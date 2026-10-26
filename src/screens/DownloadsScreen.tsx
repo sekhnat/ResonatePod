@@ -26,7 +26,7 @@ export function DownloadsScreen() {
   const time = (ms: number) => `${dateLabel(ms)}, ${new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)', maxWidth: 820 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
       <PageHeader title="Downloads" sub={dlSummary(s)}>
         <span className="tag tag-neutral" style={{ gap: 5 }}><i className={s.metered ? 'ph ph-cell-signal-high' : 'ph ph-wifi-high'} />{net}</span>
         <button className="btn btn-secondary" onClick={s.toggleDlPause} style={{ fontSize: 12 }}>

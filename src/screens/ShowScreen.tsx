@@ -16,7 +16,7 @@ export function ShowScreen() {
   const unplayed = unplayedFor(s, sh.id);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)', maxWidth: 760 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
       <div style={{ display: 'flex', gap: 'var(--space-8)', alignItems: 'flex-end' }}>
         <Art bg={art(sh.hue)} mono={mono(sh.title)} img={sh.imageUrl} size={148} font={44} weight={500} radius="var(--radius-lg)" style={{ letterSpacing: '-0.02em', boxShadow: 'var(--shadow-md)' }} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 0 }}>
