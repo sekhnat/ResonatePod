@@ -1,7 +1,18 @@
 # Resonate
 
+[![CI](https://github.com/sekhnat/Resonate/actions/workflows/ci.yml/badge.svg)](https://github.com/sekhnat/Resonate/actions/workflows/ci.yml)
+
 A podcast downloader and player for the Linux desktop. It's an Electron app with a
 React UI built on the **Nocturne** design system (dark, compact, Inter, Phosphor icons).
+
+## Install
+
+Download the latest build from [Releases](https://github.com/sekhnat/Resonate/releases/latest):
+
+- **AppImage** (any distribution): `chmod +x Resonate-*.AppImage && ./Resonate-*.AppImage`
+- **Debian / Ubuntu**: `sudo apt install ./resonate_*_amd64.deb`
+
+## Develop
 
 ```bash
 npm install
@@ -71,3 +82,7 @@ test/fixtures/  sample feed, chapters, transcript, and small media files (chapte
 - The tray uses StatusNotifierItem. GNOME needs the AppIndicator extension to show it.
 - `npm run icons` regenerates `assets/*.png` from the SVGs. It needs `playwright` with
   Chromium installed.
+- CI (`.github/workflows/ci.yml`) runs the typecheck, unit tests and end-to-end test on
+  every push, then builds and smoke-tests the AppImage and .deb (downloadable from the run).
+  To release, bump `version` in `package.json` and push a matching tag (`git tag v1.4.1 &&
+  git push origin v1.4.1`); CI attaches the packages and checksums to a GitHub release.
