@@ -192,6 +192,26 @@ try {
     await page.getByLabel('Sort episodes').selectOption('Newest first');
   });
 
+  await step('screens grow with the window', async () => {
+    const getSize = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize());
+    const setSize = (size) => app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0].setSize(w, h), size);
+    const original = await getSize();
+    try {
+      await setSize([1900, 1000]);
+      await page.waitForFunction(() => window.innerWidth >= 1800);
+      for (const name of ['Fixture FM', 'New episodes', 'Queue', 'Downloads']) {
+        await page.getByRole('button', { name }).first().click();
+        const { main, screen } = await page.evaluate(() => ({ main: document.querySelector('main').clientWidth, screen: document.querySelector('main > div').getBoundingClientRect().width }));
+        assert.ok(screen > main * 0.9, `${name} fills the window: ${screen}px of ${main}px`);
+        if (name === 'Fixture FM') await shot('02c-wide');
+      }
+    } finally {
+      await setSize(original);
+      await page.waitForFunction((w) => window.innerWidth <= w, original[0]);
+      await page.getByRole('button', { name: 'Fixture FM' }).first().click();
+    }
+  });
+
   await step('auto-download saves episodes to ~/Podcasts', async () => {
     const dir = path.join(home, 'Podcasts', 'Fixture FM');
     for (let i = 0; i < 50 && !(existsSync(dir) && readdirSync(dir).filter((f) => f.endsWith('.wav')).length === 2); i++) await page.waitForTimeout(100);

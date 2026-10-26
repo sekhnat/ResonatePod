@@ -33,7 +33,7 @@ export function DiscoverScreen() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 860 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <h1 style={h1Style}>Discover</h1>
       <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
         <div style={{ flex: 1, position: 'relative' }}>

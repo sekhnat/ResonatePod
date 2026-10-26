@@ -12,7 +12,7 @@ export function InboxScreen() {
   const sub = s.refreshing ? 'Checking feeds…' : s.lastChecked ? `Feeds checked ${agoLabel(s.lastChecked)} · next check in ${nextMin} min` : 'Feeds not checked yet';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 760 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <PageHeader title="New episodes" sub={sub}>
         <SortSelect value={sortFor(s, INBOX_SORT)} onPick={(v) => s.setSort(INBOX_SORT, v)} />
         <Seg options={FILTERS} value={s.filter} onPick={(filter) => s.set({ filter })} />

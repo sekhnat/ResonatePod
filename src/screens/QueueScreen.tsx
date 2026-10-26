@@ -13,7 +13,7 @@ export function QueueScreen() {
   const n = rows.length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 760 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <PageHeader title="Queue" sub={`${n} episode${n === 1 ? '' : 's'} · ${Math.floor(total / 60)} h ${total % 60} min at 1×`}>
         <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={n <= 1} onClick={s.clearQueue}>Clear queue</button>
       </PageHeader>

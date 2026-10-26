@@ -1,6 +1,6 @@
 {
   "name": "resonate",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "description": "Resonate — a podcast downloader and player for the Linux desktop.",
   "type": "module",
