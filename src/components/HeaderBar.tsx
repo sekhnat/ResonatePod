@@ -1,6 +1,7 @@
 import { useStore } from '../store';
 import { totalUnplayed } from '../model';
 import { platform } from '../platform';
+import { APP_VERSION } from '../version';
 import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
 import { GhostIcon, useOutside } from './ui';
 
@@ -15,7 +16,7 @@ export function HeaderBar() {
     queue: ['Queue', 'Up next'],
     downloads: ['Downloads', s.dl.length ? [`${s.dl.filter((d) => !d.error).length} in progress`, ...(s.dl.some((d) => d.error) ? [`${s.dl.filter((d) => d.error).length} failed`] : [])].join(' · ') : 'All done'],
     discover: ['Discover', 'Apple Podcasts · gpodder.net · fyyd'],
-    settings: ['Preferences', 'Resonate 1.4'],
+    settings: ['Preferences', `Resonate ${APP_VERSION}`],
   };
   const [title, sub] = s.shows.length || s.screen === 'discover' || s.screen === 'settings' ? titles[s.screen] : ['Welcome', 'Resonate'];
   const menuRef = useOutside<HTMLDivElement>(s.menu === 'main', () => s.set({ menu: null }), '[data-menu-trigger="main"]');

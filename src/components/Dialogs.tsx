@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { art, mono } from '../data';
 import { useStore, type Override } from '../store';
+import { APP_VERSION } from '../version';
 import { Seg } from './ui';
 
 function Modal({ onClose, width = 480, children, label }: { onClose: () => void; width?: number; children: ReactNode; label: string }) {
@@ -195,7 +196,7 @@ export function Dialogs() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center' }}>
             <i className="ph-fill ph-waveform" style={{ fontSize: 44, color: 'var(--color-accent)' }} />
             <span className="dialog-title">Resonate</span>
-            <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)' }}>Version 1.4 · A podcast downloader and player for the Linux desktop.</span>
+            <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)' }}>Version {APP_VERSION} · A podcast downloader and player for the Linux desktop.</span>
             <span style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>{s.shows.length} subscriptions · {(s.usedBytes / 1024 ** 3).toFixed(1)} GB in {s.folder}</span>
           </div>
           <div className="dialog-actions" style={{ margin: 0, justifyContent: 'center' }}><button className="btn btn-primary" style={{ fontSize: 12 }} onClick={close}>Close</button></div>
