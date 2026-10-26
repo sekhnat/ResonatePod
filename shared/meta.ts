@@ -1,3 +1,4 @@
+import { plainText } from './feed';
 import type { Chapter, TranscriptLine } from './types';
 
 /** Podcasting 2.0 JSON chapters (https://github.com/Podcastindex-org/podcast-namespace/blob/main/chapters/jsonChapters.md). */
@@ -15,6 +16,8 @@ const ts = (s: string) => {
   return parts.reduce((a, p) => a * 60 + p, 0) + parseFloat('0.' + frac);
 };
 
+const SPEAKER = /^([A-Z][\w .'-]{0,30}):\s+([\s\S]*)$/;
+
 interface Cue { at: number; who: string; text: string }
 
 /** WebVTT or SRT cues. Handles `<v Speaker>` voice tags and `Speaker: text` prefixes. */
@@ -29,7 +32,7 @@ function parseCues(src: string): Cue[] {
     const voice = /<v(?:\.[^ >]+)?\s+([^>]+)>/.exec(body);
     if (voice) who = voice[1].trim();
     body = body.replace(/<[^>]+>/g, '').trim();
-    const named = /^([A-Z][\w .'-]{0,30}):\s+(.*)$/.exec(body);
+    const named = SPEAKER.exec(body);
     if (!who && named) { who = named[1]; body = named[2]; }
     if (body) cues.push({ at: ts(lines[ti].split('-->')[0]), who, text: body });
   }
@@ -61,11 +64,49 @@ function mergeCues(cues: Cue[]): TranscriptLine[] {
   return out;
 }
 
-export function parseTranscript(src: string, type = ''): TranscriptLine[] | null {
-  const t = type.toLowerCase();
-  let cues: Cue[];
-  if (t.includes('json') || src.trimStart().startsWith('{')) cues = parseJsonTranscript(src);
-  else if (t.includes('vtt') || t.includes('srt') || t.includes('subrip') || src.includes('-->')) cues = parseCues(src);
-  else return null;
-  return cues.length ? mergeCues(cues.sort((a, b) => a.at - b.at)) : null;
+/** Podcasting 2.0 HTML transcripts: `<cite>Speaker:</cite> <time>0:01:02</time> <p>Text</p>`. */
+function parseHtmlTranscript(src: string): { cues: Cue[]; timed: boolean } | null {
+  const re = /<(cite|time|p)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  const cues: Cue[] = [];
+  let who = '';
+  let at = 0;
+  let timed = false;
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    const body = plainText(m[2]);
+    const tag = m[1].toLowerCase();
+    if (tag === 'cite') who = body.replace(/:\s*$/, '');
+    else if (tag === 'time') { if (/^\d+(:\d+)*([.,]\d+)?$/.test(body)) { at = ts(body); timed = true; } }
+    else if (body) {
+      const named = !who && SPEAKER.exec(body);
+      cues.push(named ? { at, who: named[1], text: named[2] } : { at, who, text: body });
+    }
+  }
+  return cues.length ? { cues, timed } : null;
 }
+
+/** Untimed text: one line per paragraph, with `Name:` prefixes as speakers. */
+function parseParagraphs(src: string): Cue[] {
+  return plainText(src).split(/\n\s*\n|\n(?=[A-Z][\w .'-]{0,30}:\s)/).map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean).map((p) => {
+    const named = SPEAKER.exec(p);
+    return named ? { at: 0, who: named[1], text: named[2] } : { at: 0, who: '', text: p };
+  });
+}
+
+export interface Transcript { lines: TranscriptLine[]; timed: boolean }
+
+export function parseTranscript(src: string, type = ''): Transcript | null {
+  const t = type.toLowerCase();
+  const trimmed = src.trimStart();
+  if (t.includes('json') || trimmed.startsWith('{')) return timedOf(parseJsonTranscript(src));
+  if (t.includes('vtt') || t.includes('srt') || t.includes('subrip') || src.includes('-->')) return timedOf(parseCues(src));
+  if (t.includes('html') || /^<(!doctype|html|body|p|div|cite|time)\b/i.test(trimmed)) {
+    const html = parseHtmlTranscript(src);
+    if (html) return html.timed ? timedOf(html.cues) : untimed(html.cues);
+    return untimed(parseParagraphs(src));
+  }
+  if (t.includes('text') || !t) return untimed(parseParagraphs(src));
+  return null;
+}
+
+const timedOf = (cues: Cue[]): Transcript | null => (cues.length ? { lines: mergeCues(cues.sort((a, b) => a.at - b.at)), timed: true } : null);
+const untimed = (cues: Cue[]): Transcript | null => (cues.length ? { lines: cues.map((c) => ({ at: 0, who: c.who, text: c.text })), timed: false } : null);

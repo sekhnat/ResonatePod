@@ -1,5 +1,7 @@
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { art, fmt, mono } from '../data';
 import { chaptersOf, currentChapter, epInfo, sleepLabel, trimOn, useStore } from '../store';
+import { attachVideo, detachVideo } from '../audio/engine';
 import { Art, GhostIcon, sectionLabel } from './ui';
 
 function useNowPlaying() {
@@ -10,14 +12,17 @@ function useNowPlaying() {
   const ci = currentChapter(ch, s.pos);
   const meta = s.meta[cur.key];
   const tr = meta?.transcript ?? null;
+  const timed = meta?.transcriptTimed !== false;
   const loading = !!cur.ep.transcriptUrl && meta?.transcript === undefined;
   let lines: { who: string; text: string; at: number; current: boolean }[] = [];
-  if (tr) {
+  if (tr && !timed) {
+    lines = tr.map((l) => ({ ...l, current: true }));
+  } else if (tr) {
     const ti = Math.max(0, tr.reduce((a, l, i) => (l.at <= s.pos ? i : a), 0));
     const from = Math.max(0, Math.min(ti - 1, tr.length - 3));
     lines = tr.slice(from, from + 3).map((l) => ({ ...l, current: l === tr[ti] }));
   }
-  return { s, cur, ch, ci, lines, hasTranscript: !!tr, loading, img: cur.ep.imageUrl ?? cur.show.imageUrl };
+  return { s, cur, ch, ci, lines, timed, hasTranscript: !!tr, loading, img: cur.ep.imageUrl ?? cur.show.imageUrl };
 }
 
 function Chapters({ big }: { big?: boolean }) {
@@ -45,21 +50,47 @@ function Chapters({ big }: { big?: boolean }) {
 function Transcript({ big }: { big?: boolean }) {
   const np = useNowPlaying();
   if (!np) return null;
-  const { s, lines, hasTranscript, loading } = np;
+  const { s, hasTranscript, loading, timed } = np;
+  // Untimed (HTML or plain-text) transcripts can't follow playback: the panel shows
+  // the opening paragraphs, the full view all of them.
+  const lines = timed ? np.lines : big ? np.lines : np.lines.slice(0, 3);
+  const label = hasTranscript ? (timed ? (big ? 'From feed · follows playback' : 'From feed') : 'From feed · not synced to playback') : loading ? 'Loading…' : 'Not available';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: big ? 12 : 8, maxWidth: big ? 620 : undefined }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <span style={sectionLabel}>Transcript</span>
-        <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{hasTranscript ? (big ? 'From feed · follows playback' : 'From feed') : loading ? 'Loading…' : 'Not available'}</span>
+        <span style={{ fontSize: 11, color: 'var(--color-neutral-500)', textAlign: 'right' }}>{label}</span>
       </div>
-      {lines.map((l) => (
-        <p key={l.at} onClick={() => s.seek(l.at)} title={`Jump to ${fmt(l.at)}`}
-          style={{ margin: 0, fontSize: big ? 17 : 13, lineHeight: big ? 1.55 : 1.5, color: l.current ? 'var(--color-text)' : 'var(--color-neutral-500)', textWrap: 'pretty', cursor: 'pointer', transition: 'color .3s' } as React.CSSProperties}>
-          <span style={{ fontSize: big ? 12 : 11, color: 'var(--color-neutral-500)', marginRight: big ? 8 : 6 }}>{l.who}</span>{l.text}
+      {lines.map((l, i) => (
+        <p key={`${l.at}-${i}`} onClick={timed ? () => s.seek(l.at) : undefined} title={timed ? `Jump to ${fmt(l.at)}` : undefined}
+          style={{ margin: 0, fontSize: big ? 17 : 13, lineHeight: big ? 1.55 : 1.5, color: l.current ? 'var(--color-text)' : 'var(--color-neutral-500)', textWrap: 'pretty', cursor: timed ? 'pointer' : 'auto', transition: 'color .3s' } as CSSProperties}>
+          {l.who && <span style={{ fontSize: big ? 12 : 11, color: 'var(--color-neutral-500)', marginRight: big ? 8 : 6 }}>{l.who}</span>}{l.text}
         </p>
       ))}
+      {!timed && !big && np.lines.length > 3 && (
+        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 12, padding: '2px 0' }} onClick={() => s.set({ npFull: true })}>Read the full transcript</button>
+      )}
       {!hasTranscript && !loading && <p style={{ margin: 0, fontSize: big ? 14 : 12.5, color: 'var(--color-neutral-500)' }}>This episode’s feed doesn’t include a transcript.</p>}
     </div>
+  );
+}
+
+/** Shows the playing episode's picture by borrowing the engine's media element. */
+function VideoView({ style }: { style?: CSSProperties }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    attachVideo(el);
+    return () => detachVideo(el);
+  }, []);
+  const fullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void ref.current?.requestFullscreen();
+  };
+  return (
+    <div ref={ref} onDoubleClick={fullscreen} title="Double-click for full screen"
+      style={{ width: '100%', aspectRatio: '16 / 9', flex: 'none', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: '#000', boxShadow: 'var(--shadow-md)', ...style }} />
   );
 }
 
@@ -76,9 +107,11 @@ export function NowPlayingPanel() {
           <GhostIcon icon="ph ph-x" title="Close" size={28} iconSize={14} color="var(--color-text)" onClick={() => s.set({ npOpen: false })} />
         </div>
       </div>
-      <button onClick={() => s.openShow(cur.show.id)} title={`Open ${cur.show.title}`} style={{ width: '100%', flex: 'none', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}>
-        <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={72} weight={500} radius="var(--radius-lg)" style={{ aspectRatio: '1', height: 'auto', letterSpacing: '-0.03em', boxShadow: 'var(--shadow-md)' }} />
-      </button>
+      {s.video && !s.npFull ? <VideoView /> : (
+        <button onClick={() => s.openShow(cur.show.id)} title={`Open ${cur.show.title}`} style={{ width: '100%', flex: 'none', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}>
+          <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={72} weight={500} radius="var(--radius-lg)" style={{ aspectRatio: '1', height: 'auto', letterSpacing: '-0.03em', boxShadow: 'var(--shadow-md)' }} />
+        </button>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.25 }}>{cur.title}</span>
         <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)' }}>{cur.show.title} · {cur.date}</span>
@@ -103,7 +136,9 @@ export function NowPlayingFull() {
             <i className="ph ph-arrows-in-simple" style={{ fontSize: 13 }} />Collapse
           </button>
         </div>
-        <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={120} weight={500} radius="var(--radius-lg)" style={{ aspectRatio: '1', height: 'auto', letterSpacing: '-0.04em', boxShadow: 'var(--shadow-md),0 0 80px color-mix(in srgb,var(--color-accent) 18%,transparent)' }} />
+        {s.video ? <VideoView style={{ boxShadow: 'var(--shadow-md),0 0 80px color-mix(in srgb,var(--color-accent) 18%,transparent)' }} /> : (
+          <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={120} weight={500} radius="var(--radius-lg)" style={{ aspectRatio: '1', height: 'auto', letterSpacing: '-0.04em', boxShadow: 'var(--shadow-md),0 0 80px color-mix(in srgb,var(--color-accent) 18%,transparent)' }} />
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 26, fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15 }}>{cur.title}</span>
           <span style={{ fontSize: 14, color: 'var(--color-neutral-400)' }}>{cur.show.title} · {cur.date}</span>

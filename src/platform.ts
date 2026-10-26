@@ -1,4 +1,4 @@
-import type { DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
+import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
 import type { ResonateApi } from '../electron/preload';
 import { downloadText } from './lib/opml';
 
@@ -29,6 +29,15 @@ export interface Platform {
     onEvent(cb: (e: DownloadEvent) => void): () => void;
   };
   deleteFile(file: string): Promise<void>;
+  /** Moves files from one download folder to another; returns the ones that moved. */
+  moveFiles(from: string, to: string, files: string[]): Promise<{ from: string; to: string }[]>;
+  /** Chapters stored inside the media file (ID3 CHAP / MP4 chpl), from disk or by Range requests. */
+  embeddedChapters(file: string | undefined, url: string): Promise<Chapter[] | null>;
+  /** HTTP Basic credentials for a feed's origin (also used for its enclosures); null clears them. */
+  setFeedAuth(url: string, user: string | null, password: string | null): Promise<void>;
+  setAutostart(on: boolean): Promise<void>;
+  /** Runs before the app quits, so pending writes reach disk. */
+  onFlush(cb: () => Promise<void>): void;
   diskUsage(folder: string): Promise<number>;
   showInFolder(file: string): void;
   openFolder(folder: string): void;
@@ -69,6 +78,11 @@ function electronPlatform(api: ResonateApi): Platform {
       onEvent: api.download.onEvent,
     },
     deleteFile: api.deleteFile,
+    moveFiles: api.moveFiles,
+    embeddedChapters: (file, url) => api.embeddedChapters(file ?? null, url),
+    setFeedAuth: api.setFeedAuth,
+    setAutostart: api.setAutostart,
+    onFlush: api.onFlush,
     diskUsage: api.diskUsage,
     showInFolder: (f) => { void api.showInFolder(f); },
     openFolder: (f) => { void api.openFolder(f); },
@@ -88,12 +102,15 @@ function electronPlatform(api: ResonateApi): Platform {
 }
 
 function browserPlatform(): Platform {
+  const auth = new Map<string, string>();
+  const origin = (url: string) => { try { return new URL(url).origin; } catch { return ''; } };
   return {
     isDesktop: false,
     desktop: 'KDE',
     hostname: 'browser',
     async http(url, req = {}) {
-      const res = await fetch(url, { method: req.method ?? 'GET', headers: req.headers, body: req.body });
+      const a = auth.get(origin(url));
+      const res = await fetch(url, { method: req.method ?? 'GET', headers: { ...(a ? { Authorization: a } : {}), ...req.headers }, body: req.body });
       return { status: res.status, text: await res.text(), etag: res.headers.get('etag') ?? undefined, lastModified: res.headers.get('last-modified') ?? undefined };
     },
     loadLibrary: async () => LS.get('resonate-library'),
@@ -102,6 +119,14 @@ function browserPlatform(): Platform {
     canAnalyse: false,
     download: { start() {}, cancel() {}, setPaused() {}, setConcurrency() {}, onEvent: () => () => {} },
     deleteFile: async () => {},
+    moveFiles: async () => [],
+    embeddedChapters: async () => null,
+    setFeedAuth: async (url, user, password) => {
+      if (user == null) auth.delete(origin(url));
+      else auth.set(origin(url), 'Basic ' + btoa(`${user}:${password ?? ''}`));
+    },
+    setAutostart: async () => {},
+    onFlush() {},
     diskUsage: async () => 0,
     showInFolder() {},
     openFolder() {},

@@ -43,6 +43,13 @@ describe('parseFeed', () => {
     expect(b.description).toBe('Arch, Tumbleweed & friends.\nPicks');
   });
 
+  it('reads itunes:new-feed-url when a publisher moves the feed', () => {
+    expect(f.newFeedUrl).toBeUndefined();
+    const moved = xml.replace('<channel>', '<channel><itunes:new-feed-url>https://new.example/feed.xml</itunes:new-feed-url>');
+    expect(parseFeed(moved).newFeedUrl).toBe('https://new.example/feed.xml');
+    expect(parseFeed(xml.replace('<channel>', '<channel><itunes:new-feed-url>javascript:x</itunes:new-feed-url>')).newFeedUrl).toBeUndefined();
+  });
+
   it('rejects things that are not podcast feeds', () => {
     expect(() => parseFeed('<rss><channel>')).toThrow('not valid XML');
     expect(() => parseFeed('<html><body>hi</body></html>')).toThrow('Not a podcast RSS feed');

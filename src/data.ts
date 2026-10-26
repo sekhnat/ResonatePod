@@ -85,7 +85,13 @@ export const episodeInfo = (show: Show, ep: Episode): EpisodeInfo => ({
   sizeMb: Math.round((ep.sizeBytes || ep.duration * 16000) / 1048576),
 });
 
-export interface EpisodeMeta { chapters?: Chapter[]; transcript?: TranscriptLine[] | null }
+export interface EpisodeMeta {
+  chapters?: Chapter[];
+  /** undefined while loading, null when there is none. */
+  transcript?: TranscriptLine[] | null;
+  /** False for HTML or plain-text transcripts without timestamps. */
+  transcriptTimed?: boolean;
+}
 
 export const chaptersFor = (ep: EpisodeInfo, meta?: EpisodeMeta): Chapter[] =>
   meta?.chapters?.length ? meta.chapters : ep.ep.inlineChapters?.length ? ep.ep.inlineChapters : [{ t: 'Full episode', at: 0 }];

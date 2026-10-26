@@ -16,7 +16,12 @@ export function SettingsScreen() {
   const changeFolder = async () => {
     if (!platform.isDesktop) { s.set({ dialog: 'folder' }); return; }
     const folder = await platform.pickFolder(s.folder);
-    if (folder) { s.setPrefs({ folder }); s.toast(`New downloads will be saved to ${folder}`); }
+    if (!folder || folder === s.folder) return;
+    const from = s.folder;
+    s.setPrefs({ folder });
+    // Offer to bring already-downloaded episodes along.
+    if (Object.values(s.eps).some((e) => e.file)) s.set({ dialog: 'move', pendingMove: { from, to: folder } });
+    else s.toast(`New downloads will be saved to ${folder}`);
   };
   const usedGb = (s.usedBytes / 1024 ** 3).toFixed(1);
   const groups: { title: string; rows: Row[] }[] = [
@@ -37,6 +42,9 @@ export function SettingsScreen() {
       { label: 'Skip back / forward', kind: 'seg', k: 'skip', opts: ['10 / 30 s', '15 / 30 s', '30 / 60 s'] },
       { label: 'Notify on new episodes', kind: 'toggle', k: 'notify' },
     ] },
+    ...(platform.isDesktop ? [{ title: 'Desktop', rows: [
+      { label: 'Start Resonate when you log in', hint: 'Opens hidden in the tray', kind: 'toggle', k: 'autostart' },
+    ] as Row[] }] : []),
     { title: 'Sync & subscriptions', rows: [
       { label: 'Sync server', hint: s.sync.server ? `gpodder-compatible · ${s.syncing ? 'syncing…' : `last synced ${clockLabel(s.sync.lastSynced)}`}` : 'gpodder-compatible · subscriptions and play positions', kind: 'value', value: s.sync.server ? `${s.sync.user}@${s.sync.server.replace(/^https?:\/\//, '')}` : 'Not connected', action: 'Configure', run: () => s.set({ dialog: 'sync' }) },
       { label: 'Subscriptions', hint: 'OPML works with almost every podcast app', kind: 'value', value: `${s.shows.length} feeds`, action: 'Export OPML', run: () => void exportOpmlFile() },

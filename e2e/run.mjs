@@ -28,7 +28,19 @@ function wav(segments) {
 const media = {
   '/ep1.wav': wav([[3, 440], [6, 0], [3, 440]]), // 12 s with a long pause for silence trim
   '/ep2.wav': wav([[5, 330]]),
+  // Behind HTTP Basic auth, in the private feed:
+  '/p/chapters.mp3': readFileSync('test/fixtures/chapters.mp3'), // ID3 CHAP frames written by ffmpeg
+  '/p/video.mp4': readFileSync('test/fixtures/video.mp4'),
+  '/p/flaky.wav': wav([[2, 520]]),
+  '/p/slow.wav': wav([[20, 260]]),
 };
+const AUTH = 'Basic ' + Buffer.from('ana:pw').toString('base64');
+const hits = {};
+const rangesFor = {};
+// The slow episode sends its first 64 KB and then holds the connection open, so a
+// restart interrupts it at a known point; clearing this lets it finish.
+let holdSlow = true;
+const HOLD = 65536;
 const chapters = JSON.stringify({ version: '1.2.0', chapters: [{ startTime: 0, title: 'Opening' }, { startTime: 9, title: 'Second half' }] });
 const vtt = 'WEBVTT\n\n00:00:00.000 --> 00:00:03.000\n<v Ana>Testing one two.\n\n00:00:09.000 --> 00:00:12.000\n<v Ben>And we are back.\n';
 
@@ -41,20 +53,49 @@ const feed = () => `<?xml version="1.0"?>
 <podcast:chapters url="${base}/ch.json" type="application/json+chapters"/><podcast:transcript url="${base}/t.vtt" type="text/vtt"/></item>
 </channel></rss>`;
 
+const html = '<html><body><cite>Ana:</cite><time>0:00:00</time><p>Welcome to the members feed.</p><cite>Ben:</cite><time>0:00:02</time><p>Mail time.</p></body></html>';
+const privateFeed = () => {
+  const item = (title, guid, file, type, ago, extra = '') => `<item><title>${title}</title><guid>${guid}</guid><pubDate>${new Date(Date.now() - ago * 36e5).toUTCString()}</pubDate><enclosure url="${base}${file}" length="${media[file].length}" type="${type}"/>${extra}</item>`;
+  return `<?xml version="1.0"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+<channel><title>Members Only</title><itunes:author>Resonate Tests</itunes:author><description>A private feed.</description>
+${item('Slow episode', 'm-4', '/p/slow.wav', 'audio/wav', 0)}
+${item('Flaky episode', 'm-3', '/p/flaky.wav', 'audio/wav', 1)}
+${item('Video episode', 'm-2', '/p/video.mp4', 'video/mp4', 2)}
+${item('Chaptered episode', 'm-1', '/p/chapters.mp3', 'audio/mpeg', 3, `<podcast:transcript url="${base}/p/t.html" type="text/html"/>`)}
+</channel></rss>`;
+};
+
 const server = createServer((req, res) => {
   const url = req.url.split('?')[0];
+  const hit = (hits[url] = (hits[url] ?? 0) + 1);
+  (rangesFor[url] ??= []).push(req.headers.range);
+  if (url === '/old.xml') return res.writeHead(301, { Location: '/feed.xml' }).end();
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
+  if ((url === '/private.xml' || url.startsWith('/p/')) && req.headers.authorization !== AUTH) {
+    return res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="members"' }).end();
+  }
+  if (url === '/private.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(privateFeed());
+  if (url === '/p/t.html') return res.writeHead(200, { 'Content-Type': 'text/html' }).end(html);
+  if (url === '/p/flaky.wav' && hit === 1) return res.writeHead(503).end();
   if (url === '/ch.json') return res.writeHead(200, { 'Content-Type': 'application/json' }).end(chapters);
   if (url === '/t.vtt') return res.writeHead(200, { 'Content-Type': 'text/vtt' }).end(vtt);
   const body = media[url];
   if (!body) return res.writeHead(404).end();
+  const ctype = { mp3: 'audio/mpeg', mp4: 'video/mp4', wav: 'audio/wav' }[url.split('.').pop()];
   const m = /bytes=(\d*)-(\d*)/.exec(req.headers.range ?? '');
+  if (url === '/p/slow.wav' && holdSlow) {
+    const start = m ? +m[1] || 0 : 0;
+    res.writeHead(m ? 206 : 200, { 'Content-Type': 'audio/wav', 'Content-Length': body.length - start, ...(m ? { 'Content-Range': `bytes ${start}-${body.length - 1}/${body.length}` } : {}) });
+    res.write(body.subarray(start, Math.max(start, HOLD)));
+    return; // ...and never finish while held
+  }
   if (m) {
     const start = +m[1] || 0;
     const end = m[2] ? +m[2] : body.length - 1;
-    return res.writeHead(206, { 'Content-Type': 'audio/wav', 'Content-Range': `bytes ${start}-${end}/${body.length}`, 'Content-Length': end - start + 1, 'Accept-Ranges': 'bytes' }).end(body.subarray(start, end + 1));
+    return res.writeHead(206, { 'Content-Type': ctype, 'Content-Range': `bytes ${start}-${end}/${body.length}`, 'Content-Length': end - start + 1, 'Accept-Ranges': 'bytes' }).end(body.subarray(start, end + 1));
   }
-  res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': body.length, 'Accept-Ranges': 'bytes' }).end(body);
+  res.writeHead(200, { 'Content-Type': ctype, 'Content-Length': body.length, 'Accept-Ranges': 'bytes' }).end(body);
 });
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 base = `http://127.0.0.1:${server.address().port}`;
@@ -63,15 +104,25 @@ base = `http://127.0.0.1:${server.address().port}`;
 const home = mkdtempSync(path.join(tmpdir(), 'resonate-home-'));
 // E2E_APP=release/linux-unpacked/resonate tests a packaged build instead of the dev tree.
 const packaged = process.env.E2E_APP;
-const app = await electron.launch({
-  executablePath: packaged ? path.resolve(packaged) : electronPath,
-  args: packaged ? ['--no-sandbox'] : ['.', '--no-sandbox'],
-  env: { ...process.env, HOME: home, RESONATE_USER_DATA: path.join(home, 'config'), XDG_CURRENT_DESKTOP: 'KDE' },
-});
-const page = await app.firstWindow();
 const errors = [];
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', (e) => errors.push(String(e)));
+let app;
+let page;
+async function launch() {
+  app = await electron.launch({
+    executablePath: packaged ? path.resolve(packaged) : electronPath,
+    args: packaged ? ['--no-sandbox'] : ['.', '--no-sandbox'],
+    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: path.join(home, 'config'), XDG_CURRENT_DESKTOP: 'KDE' },
+  });
+  page = await app.firstWindow();
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push(String(e)));
+}
+await launch();
+const podcasts = (show) => path.join(home, 'Podcasts', show);
+const waitFor = async (what, pred, ms = 10000) => {
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) if (pred()) return;
+  throw new Error(`timed out waiting for ${what}`);
+};
 const step = async (name, fn) => { process.stdout.write(`• ${name} … `); await fn(); console.log('ok'); };
 const shot = (name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
 const time = () => page.locator('[aria-label="Seek"]').getAttribute('aria-valuenow').then(Number);
@@ -83,8 +134,9 @@ try {
     await shot('01-welcome');
   });
 
-  await step('subscribe by pasting a feed URL', async () => {
-    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/feed.xml`);
+  await step('subscribe by pasting a feed URL (one that has moved)', async () => {
+    // /old.xml permanently redirects to /feed.xml; the OPML export below checks the stored URL.
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/old.xml`);
     await page.keyboard.press('Enter');
     await page.getByRole('heading', { name: 'Fixture FM' }).waitFor();
     await page.getByText('Episode one').waitFor();
@@ -148,7 +200,7 @@ try {
     await shot('06-downloads');
   });
 
-  await step('export OPML through the native save dialog', async () => {
+  await step('export OPML through the native save dialog, with the moved feed’s new address', async () => {
     const out = path.join(home, 'subs.opml');
     await app.evaluate(({ dialog }, p) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: p }); }, out);
     await page.keyboard.press('Control+e');
@@ -156,10 +208,90 @@ try {
     assert.match(readFileSync(out, 'utf8'), new RegExp(`xmlUrl="${base}/feed.xml"`));
   });
 
-  await step('library persists across restarts', async () => {
-    await page.waitForTimeout(1500);
-    const lib = JSON.parse(readFileSync(path.join(home, 'config', 'library.json'), 'utf8'));
-    assert.equal(lib.state.shows[0].title, 'Fixture FM');
+  await step('a private feed asks for a login', async () => {
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/private.xml`);
+    await page.keyboard.press('Enter');
+    await page.getByText('This feed needs a login').waitFor();
+    await page.getByLabel('Username').fill('ana');
+    await page.getByLabel('Password').fill('wrong');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByText('The server didn’t accept that username and password.').waitFor();
+    await page.getByLabel('Password').fill('pw');
+    await shot('08-feed-login');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('heading', { name: 'Members Only' }).waitFor();
+    await page.getByText('Chaptered episode').waitFor();
+  });
+
+  await step('chapters inside a streamed MP3 and an HTML transcript', async () => {
+    await page.locator('.h-row', { hasText: 'Chaptered episode' }).getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByText('Listener mail').first().waitFor();
+    await page.getByText('Welcome to the members feed.').first().waitFor();
+    await page.waitForFunction(() => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) >= 1, null, { timeout: 8000 });
+    assert.ok(rangesFor['/p/chapters.mp3'].some((r) => r === 'bytes=0-9'), 'chapters read with a small Range request');
+    await shot('09-embedded-chapters');
+  });
+
+  await step('a video episode shows its picture', async () => {
+    await page.locator('.h-row', { hasText: 'Video episode' }).getByRole('button', { name: 'Play', exact: true }).click();
+    await page.locator('aside video').waitFor({ state: 'visible', timeout: 8000 });
+    await page.waitForFunction(() => { const v = document.querySelector('aside video'); return v && v.videoWidth === 160 && v.currentTime > 0.5; }, null, { timeout: 8000 });
+    await shot('10-video');
+  });
+
+  await step('a failed download is retried automatically', async () => {
+    await waitFor('the flaky episode to download', () => existsSync(podcasts('Members Only')) && readdirSync(podcasts('Members Only')).some((f) => f.includes('Flaky') && f.endsWith('.wav')), 20000);
+    assert.ok(hits['/p/flaky.wav'] >= 2, `flaky requests: ${hits['/p/flaky.wav']}`);
+  });
+
+  await step('start at login writes an autostart entry', async () => {
+    await page.locator('nav button', { hasText: 'Preferences' }).click();
+    await page.getByRole('switch', { name: 'Start Resonate when you log in' }).click();
+    const file = path.join(home, '.config', 'autostart', 'io.github.sekhnat.resonate.desktop');
+    await waitFor('the autostart file', () => existsSync(file));
+    assert.match(readFileSync(file, 'utf8'), /^Exec=.* --hidden$/m);
+  });
+
+  await step('a restart keeps the library, position, window size and interrupted download', async () => {
+    await page.getByRole('button', { name: 'Pause', exact: true }).first().click();
+    const pos = await time();
+    const current = await page.locator('button[title="Open Now playing"]').innerText();
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 720));
+    const part = () => readdirSync(podcasts('Members Only')).find((f) => f.includes('Slow') && f.endsWith('.part'));
+    await waitFor('the slow download to start', () => part() && statSync(path.join(podcasts('Members Only'), part())).size >= HOLD);
+    await page.waitForTimeout(700);
+    await app.close();
+    assert.ok(part(), 'the partial file is kept');
+    holdSlow = false;
+    rangesFor['/p/slow.wav'] = [];
+    await launch();
+    await page.getByRole('heading', { name: 'New episodes' }).waitFor();
+    assert.deepEqual(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize()), [1100, 720]);
+    await page.waitForFunction((t) => document.querySelector('button[title="Open Now playing"]')?.innerText === t, current);
+    assert.ok(Math.abs((await time()) - pos) <= 1, `position ${await time()} vs ${pos}`);
+    const done = () => readdirSync(podcasts('Members Only')).find((f) => f.includes('Slow') && f.endsWith('.wav'));
+    await waitFor('the slow download to finish', done, 15000);
+    assert.equal(statSync(path.join(podcasts('Members Only'), done())).size, media['/p/slow.wav'].length);
+    assert.deepEqual(rangesFor['/p/slow.wav'], [`bytes=${HOLD}-`]);
+    await shot('11-after-restart');
+  });
+
+  await step('changing the download folder moves downloaded files, even the one playing', async () => {
+    const dest = path.join(home, 'Media', 'Pods');
+    await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, dest);
+    await page.locator('nav button', { hasText: 'Preferences' }).click();
+    await page.getByRole('button', { name: 'Change…' }).click();
+    await page.getByText('Move downloaded episodes?').waitFor();
+    await shot('12-move');
+    await page.getByRole('button', { name: 'Move', exact: true }).click();
+    const moved = (show) => existsSync(path.join(dest, show)) ? readdirSync(path.join(dest, show)) : [];
+    await waitFor('files in the new folder', () => moved('Members Only').some((f) => f.includes('Slow')) && moved('Fixture FM').length > 0);
+    assert.ok(!existsSync(podcasts('Members Only')), 'old show folder removed once empty');
+    await page.getByText('~/Media/Pods', { exact: true }).first().waitFor();
+    const before = await time();
+    await page.keyboard.press('Space');
+    await page.waitForFunction((t) => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) > t, before, { timeout: 8000 });
   });
 
   await step('preferences and discover render', async () => {

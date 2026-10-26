@@ -1,4 +1,4 @@
-import { downloadsBlocked, epInfo, sleepLabel, useStore, type State } from './store';
+import { downloadsBlocked, epInfo, flushSave, getEp, sleepLabel, useStore, type State } from './store';
 import { dlSummary } from './model';
 import { platform } from './platform';
 import { startEngine } from './audio/engine';
@@ -15,12 +15,15 @@ export function startServices() {
   let par: string | null = null;
   let traySig = '';
   let folder: string | null = null;
+  let autostart: boolean | null = null;
 
   const sync = (s: State) => {
     const b = downloadsBlocked(s);
     if (b !== blocked) { blocked = b; platform.download.setPaused(b); }
     if (s.sv.par !== par) { par = s.sv.par; platform.download.setConcurrency(parseInt(par, 10)); }
     if (s.folder !== folder) { folder = s.folder; void s.updateUsage(); }
+    // Applied at every launch too, so the autostart entry follows the app if it moves.
+    if (s.tg.autostart !== autostart) { autostart = s.tg.autostart; void platform.setAutostart(autostart).catch(() => {}); }
     const cur = epInfo(s, s.cur);
     const tray = {
       title: cur?.title ?? '',
@@ -62,6 +65,23 @@ export function startServices() {
   setInterval(checkMetered, 60000);
 
   setInterval(() => st().tick(), 1000);
+
+  // Playback position reaches disk every 30 s while playing, and on quit.
+  setInterval(() => { if (st().playing) st().checkpoint(); }, 30000);
+  platform.onFlush(async () => { st().checkpoint(); await flushSave(); });
+
+  // Downloads that were queued, running or failed when Resonate last quit resume from their .part files.
+  if (platform.isDesktop) {
+    const s = st();
+    const live = s.dlPending.filter((k) => epInfo(s, k) && !getEp(s, k).file);
+    if (live.length !== s.dlPending.length) useStore.setState({ dlPending: live });
+    live.forEach((k) => st().startDownload(k));
+  }
+
+  // "Delete played episodes" and the storage limit apply on a timer, not only after refreshes and downloads.
+  const cleanup = () => { void st().updateUsage().then(() => st().cleanupStorage({ quiet: true })); };
+  cleanup();
+  setInterval(cleanup, HOUR);
 
   const maybeRefresh = () => {
     const s = st();

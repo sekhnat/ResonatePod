@@ -4,19 +4,27 @@ import { mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DownloadManager, targetPath } from './downloads';
+import { DownloadManager, moveFiles, targetPath } from './downloads';
 import type { DownloadEvent, DownloadJob } from '../shared/types';
 
 const BODY = Buffer.alloc(300_000, 7);
 let server: Server;
 let base = '';
 const ranges: (string | undefined)[] = [];
+const hits: Record<string, number> = {};
 
 beforeAll(async () => {
   server = createServer((req, res) => {
     ranges.push(req.headers.range);
+    const route = req.url!.split('?')[0];
+    const hit = (hits[route] = (hits[route] ?? 0) + 1);
     const m = /bytes=(\d+)-/.exec(req.headers.range ?? '');
     const start = m ? +m[1] : 0;
+    // /flaky: drops the connection part-way, then answers 503, then works.
+    if (route === '/flaky' && hit === 1) { res.writeHead(200, { 'Content-Length': BODY.length }); res.write(BODY.subarray(0, 100_000)); setTimeout(() => res.destroy(), 30); return; }
+    if (route === '/flaky' && hit === 2) { res.writeHead(503).end(); return; }
+    // /stall: sends a little, then goes quiet.
+    if (route === '/stall' && hit === 1) { res.writeHead(200, { 'Content-Length': BODY.length }); res.write(BODY.subarray(0, 50_000)); return; }
     const chunk = BODY.subarray(start);
     res.writeHead(m ? 206 : 200, { 'Content-Length': chunk.length, 'Content-Type': 'audio/mpeg' });
     // Trickle so tests can pause mid-way.
@@ -33,7 +41,7 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 
-const job = (folder: string, key = 'kp:1'): DownloadJob => ({ key, url: `${base}/ep.mp3?x=1`, folder, showTitle: 'Kernel: Panic/Hour', title: 'Wayland?', pubDate: Date.UTC(2026, 9, 19), mime: 'audio/mpeg' });
+const job = (folder: string, key = 'kp:1', route = '/ep.mp3'): DownloadJob => ({ key, url: `${base}${route}?x=1`, folder, showTitle: 'Kernel: Panic/Hour', title: 'Wayland?', pubDate: Date.UTC(2026, 9, 19), mime: 'audio/mpeg' });
 const until = (m: DownloadManager, pred: (e: DownloadEvent) => boolean) => new Promise<DownloadEvent>((ok) => m.on('event', (e: DownloadEvent) => { if (pred(e)) ok(e); }));
 
 describe('DownloadManager', () => {
@@ -57,7 +65,7 @@ describe('DownloadManager', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
     const m = new DownloadManager();
     m.start(job(dir, 'kp:2'));
-    await until(m, (e) => e.type === 'progress');
+    await until(m, (e) => e.type === 'progress' && e.received > 0);
     m.setPaused(true);
     await new Promise((r) => setTimeout(r, 50));
     const part = targetPath(job(dir, 'kp:2')) + '.part';
@@ -87,5 +95,71 @@ describe('DownloadManager', () => {
     const m = new DownloadManager(async () => new Response('nope', { status: 404 }));
     m.start(job(dir, 'z:1'));
     expect(await until(m, (e) => e.type === 'error')).toMatchObject({ key: 'z:1', message: 'HTTP 404' });
+  });
+
+  it('retries after a dropped connection and a 503, resuming from the part file', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
+    const m = new DownloadManager(fetch, { retryDelays: [20, 20, 20] });
+    const retries: DownloadEvent[] = [];
+    m.on('event', (e: DownloadEvent) => { if (e.type === 'retry') retries.push(e); });
+    ranges.length = 0;
+    m.start(job(dir, 'f:1', '/flaky'));
+    const done = await until(m, (e) => e.type === 'done' || e.type === 'error');
+    expect(done.type).toBe('done');
+    expect(retries.map((r) => r.type === 'retry' && r.attempt)).toEqual([1, 2]);
+    expect(ranges.slice(1).every((r) => r === 'bytes=100000-')).toBe(true);
+    if (done.type === 'done') expect(readFileSync(done.path).equals(BODY)).toBe(true);
+  });
+
+  it('gives up on client errors without retrying, and after the last retry', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
+    let calls = 0;
+    const m404 = new DownloadManager(async () => { calls++; return new Response('', { status: 404 }); }, { retryDelays: [10] });
+    m404.start(job(dir, 'n:1'));
+    await until(m404, (e) => e.type === 'error');
+    expect(calls).toBe(1);
+    calls = 0;
+    const m500 = new DownloadManager(async () => { calls++; return new Response('', { status: 500 }); }, { retryDelays: [10, 10] });
+    m500.start(job(dir, 'n:2'));
+    expect(await until(m500, (e) => e.type === 'error')).toMatchObject({ message: 'HTTP 500' });
+    expect(calls).toBe(3);
+  });
+
+  it('aborts and retries a stalled download', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
+    const m = new DownloadManager(fetch, { retryDelays: [10], stallMs: 200 });
+    m.start(job(dir, 's:1', '/stall'));
+    expect(await until(m, (e) => e.type === 'retry')).toMatchObject({ message: 'the connection stalled' });
+    const done = await until(m, (e) => e.type === 'done');
+    if (done.type === 'done') expect(readFileSync(done.path).equals(BODY)).toBe(true);
+  });
+
+  it('takes the total size from Content-Range when resuming', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
+    const j = job(dir, 'c:1');
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(path.dirname(targetPath(j)), { recursive: true });
+    writeFileSync(targetPath(j) + '.part', Buffer.alloc(10, 1));
+    const m = new DownloadManager(async () => new Response(new Uint8Array(10).fill(2), { status: 206, headers: { 'content-range': 'bytes 10-19/20', 'content-length': '10' } }));
+    const first = until(m, (e) => e.type === 'progress');
+    m.start(j);
+    expect(await first).toMatchObject({ received: 10, total: 20 });
+    const done = await until(m, (e) => e.type === 'done');
+    if (done.type === 'done') expect([...readFileSync(done.path)]).toEqual([...Array(10).fill(1), ...Array(10).fill(2)]);
+  });
+
+  it('moves downloaded files to a new folder, keeping show sub-folders', async () => {
+    const { mkdirSync, readdirSync } = await import('node:fs');
+    const root = mkdtempSync(path.join(tmpdir(), 'res-'));
+    const a = path.join(root, 'old', 'Show A', 'ep.mp3');
+    mkdirSync(path.dirname(a), { recursive: true });
+    writeFileSync(a, 'a');
+    const outside = path.join(root, 'elsewhere.mp3');
+    writeFileSync(outside, 'x');
+    const moved = await moveFiles(path.join(root, 'old'), path.join(root, 'new'), [a, outside, path.join(root, 'old', 'gone.mp3')]);
+    expect(moved).toEqual([{ from: a, to: path.join(root, 'new', 'Show A', 'ep.mp3') }]);
+    expect(readFileSync(moved[0].to, 'utf8')).toBe('a');
+    expect(readdirSync(path.join(root, 'old'))).toEqual([]);
+    expect(existsSync(outside)).toBe(true);
   });
 });
