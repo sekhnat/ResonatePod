@@ -1,0 +1,125 @@
+name: CI
+
+# Every push and pull request: typecheck, unit tests, and the Electron end-to-end test,
+# then build the AppImage and .deb and smoke-test the packaged app.
+# Pushing a tag like v1.4.0 also publishes those files as a GitHub release.
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Install a virtual display
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
+      - name: End-to-end test
+        run: xvfb-run -a npm run test:e2e
+        env:
+          E2E_SHOTS: ${{ runner.temp }}/e2e-shots
+      - name: Keep screenshots when the end-to-end test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/e2e-shots
+          if-no-files-found: ignore
+
+  package:
+    name: Package (AppImage, deb)
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      - name: Build packages
+        run: npm run dist -- --publish never
+      - name: Install a virtual display
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
+      - name: End-to-end test against the packaged app
+        run: xvfb-run -a node e2e/run.mjs
+        env:
+          E2E_APP: release/linux-unpacked/resonate
+          E2E_SHOTS: ${{ runner.temp }}/e2e-shots
+      - name: Keep screenshots when the packaged test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-packaged
+          path: ${{ runner.temp }}/e2e-shots
+          if-no-files-found: ignore
+      - name: Checksums
+        run: cd release && sha256sum *.AppImage *.deb > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resonate-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/SHA256SUMS.txt
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: resonate-linux
+          path: release
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Resonate ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            A podcast downloader and player for the Linux desktop.
+
+            **Install**
+            - **AppImage** (any distribution): download `Resonate-*.AppImage`, then `chmod +x Resonate-*.AppImage` and run it.
+            - **Debian / Ubuntu**: `sudo apt install ./resonate_*_amd64.deb`
+
+            The tray icon uses StatusNotifierItem; on GNOME it needs the AppIndicator extension.
+            `SHA256SUMS.txt` lists checksums for both files.
+          files: |
+            release/*.AppImage
+            release/*.deb
+            release/SHA256SUMS.txt
+          fail_on_unmatched_files: true
