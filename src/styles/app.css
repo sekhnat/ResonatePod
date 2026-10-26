@@ -1,0 +1,83 @@
+/* App-level styles on top of the Nocturne design system (nocturne.css).
+   Most layout lives inline in the components, mirroring the design file;
+   this sheet carries the states inline styles can't express. */
+
+body {
+  margin: 0;
+  background: color-mix(in srgb, var(--color-bg) 72%, black);
+  font-family: var(--font-body);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--color-accent-300); }
+a:hover { color: var(--color-accent-200); }
+* { box-sizing: border-box; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--color-neutral-800); border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+button { font: inherit; }
+
+/* Hover tints (the prototype's style-hover). Rows carry their own inline
+   background for the selected state, so the hover has to win over it. */
+.h-n900:hover { background: var(--color-neutral-900) !important; }
+.h-n800:hover { background: var(--color-neutral-800) !important; }
+.h-row:hover { background: color-mix(in srgb, var(--color-surface) 60%, transparent) !important; }
+.h-border:hover { border-color: var(--color-neutral-600) !important; }
+.h-ring:hover { box-shadow: 0 0 0 2px var(--color-accent); }
+.h-text:hover { color: var(--color-text) !important; }
+.btn-icon:not(.btn-primary):not(.btn-secondary):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.btn-icon:not(.btn-primary):not(.btn-secondary):active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.seg-opt { user-select: none; }
+.seg-opt:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+
+.row-actions { opacity: 0; transition: opacity .12s; }
+.h-row:hover .row-actions, .row-actions:focus-within { opacity: 1; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+
+/* Popover menus (main menu, sleep timer) */
+.menu {
+  position: absolute; z-index: 30; min-width: 220px; padding: 6px;
+  display: flex; flex-direction: column;
+  border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-lg);
+}
+.menu-item {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+  border: none; border-radius: 6px; background: transparent; color: var(--color-text);
+  font-size: 13px; text-align: left; cursor: pointer;
+}
+.menu-item:hover { background: var(--color-neutral-800); }
+.menu-item i { font-size: 15px; color: var(--color-neutral-400); width: 16px; }
+.menu-item .menu-hint { margin-left: auto; font-size: 11px; color: var(--color-neutral-500); }
+.menu-item.active { color: var(--color-accent-200); }
+.menu-item.active i { color: var(--color-accent); }
+.menu-sep { height: 1px; margin: 4px 6px; background: var(--color-neutral-800); }
+
+/* Toasts */
+.toasts {
+  position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 40;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
+}
+.toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: var(--radius-md); font-size: 12.5px;
+  background: color-mix(in srgb, var(--color-surface) 92%, black); box-shadow: var(--shadow-md);
+  animation: toast-in .18s ease-out;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* Queue drag and drop */
+.drag-over { box-shadow: inset 0 2px 0 var(--color-accent); }
+.dragging { opacity: .4; }
+
+/* Desktop frame. In "app" mode the window fills the viewport instead. */
+.desktop {
+  min-height: 100vh; display: flex; align-items: safe center; justify-content: safe center;
+  padding: 40px; width: max-content; min-width: 100%;
+}
+.app-mode .desktop { padding: 0; width: 100%; display: block; }
+.app-mode .stack { gap: 0 !important; }
+.app-mode .window { width: 100vw !important; height: 100vh !important; border-radius: 0 !important; box-shadow: none !important; }
+.app-mode .plasma { display: none !important; }
+
