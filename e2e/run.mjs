@@ -178,6 +178,20 @@ try {
     await shot('02-show');
   });
 
+  await step('episodes can be sorted, and the choice is kept per show', async () => {
+    const titles = () => page.locator('.h-row').evaluateAll((rows) => rows.map((r) => r.textContent.match(/Episode (one|two)/)?.[0]));
+    const sort = page.getByLabel('Sort episodes');
+    assert.deepEqual(await titles(), ['Episode two', 'Episode one']);
+    await sort.selectOption('Oldest first');
+    assert.deepEqual(await titles(), ['Episode one', 'Episode two']);
+    await shot('02b-sorted');
+    await page.getByRole('button', { name: 'New episodes' }).click();
+    assert.equal(await page.getByLabel('Sort episodes').inputValue(), 'Newest first', 'the inbox has its own sort');
+    await page.getByRole('button', { name: 'Fixture FM' }).click();
+    assert.equal(await page.getByLabel('Sort episodes').inputValue(), 'Oldest first');
+    await page.getByLabel('Sort episodes').selectOption('Newest first');
+  });
+
   await step('auto-download saves episodes to ~/Podcasts', async () => {
     const dir = path.join(home, 'Podcasts', 'Fixture FM');
     for (let i = 0; i < 50 && !(existsSync(dir) && readdirSync(dir).filter((f) => f.endsWith('.wav')).length === 2); i++) await page.waitForTimeout(100);
