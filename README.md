@@ -14,6 +14,7 @@ the **Nocturne** design system (dark, compact, Inter, Phosphor icons).
 ## Contents
 
 - [Highlights](#highlights)
+- [Screenshots](#screenshots)
 - [Installation](#installation)
 - [Features](#features)
 - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -32,6 +33,24 @@ the **Nocturne** design system (dark, compact, Inter, Phosphor icons).
 - **Rich playback:** chapters (from the feed or the file), synced transcripts, silence trimming and a sleep timer.
 - **Sync:** two-way subscriptions and play positions through gpodder.net, oPodSync or Nextcloud.
 - **Native feel:** system tray, MPRIS media keys, desktop notifications and login autostart.
+
+## Screenshots
+
+Captured from the packaged app by the end-to-end test, running under Xvfb against a local fixture
+feed.
+
+| | |
+| --- | --- |
+| ![A show page with episodes sorted oldest first](docs/screenshots/show-sorted.png) | ![Now playing panel with chapters and a transcript that follows playback](docs/screenshots/now-playing.png) |
+| **Show page:** sort and filter the episode list. | **Now playing:** chapters and a transcript that follows playback. |
+| ![Full-screen now playing view](docs/screenshots/now-playing-full.png) | ![Downloads screen with completed downloads](docs/screenshots/downloads.png) |
+| **Full view:** chapters, transcript and playback settings. | **Downloads:** progress, history and storage. |
+
+To regenerate them, run the e2e test with `E2E_SHOTS=<dir>` set and copy the images you want:
+
+```bash
+E2E_SHOTS=/tmp/shots xvfb-run -a npm run test:e2e
+```
 
 ## Installation
 
