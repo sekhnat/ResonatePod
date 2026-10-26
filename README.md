@@ -83,6 +83,6 @@ test/fixtures/  sample feed, chapters, transcript, and small media files (chapte
 - `npm run icons` regenerates `assets/*.png` from the SVGs. It needs `playwright` with
   Chromium installed.
 - CI (`.github/workflows/ci.yml`) runs the typecheck, unit tests and end-to-end test on
-  every push, then builds and smoke-tests the AppImage and .deb (downloadable from the run).
+  every push, then builds and smoke-tests the AppImage and .deb (kept on the run for 7 days).
   To release, bump `version` in `package.json` and push a matching tag (`git tag v1.4.1 &&
   git push origin v1.4.1`); CI attaches the packages and checksums to a GitHub release.
