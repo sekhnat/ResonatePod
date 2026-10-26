@@ -71,13 +71,8 @@ button { font: inherit; }
 .drag-over { box-shadow: inset 0 2px 0 var(--color-accent); }
 .dragging { opacity: .4; }
 
-/* Desktop frame. In "app" mode the window fills the viewport instead. */
-.desktop {
-  min-height: 100vh; display: flex; align-items: safe center; justify-content: safe center;
-  padding: 40px; width: max-content; min-width: 100%;
-}
-.app-mode .desktop { padding: 0; width: 100%; display: block; }
-.app-mode .stack { gap: 0 !important; }
-.app-mode .window { width: 100vw !important; height: 100vh !important; border-radius: 0 !important; box-shadow: none !important; }
-.app-mode .plasma { display: none !important; }
+/* The header bar is the window's title bar (the window is frameless). */
+.titlebar { -webkit-app-region: drag; user-select: none; }
+.titlebar button, .titlebar .menu, .titlebar input { -webkit-app-region: no-drag; }
 
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

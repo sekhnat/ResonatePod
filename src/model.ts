@@ -1,5 +1,5 @@
-import { art, fmt, mono } from './data';
-import { epInfo, getEp, ruleFor, type Filter, type State } from './store';
+import { art, epKey, fmt, mono } from './data';
+import { downloadsBlocked, epInfo, getEp, ruleFor, type Filter, type State } from './store';
 
 export type EpStatus = 'cloud' | 'downloaded' | 'played' | 'downloading';
 
@@ -17,6 +17,7 @@ export interface EpisodeRow {
   showId: string;
   art: string;
   mono: string;
+  imageUrl?: string;
   meta: string;
   durMin: number;
   status: EpStatus;
@@ -30,6 +31,7 @@ export interface EpisodeRow {
   downloaded: boolean;
   downloading: boolean;
   progress: number;
+  file?: string;
 }
 
 export function episodeRow(s: State, key: string): EpisodeRow | null {
@@ -39,8 +41,15 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
   const isCur = s.cur === key;
   const dlItem = s.dl.find((d) => d.key === key);
   const played = st.played && !isCur;
-  const status: EpStatus = dlItem ? 'downloading' : played ? 'played' : st.downloaded ? 'downloaded' : 'cloud';
+  const status: EpStatus = dlItem ? 'downloading' : played ? 'played' : st.file ? 'downloaded' : 'cloud';
   const [stIcon, stColor, stLabel] = STATUS[status];
+  const pos = isCur ? s.pos : st.pos;
+  const parts = [e.date];
+  if (e.durMin) parts.push(`${e.durMin} min`);
+  if (isCur && e.dur) parts.push(`${fmt(e.dur - s.pos)} left`);
+  else if (!played && pos > 30 && e.dur) parts.push(`${fmt(e.dur - pos)} left`);
+  if (e.sizeMb) parts.push(`${e.sizeMb} MB`);
+  if (dlItem && dlItem.total) parts.push(`${Math.round((dlItem.received / dlItem.total) * 100)}%`);
   return {
     key,
     title: e.title,
@@ -48,16 +57,18 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
     showId: e.show.id,
     art: art(e.show.hue),
     mono: mono(e.show.title),
-    meta: `${e.date} · ${e.durMin} min${isCur ? ` · ${fmt(e.dur - s.pos)} left` : ''} · ${e.sizeMb} MB` + (dlItem ? ` · ${Math.round(dlItem.p * 100)}%` : ''),
+    imageUrl: e.ep.imageUrl ?? e.show.imageUrl,
+    meta: parts.join(' · '),
     durMin: e.durMin,
     status, stIcon, stColor, stLabel,
     isNew: st.inbox && !st.played,
     isCur,
     isPlaying: isCur && s.playing,
     played,
-    downloaded: st.downloaded,
+    downloaded: !!st.file,
     downloading: !!dlItem,
-    progress: isCur ? s.pos / e.dur : st.progress,
+    progress: e.dur ? pos / e.dur : 0,
+    file: st.file,
   };
 }
 
@@ -66,17 +77,16 @@ export const rowsFor = (s: State, keys: string[]) => keys.map((k) => episodeRow(
 export const applyFilter = (rows: EpisodeRow[], f: Filter) =>
   rows.filter((r) => f === 'All' || (f === 'Unplayed' && !r.played) || (f === 'Downloaded' && r.downloaded));
 
-/** Episodes flagged as new, newest first across shows (as the inbox lists them). */
+/** Episodes flagged as new, newest first across shows. */
 export function inboxKeys(s: State) {
-  const maxEps = Math.max(0, ...s.shows.map((x) => x.eps.length));
-  const keys: string[] = [];
-  for (let i = 0; i < maxEps; i++) for (const sh of s.shows) if (i < sh.eps.length && s.eps[`${sh.id}:${i}`]?.inbox) keys.push(`${sh.id}:${i}`);
-  return keys;
+  const out: { key: string; at: number }[] = [];
+  for (const sh of s.shows) for (const e of sh.eps) { const key = epKey(sh.id, e.guid); if (s.eps[key]?.inbox) out.push({ key, at: e.pubDate }); }
+  return out.sort((a, b) => b.at - a.at).map((x) => x.key);
 }
 
 export const unplayedFor = (s: State, showId: string) => {
   const sh = s.shows.find((x) => x.id === showId);
-  return sh ? sh.eps.filter((_, i) => { const e = s.eps[`${showId}:${i}`]; return e?.inbox && !e.played; }).length : 0;
+  return sh ? sh.eps.filter((e) => { const st = s.eps[epKey(showId, e.guid)]; return st?.inbox && !st.played; }).length : 0;
 };
 
 export const totalUnplayed = (s: State) => s.shows.reduce((a, sh) => a + unplayedFor(s, sh.id), 0);
@@ -88,13 +98,26 @@ export function ruleLabel(s: State, showId: string) {
   return r.value === 'All' ? 'Auto-download all' : `Auto-download ${r.value.toLowerCase()}`;
 }
 
+const MB = 1048576;
+
 export function dlSummary(s: State) {
-  const done = s.dl.reduce((a, d) => a + d.mb * d.p, 0);
-  const tot = s.dl.reduce((a, d) => a + d.mb, 0);
-  return s.dl.length ? `${s.dl.length} active · ${Math.round(tot - done)} MB remaining` : 'Nothing downloading';
+  if (!s.dl.length) return 'Nothing downloading';
+  const left = s.dl.reduce((a, d) => a + Math.max(0, d.total - d.received), 0);
+  const unknown = s.dl.some((d) => !d.total);
+  const state = downloadsBlocked(s) ? ' · paused' : '';
+  return `${s.dl.length} active · ${unknown ? 'about ' : ''}${Math.round(left / MB)} MB remaining${state}`;
 }
 
-export function minutesAgo(ts: number) {
+export const fmtSpeed = (bps: number) => (bps >= MB ? `${(bps / MB).toFixed(1)} MB/s` : `${Math.round(bps / 1024)} KB/s`);
+
+export function agoLabel(ts: number) {
+  if (!ts) return 'never';
   const m = Math.floor((Date.now() - ts) / 60000);
-  return m <= 0 ? 'just now' : m === 1 ? '1 minute ago' : `${m} minutes ago`;
+  if (m <= 0) return 'just now';
+  if (m === 1) return '1 minute ago';
+  if (m < 60) return `${m} minutes ago`;
+  const h = Math.floor(m / 60);
+  return h === 1 ? '1 hour ago' : h < 24 ? `${h} hours ago` : new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+export const clockLabel = (ts: number) => (ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'never');

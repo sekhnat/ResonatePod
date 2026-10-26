@@ -44,7 +44,7 @@ export function ShowSettingsDialog() {
             <Seg options={opts} value={ovr[k] ?? opts[0]} onPick={(v) => {
               s.setOverride(sh.id, k, v);
               // Speed and trim apply live when this show is playing.
-              if (k === 'speed' && s.cur.startsWith(`${sh.id}:`)) s.setSpeed(parseFloat((v === 'Global' ? s.sv.speed : v).replace('×', '')));
+              if (k === 'speed' && s.cur?.startsWith(`${sh.id}:`)) s.setSpeed(parseFloat((v === 'Global' ? s.sv.speed : v).replace('×', '')));
             }} style={{ alignSelf: 'flex-start' }} />
           </div>
         ))}
@@ -107,7 +107,9 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl 1 – 5', 'New episodes, Shows, Queue, Downloads, Discover'],
   ['Ctrl ,', 'Preferences'],
   ['Ctrl /', 'Keyboard shortcuts'],
+  ['Ctrl O / Ctrl E', 'Import / export OPML'],
   ['Ctrl W', 'Close to tray'],
+  ['Ctrl Q', 'Quit'],
   ['Esc', 'Close dialogs and the full Now playing view'],
 ];
 
@@ -139,12 +141,10 @@ export function Dialogs() {
         onSave={(folder) => { s.setPrefs({ folder }); s.toast(`Downloads will be saved to ${folder}`); }} />;
     case 'storage':
       return <FieldDialog title="Storage limit" body="When downloads pass this size, the oldest played files are removed first." label="Limit" suffix="GB" initial={String(s.storageLimitGb)}
-        validate={(v) => (/^\d+$/.test(v) && +v >= 1 ? (+v * 1024 < s.usedMb ? `Already using ${(s.usedMb / 1024).toFixed(1)} GB — pick a larger limit` : null) : 'Enter a whole number of gigabytes')}
-        onSave={(v) => s.setPrefs({ storageLimitGb: +v })} />;
+        validate={(v) => (/^\d+$/.test(v) && +v >= 1 ? (+v * 1024 ** 3 < s.usedBytes ? `Already using ${(s.usedBytes / 1024 ** 3).toFixed(1)} GB — pick a larger limit` : null) : 'Enter a whole number of gigabytes')}
+        onSave={(v) => { s.setPrefs({ storageLimitGb: +v }); void s.cleanupStorage(); }} />;
     case 'sync':
-      return <FieldDialog title="Sync server" body="Subscriptions and play positions sync with any gpodder-compatible server." label="Server address" initial={s.syncServer}
-        validate={(v) => (/^[\w.-]+(:\d+)?(\/\S*)?$/.test(v.replace(/^https?:\/\//, '')) ? null : 'Enter a host name, e.g. gpodder.net')}
-        onSave={(v) => { s.setPrefs({ syncServer: v.replace(/^https?:\/\//, '') }); s.toast('Sync server updated'); }} />;
+      return <SyncDialog />;
     case 'shortcuts':
       return (
         <Modal onClose={close} width={460} label="Keyboard shortcuts">
@@ -167,7 +167,7 @@ export function Dialogs() {
             <i className="ph-fill ph-waveform" style={{ fontSize: 44, color: 'var(--color-accent)' }} />
             <span className="dialog-title">Resonate</span>
             <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)' }}>Version 1.4 · A podcast downloader and player for the Linux desktop.</span>
-            <span style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>{s.shows.length} subscriptions · {(s.usedMb / 1024).toFixed(1)} GB in {s.folder}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>{s.shows.length} subscriptions · {(s.usedBytes / 1024 ** 3).toFixed(1)} GB in {s.folder}</span>
           </div>
           <div className="dialog-actions" style={{ margin: 0, justifyContent: 'center' }}><button className="btn btn-primary" style={{ fontSize: 12 }} onClick={close}>Close</button></div>
         </Modal>
@@ -175,4 +175,52 @@ export function Dialogs() {
     default:
       return null;
   }
+}
+
+function SyncDialog() {
+  const s = useStore();
+  const [server, setServer] = useState(s.sync.server || 'gpodder.net');
+  const [user, setUser] = useState(s.sync.user);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const close = () => s.set({ dialog: null });
+  const connected = !!s.sync.server;
+  const save = async () => {
+    if (!server.trim() || !user.trim() || !password) return;
+    setBusy(true);
+    const ok = await s.configureSync(server.trim(), user.trim(), password);
+    setBusy(false);
+    if (ok) { s.toast(`Syncing with ${server.trim()}`); close(); }
+  };
+  const field = (id: string, label: string, value: string, set: (v: string) => void, type = 'text', placeholder = '') => (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} className="input" type={type} value={value} placeholder={placeholder} autoComplete="off"
+        onChange={(e) => set(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
+    </div>
+  );
+  return (
+    <Modal onClose={close} width={440} label="Sync server">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="dialog-title">Sync server</span>
+        <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+          Keep subscriptions and play positions in step with other apps through gpodder.net or a compatible server (oPodSync, Nextcloud gPodder Sync).
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {field('sync-server', 'Server', server, setServer, 'text', 'gpodder.net')}
+        {field('sync-user', 'Username', user, setUser)}
+        {field('sync-pass', connected ? 'Password (re-enter to change)' : 'Password', password, setPassword, 'password')}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {connected ? <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => { s.disconnectSync(); close(); }}>Disconnect</button> : <span />}
+        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+          {connected && <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={s.syncing} onClick={() => void s.runSync()}>{s.syncing ? 'Syncing…' : 'Sync now'}</button>}
+          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || !server.trim() || !user.trim() || !password} onClick={() => void save()}>
+            {busy ? <i className="ph ph-circle-notch spin" /> : null}{connected ? 'Save' : 'Connect'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 }

@@ -1,0 +1,73 @@
+import { downloadsBlocked, epInfo, sleepLabel, useStore, type State } from './store';
+import { dlSummary } from './model';
+import { platform } from './platform';
+import { startEngine } from './audio/engine';
+
+const HOUR = 3600000;
+
+/** Wires the store to the OS: downloads, tray, metered network, timers. Call once after hydration. */
+export function startServices() {
+  const st = () => useStore.getState();
+  startEngine();
+
+  platform.download.onEvent((e) => st().onDownloadEvent(e));
+  let blocked: boolean | null = null;
+  let par: string | null = null;
+  let traySig = '';
+  let folder: string | null = null;
+
+  const sync = (s: State) => {
+    const b = downloadsBlocked(s);
+    if (b !== blocked) { blocked = b; platform.download.setPaused(b); }
+    if (s.sv.par !== par) { par = s.sv.par; platform.download.setConcurrency(parseInt(par, 10)); }
+    if (s.folder !== folder) { folder = s.folder; void s.updateUsage(); }
+    const cur = epInfo(s, s.cur);
+    const tray = {
+      title: cur?.title ?? '',
+      show: cur?.show.title ?? '',
+      playing: s.playing,
+      speed: s.speed,
+      sleep: sleepLabel(s.sleep),
+      upNext: s.queue.filter((k) => k !== s.cur).slice(0, 2).map((k) => ({ key: k, title: epInfo(s, k)?.title ?? '' })),
+      downloads: dlSummary(s),
+      dlPaused: s.dlPaused,
+    };
+    const sig = JSON.stringify(tray);
+    if (sig !== traySig) { traySig = sig; platform.updateTray(tray); }
+  };
+  useStore.subscribe(sync);
+  sync(st());
+
+  platform.onTrayAction((a) => {
+    const s = st();
+    switch (a.type) {
+      case 'toggle': s.togglePlay(); break;
+      case 'back': s.skipBack(); break;
+      case 'fwd': s.skipFwd(); break;
+      case 'speed': s.cycleSpeed(); break;
+      case 'refresh': void s.refresh(); break;
+      case 'dlPause': s.toggleDlPause(); break;
+      case 'play': s.play(a.key); break;
+      case 'sleep':
+        s.setSleep(a.mode === 'off' ? { mode: 'off' } : a.mode === 'chapter' ? { mode: 'chapter' } : a.mode === 'episode' ? { mode: 'episode' } : { mode: 'timer', minutes: a.mode, remaining: a.mode * 60 });
+        break;
+    }
+  });
+
+  const checkMetered = async () => {
+    const metered = await platform.isMetered().catch(() => null);
+    if (metered !== st().metered) useStore.setState({ metered });
+  };
+  void checkMetered();
+  setInterval(checkMetered, 60000);
+
+  setInterval(() => st().tick(), 1000);
+
+  const maybeRefresh = () => {
+    const s = st();
+    if (s.shows.length && Date.now() - s.lastChecked > HOUR) void s.refresh();
+  };
+  maybeRefresh();
+  setInterval(maybeRefresh, 60000);
+  if (st().cur) void st().loadMeta(st().cur!);
+}

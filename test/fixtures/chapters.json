@@ -1,0 +1,7 @@
+{ "version": "1.2.0", "chapters": [
+  { "startTime": 0, "title": "Cold open" },
+  { "startTime": 266.6, "title": "Why Wayland took so long" },
+  { "startTime": 1120, "title": "Screen sharing & portals" },
+  { "startTime": 1500, "title": "Ad break", "toc": false },
+  { "startTime": 2027, "title": "Fractional scaling, finally" }
+] }

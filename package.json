@@ -2,30 +2,76 @@
   "name": "resonate",
   "version": "1.4.0",
   "private": true,
-  "description": "Resonate — a podcast downloader and player for the Linux desktop.",
+  "description": "Resonate \u2014 a podcast downloader and player for the Linux desktop.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
+    "build": "tsc -b && vite build && node scripts/build-electron.mjs",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder --linux AppImage deb",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "test:e2e": "npm run build && node e2e/run.mjs",
+    "typecheck": "tsc -b",
+    "icons": "node scripts/icons.mjs"
   },
   "license": "MIT",
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
     "@phosphor-icons/web": "^2.1.1",
+    "fast-xml-parser": "^4.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
     "jsdom": "^25.0.1",
+    "playwright-core": "^1.48.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
+  },
+  "main": "dist-electron/main.cjs",
+  "author": "sekhnat <221756436+sekhnat@users.noreply.github.com>",
+  "homepage": "https://github.com/sekhnat/Resonate",
+  "build": {
+    "appId": "io.github.sekhnat.resonate",
+    "productName": "Resonate",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "assets/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo;Audio;Player",
+      "icon": "assets/icon-512.png",
+      "synopsis": "Podcast downloader and player",
+      "desktop": {
+        "Name": "Resonate",
+        "Comment": "Download and listen to podcasts",
+        "Keywords": "podcast;rss;audio;"
+      }
+    },
+    "deb": {
+      "depends": [
+        "libnotify4",
+        "libsecret-1-0"
+      ]
+    }
   }
 }

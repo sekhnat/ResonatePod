@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0" xmlns:psc="http://podlove.org/simple-chapters" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Kernel Panic Hour</title>
+    <link>https://kernelpanic.example/</link>
+    <description><![CDATA[<p>Two sysadmins talk through the week in <b>free software</b> &amp; answer mail.</p>]]></description>
+    <itunes:author>Ines Varga &amp; Tom Achebe</itunes:author>
+    <itunes:image href="https://kernelpanic.example/art.jpg"/>
+    <itunes:category text="Technology"><itunes:category text="Tech News"/></itunes:category>
+    <item>
+      <title>Wayland, five years on</title>
+      <guid isPermaLink="false">kp:ep:42</guid>
+      <pubDate>Mon, 19 Oct 2026 06:00:00 +0000</pubDate>
+      <enclosure url="https://cdn.example/kp42.mp3" length="69206016" type="audio/mpeg"/>
+      <itunes:duration>1:12:03</itunes:duration>
+      <description>Screen sharing, portals and fractional scaling.</description>
+      <podcast:chapters url="https://kernelpanic.example/42/chapters.json" type="application/json+chapters"/>
+      <podcast:transcript url="https://kernelpanic.example/42.html" type="text/html"/>
+      <podcast:transcript url="https://kernelpanic.example/42.vtt" type="text/vtt"/>
+    </item>
+    <item>
+      <title>Rolling releases vs. the rest of us</title>
+      <guid>https://kernelpanic.example/41</guid>
+      <pubDate>Mon, 12 Oct 2026 06:00:00 +0000</pubDate>
+      <enclosure url="https://cdn.example/kp41.m4a" length="0" type="audio/mp4"/>
+      <itunes:duration>3840</itunes:duration>
+      <itunes:image href="https://kernelpanic.example/41.jpg"/>
+      <content:encoded><![CDATA[<p>Arch, Tumbleweed &amp; friends.</p><ul><li>Picks</li></ul>]]></content:encoded>
+      <psc:chapters version="1.2">
+        <psc:chapter start="00:00:00" title="Intro"/>
+        <psc:chapter start="00:04:26.500" title="Why roll?"/>
+        <psc:chapter start="35:10" title="Listener mail"/>
+      </psc:chapters>
+    </item>
+    <item>
+      <title>The init wars, revisited</title>
+      <pubDate>Mon, 05 Oct 2026 06:00:00 +0000</pubDate>
+      <enclosure url="https://cdn.example/kp40.mp3" type="audio/mpeg"/>
+      <itunes:duration>58:00</itunes:duration>
+    </item>
+    <item>
+      <title>A trailer with no audio</title>
+    </item>
+  </channel>
+</rss>

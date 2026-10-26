@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore, type State } from '../store';
+import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
 
 export interface PalItem { label: string; hint: string; icon: string; run: () => void }
 
@@ -7,9 +8,9 @@ export function paletteItems(s: State): PalItem[] {
   const q = s.query.trim().toLowerCase();
   const cmds: PalItem[] = [
     { label: s.playing ? 'Pause' : 'Play', hint: 'Space', icon: 'ph ph-play-pause', run: () => { s.set({ palette: false }); s.togglePlay(); } },
-    { label: 'Refresh all feeds', hint: 'Ctrl R', icon: 'ph ph-arrows-clockwise', run: () => { s.set({ palette: false }); s.refresh(); } },
+    { label: 'Refresh all feeds', hint: 'Ctrl R', icon: 'ph ph-arrows-clockwise', run: () => { s.set({ palette: false }); void s.refresh(); } },
     { label: 'Go to Downloads', hint: 'Ctrl 4', icon: 'ph ph-download-simple', run: () => s.go('downloads') },
-    { label: 'Import OPML…', hint: '', icon: 'ph ph-file-arrow-up', run: () => { s.go('shows'); document.getElementById('opml-input')?.click(); } },
+    { label: 'Import OPML…', hint: 'Ctrl O', icon: 'ph ph-file-arrow-up', run: () => { s.set({ palette: false }); void importOpmlFile(); } },
     { label: 'Set speed to 1.5×', hint: '', icon: 'ph ph-gauge', run: () => s.setSpeed(1.5) },
     { label: 'Sleep timer: end of chapter', hint: '', icon: 'ph ph-moon', run: () => s.setSleep({ mode: 'chapter' }) },
     { label: 'Preferences', hint: 'Ctrl ,', icon: 'ph ph-gear-six', run: () => s.go('settings') },
@@ -20,14 +21,15 @@ export function paletteItems(s: State): PalItem[] {
     { label: 'Go to Shows', hint: 'Ctrl 2', icon: 'ph ph-squares-four', run: () => s.go('shows') },
     { label: 'Go to Queue', hint: 'Ctrl 3', icon: 'ph ph-queue', run: () => s.go('queue') },
     { label: 'Go to Discover', hint: 'Ctrl 5', icon: 'ph ph-compass', run: () => s.go('discover') },
-    { label: 'Export OPML…', hint: '', icon: 'ph ph-file-arrow-down', run: () => { s.set({ palette: false }); window.dispatchEvent(new Event('resonate:export-opml')); } },
+    { label: 'Export OPML…', hint: 'Ctrl E', icon: 'ph ph-file-arrow-down', run: () => { s.set({ palette: false }); void exportOpmlFile(); } },
     { label: 'Pause all downloads', hint: '', icon: 'ph ph-pause', run: () => { s.set({ palette: false }); if (!s.dlPaused) s.toggleDlPause(); } },
     { label: 'Sleep timer: off', hint: '', icon: 'ph ph-moon', run: () => s.setSleep({ mode: 'off' }) },
     { label: 'Keyboard shortcuts', hint: 'Ctrl /', icon: 'ph ph-keyboard', run: () => s.set({ palette: false, dialog: 'shortcuts' }) },
   ];
   const shows = s.shows.map((x) => ({ label: x.title, hint: 'Show', icon: 'ph ph-microphone', run: () => s.openShow(x.id) }));
   const eps: PalItem[] = [];
-  s.shows.forEach((x) => x.eps.forEach((t, i) => eps.push({ label: t, hint: x.title, icon: 'ph ph-play-circle', run: () => s.play(`${x.id}:${i}`) })));
+  s.shows.forEach((x) => x.eps.forEach((e) => eps.push({ label: e.title, hint: x.title, icon: 'ph ph-play-circle', run: () => s.play(`${x.id}:${e.guid}`) })));
+  if (s.sync.server) extra.push({ label: 'Sync now', hint: '', icon: 'ph ph-arrows-left-right', run: () => { s.set({ palette: false }); void s.runSync(); } });
   return [...cmds, ...extra, ...shows, ...eps].filter((x) => x.label.toLowerCase().includes(q) || x.hint.toLowerCase().includes(q)).slice(0, 9);
 }
 

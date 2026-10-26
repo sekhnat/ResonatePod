@@ -1,0 +1,46 @@
+import { contextBridge, ipcRenderer } from 'electron';
+import type { DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
+
+const env = ipcRenderer.sendSync('env') as { desktop: 'KDE' | 'GNOME'; hostname: string };
+
+const api = {
+  env,
+  http: (url: string, req?: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke('http', url, req),
+  loadLibrary: (): Promise<string | null> => ipcRenderer.invoke('library:load'),
+  saveLibrary: (json: string): Promise<void> => ipcRenderer.invoke('library:save', json),
+  download: {
+    start: (job: DownloadJob) => ipcRenderer.invoke('dl:start', job),
+    cancel: (key: string) => ipcRenderer.invoke('dl:cancel', key),
+    setPaused: (paused: boolean) => ipcRenderer.invoke('dl:paused', paused),
+    setConcurrency: (n: number) => ipcRenderer.invoke('dl:concurrency', n),
+    onEvent: (cb: (e: DownloadEvent) => void) => {
+      const h = (_: unknown, e: DownloadEvent) => cb(e);
+      ipcRenderer.on('dl:event', h);
+      return () => ipcRenderer.off('dl:event', h);
+    },
+  },
+  deleteFile: (file: string): Promise<void> => ipcRenderer.invoke('fs:delete', file),
+  diskUsage: (folder: string): Promise<number> => ipcRenderer.invoke('fs:usage', folder),
+  showInFolder: (file: string): Promise<void> => ipcRenderer.invoke('fs:showInFolder', file),
+  openFolder: (folder: string): Promise<string> => ipcRenderer.invoke('fs:openFolder', folder),
+  pickFolder: (current: string): Promise<string | null> => ipcRenderer.invoke('dialog:folder', current),
+  openOpml: (): Promise<{ name: string; text: string } | null> => ipcRenderer.invoke('dialog:openOpml'),
+  saveOpml: (name: string, text: string): Promise<string | null> => ipcRenderer.invoke('dialog:saveOpml', name, text),
+  isMetered: (): Promise<boolean | null> => ipcRenderer.invoke('net:metered'),
+  getSecret: (key: string): Promise<string | null> => ipcRenderer.invoke('secret:get', key),
+  setSecret: (key: string, value: string | null): Promise<void> => ipcRenderer.invoke('secret:set', key, value),
+  updateTray: (s: TrayState) => ipcRenderer.send('tray:update', s),
+  onTrayAction: (cb: (a: TrayAction) => void) => {
+    const h = (_: unknown, a: TrayAction) => cb(a);
+    ipcRenderer.on('tray:action', h);
+    return () => ipcRenderer.off('tray:action', h);
+  },
+  minimize: () => ipcRenderer.send('win:minimize'),
+  toggleMaximize: () => ipcRenderer.send('win:maximize'),
+  close: () => ipcRenderer.send('win:close'),
+  quit: () => ipcRenderer.send('app:quit'),
+};
+
+export type ResonateApi = typeof api;
+
+contextBridge.exposeInMainWorld('resonate', api);
