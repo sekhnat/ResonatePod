@@ -1,19 +1,20 @@
-import { useStore } from '../store';
-import { agoLabel, applyFilter, inboxKeys, rowsFor } from '../model';
-import { Art, GhostIcon, PageHeader, RowPlay, Seg } from '../components/ui';
+import { INBOX_SORT, sortFor, useStore } from '../store';
+import { agoLabel, applyFilter, applySort, inboxKeys, rowsFor } from '../model';
+import { Art, GhostIcon, PageHeader, RowPlay, Seg, SortSelect } from '../components/ui';
 import { Empty, titleColor } from './ShowScreen';
 
 const FILTERS = ['All', 'Unplayed', 'Downloaded'] as const;
 
 export function InboxScreen() {
   const s = useStore();
-  const rows = applyFilter(rowsFor(s, inboxKeys(s)), s.filter);
+  const rows = applySort(applyFilter(rowsFor(s, inboxKeys(s)), s.filter), sortFor(s, INBOX_SORT));
   const nextMin = Math.max(1, 60 - Math.floor((Date.now() - s.lastChecked) / 60000));
   const sub = s.refreshing ? 'Checking feeds…' : s.lastChecked ? `Feeds checked ${agoLabel(s.lastChecked)} · next check in ${nextMin} min` : 'Feeds not checked yet';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 760 }}>
       <PageHeader title="New episodes" sub={sub}>
+        <SortSelect value={sortFor(s, INBOX_SORT)} onPick={(v) => s.setSort(INBOX_SORT, v)} />
         <Seg options={FILTERS} value={s.filter} onPick={(filter) => s.set({ filter })} />
         <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => { s.markAllPlayed(); s.toast('Marked all new episodes as played'); }}>Mark all played</button>
       </PageHeader>

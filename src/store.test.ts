@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, useStore } from './store';
-import { inboxKeys, totalUnplayed } from './model';
+import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, useStore } from './store';
+import { applySort, inboxKeys, rowsFor, totalUnplayed } from './model';
 import { platform } from './platform';
 
 const FEED_URL = 'https://kernelpanic.example/feed.xml';
@@ -377,5 +377,45 @@ describe('directories', () => {
     await st().setPodcastIndexKey(null);
     expect(st().directory).toMatchObject({ podcastIndex: false, source: 'all' });
     setSecret.mockRestore();
+  });
+});
+
+describe('sorting episodes', () => {
+  const keys = () => st().shows[0].eps.map((e) => `${st().shows[0].id}:${e.guid}`);
+  const order = (sort: Parameters<typeof applySort>[1], rows = rowsFor(st(), keys())) => applySort(rows, sort).map((r) => r.key);
+
+  it('orders by date, duration and title', () => {
+    expect(order('Newest first')).toEqual([K42, K41, K40]);
+    expect(order('Oldest first')).toEqual([K40, K41, K42]);
+    expect(order('Longest first')).toEqual([K42, K41, K40]);
+    expect(order('Shortest first')).toEqual([K40, K41, K42]);
+    expect(order('Title A–Z')).toEqual([K41, K40, K42]);
+    expect(order('Title Z–A')).toEqual([K42, K40, K41]);
+  });
+
+  it('puts undated and unknown-length episodes last either way', () => {
+    const rows = rowsFor(st(), keys());
+    rows[0] = { ...rows[0], pubDate: 0, dur: 0 };
+    for (const sort of ['Newest first', 'Oldest first', 'Longest first', 'Shortest first'] as const) expect(order(sort, rows).at(-1)).toBe(K42);
+  });
+
+  it('numbers titles naturally and lists unplayed first', () => {
+    const base = rowsFor(st(), keys())[0];
+    const titled = ['Ep 10', 'Ep 2', 'ep 1'].map((title) => ({ ...base, key: title, title }));
+    expect(order('Title A–Z', titled)).toEqual(['ep 1', 'Ep 2', 'Ep 10']);
+    st().markPlayed(K42, true);
+    expect(order('Unplayed first')).toEqual([K41, K40, K42]);
+  });
+
+  it('remembers a sort per show and for the inbox, and forgets it on unsubscribe', () => {
+    st().setSort('kernel-panic-hour', 'Oldest first');
+    st().setSort(INBOX_SORT, 'Title A–Z');
+    expect(st().sorts).toEqual({ 'kernel-panic-hour': 'Oldest first', [INBOX_SORT]: 'Title A–Z' });
+    expect(sortFor(st(), 'other')).toBe('Newest first');
+    st().setSort('kernel-panic-hour', 'Newest first');
+    expect(st().sorts).toEqual({ [INBOX_SORT]: 'Title A–Z' });
+    st().setSort('kernel-panic-hour', 'Longest first');
+    st().unsubscribe('kernel-panic-hour', true);
+    expect(st().sorts).toEqual({ [INBOX_SORT]: 'Title A–Z' });
   });
 });
