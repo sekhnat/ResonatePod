@@ -1,5 +1,5 @@
 import { art, epKey, fmt, mono } from './data';
-import { downloadsBlocked, epInfo, getEp, ruleFor, type Filter, type State } from './store';
+import { downloadsBlocked, epInfo, getEp, ruleFor, type Filter, type Sort, type State } from './store';
 
 export type EpStatus = 'cloud' | 'downloaded' | 'played' | 'downloading';
 
@@ -20,6 +20,10 @@ export interface EpisodeRow {
   imageUrl?: string;
   meta: string;
   durMin: number;
+  /** Publication time, ms since epoch; 0 when undated. */
+  pubDate: number;
+  /** Seconds; 0 when unknown. */
+  dur: number;
   status: EpStatus;
   stIcon: string;
   stColor: string;
@@ -62,6 +66,8 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
     imageUrl: e.ep.imageUrl ?? e.show.imageUrl,
     meta: parts.join(' · '),
     durMin: e.durMin,
+    pubDate: e.ep.pubDate,
+    dur: e.dur,
     status, stIcon, stColor, stLabel,
     isNew: st.inbox && !st.played,
     isCur,
@@ -78,6 +84,29 @@ export const rowsFor = (s: State, keys: string[]) => keys.map((k) => episodeRow(
 
 export const applyFilter = (rows: EpisodeRow[], f: Filter) =>
   rows.filter((r) => f === 'All' || (f === 'Unplayed' && !r.played) || (f === 'Downloaded' && r.downloaded));
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+/** Orders by `by`, with unknown values (0) last in either direction. */
+const byValue = (by: (r: EpisodeRow) => number, dir: 1 | -1) => (a: EpisodeRow, b: EpisodeRow) => {
+  const x = by(a), y = by(b);
+  return !x === !y ? dir * (x - y) : x ? -1 : 1;
+};
+
+/** Sorts a copy of `rows`; ties fall back to newest first. */
+export function applySort(rows: EpisodeRow[], sort: Sort): EpisodeRow[] {
+  const newest = (a: EpisodeRow, b: EpisodeRow) => b.pubDate - a.pubDate;
+  const primary: Record<Sort, (a: EpisodeRow, b: EpisodeRow) => number> = {
+    'Newest first': byValue((r) => r.pubDate, -1),
+    'Oldest first': byValue((r) => r.pubDate, 1),
+    'Longest first': byValue((r) => r.dur, -1),
+    'Shortest first': byValue((r) => r.dur, 1),
+    'Title A–Z': (a, b) => collator.compare(a.title, b.title),
+    'Title Z–A': (a, b) => collator.compare(b.title, a.title),
+    'Unplayed first': (a, b) => Number(a.played) - Number(b.played),
+  };
+  return [...rows].sort((a, b) => primary[sort](a, b) || newest(a, b));
+}
 
 /** Episodes flagged as new, newest first across shows. */
 export function inboxKeys(s: State) {

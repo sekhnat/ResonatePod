@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { art, epKey, mono } from '../data';
-import { epInfo, useStore } from '../store';
-import { applyFilter, ruleLabel, rowsFor, unplayedFor, type EpisodeRow } from '../model';
-import { Art, GhostIcon, RowPlay, Seg } from '../components/ui';
+import { epInfo, sortFor, useStore } from '../store';
+import { applyFilter, applySort, ruleLabel, rowsFor, unplayedFor, type EpisodeRow } from '../model';
+import { Art, GhostIcon, RowPlay, Seg, SortSelect } from '../components/ui';
 
 const FILTERS = ['All', 'Unplayed', 'Downloaded'] as const;
 
@@ -11,7 +11,7 @@ export function ShowScreen() {
   const [limit, setLimit] = useState(50);
   const sh = s.shows.find((x) => x.id === s.showId);
   if (!sh) return null;
-  const all = applyFilter(rowsFor(s, sh.eps.map((e) => epKey(sh.id, e.guid))), s.filter);
+  const all = applySort(applyFilter(rowsFor(s, sh.eps.map((e) => epKey(sh.id, e.guid))), s.filter), sortFor(s, sh.id));
   const rows = all.slice(0, limit);
   const unplayed = unplayedFor(s, sh.id);
 
@@ -44,12 +44,15 @@ export function ShowScreen() {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 'var(--space-3)' }}>
           <span style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>{sh.eps.length} episodes · {unplayed} unplayed</span>
-          <Seg options={FILTERS} value={s.filter} onPick={(filter) => s.set({ filter })} />
+          <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+            <SortSelect value={sortFor(s, sh.id)} onPick={(v) => s.setSort(sh.id, v)} />
+            <Seg options={FILTERS} value={s.filter} onPick={(filter) => s.set({ filter })} />
+          </div>
         </div>
         {rows.map((e) => <ShowEpisodeRow key={e.key} e={e} />)}
         {all.length > limit && (
           <button className="btn btn-secondary" style={{ alignSelf: 'center', fontSize: 12, marginTop: 'var(--space-4)' }} onClick={() => setLimit((l) => l + 100)}>
-            Show more ({all.length - limit} older)
+            Show more ({all.length - limit} more)
           </button>
         )}
         {!sh.eps.length && <Empty icon="ph ph-rss" text="This feed has no episodes yet. They'll appear after the next refresh." />}

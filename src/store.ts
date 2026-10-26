@@ -13,6 +13,10 @@ import { platform } from './platform';
 
 export type Screen = 'inbox' | 'shows' | 'show' | 'queue' | 'downloads' | 'discover' | 'settings';
 export type Filter = 'All' | 'Unplayed' | 'Downloaded';
+export const SORTS = ['Newest first', 'Oldest first', 'Longest first', 'Shortest first', 'Title A–Z', 'Title Z–A', 'Unplayed first'] as const;
+export type Sort = (typeof SORTS)[number];
+/** Sort scope for the Inbox; show ids never contain ':' so it can't collide. */
+export const INBOX_SORT = ':inbox';
 
 export interface EpState {
   played: boolean;
@@ -77,6 +81,8 @@ interface Data {
   dlPending: string[];
   dlPaused: boolean;
   ovr: Record<string, Override>;
+  /** Episode sort per show id (and INBOX_SORT); absent means newest first. */
+  sorts: Record<string, Sort>;
   tg: Toggles;
   sv: SegValues;
   folder: string;
@@ -175,6 +181,7 @@ interface Actions {
 
   setOverride(showId: string, k: keyof Override, v: string): void;
   resetOverride(showId: string): void;
+  setSort(scope: string, sort: Sort): void;
   setToggle(k: keyof Toggles): void;
   setSeg(k: keyof SegValues, v: string): void;
   setPrefs(patch: Partial<Pick<Data, 'folder' | 'storageLimitGb'>>): void;
@@ -190,6 +197,8 @@ interface Actions {
 }
 
 export type State = Data & Ui & Actions;
+
+export const sortFor = (s: State, scope: string): Sort => s.sorts[scope] ?? 'Newest first';
 
 // ---------- player bridge (set by the audio engine) ----------
 
@@ -345,6 +354,7 @@ const initialData: Data = {
   dlPending: [],
   dlPaused: false,
   ovr: {},
+  sorts: {},
   tg: { auto: true, metered: true, silence: true, notify: false, deletePlayed: true, autostart: false },
   sv: { keep: '3', par: '2', speed: '1.2×', del: '1 week', skip: '15 / 30 s' },
   folder: '~/Podcasts',
@@ -834,11 +844,13 @@ export const useStore = create<State>()(
           for (const [k, v] of Object.entries(s.eps)) if (!k.startsWith(prefix)) eps[k] = v;
           const ovr = { ...s.ovr };
           delete ovr[id];
+          const sorts = { ...s.sorts };
+          delete sorts[id];
           // Forget feed credentials once no remaining show lives on that server.
           const origin = (u: string) => { try { return new URL(u).origin; } catch { return u; } };
           if (!shows.some((x) => origin(x.feedUrl) === origin(show.feedUrl))) void platform.setFeedAuth(show.feedUrl, null, null);
           const patch: Partial<State> = {
-            shows, eps, ovr,
+            shows, eps, ovr, sorts,
             queue: s.queue.filter((k) => !k.startsWith(prefix)),
             dl: s.dl.filter((d) => !d.key.startsWith(prefix)),
             dlPending: s.dlPending.filter((k) => !k.startsWith(prefix)),
@@ -857,6 +869,13 @@ export const useStore = create<State>()(
             const ovr = { ...s.ovr };
             delete ovr[showId];
             return { ovr };
+          }),
+        setSort: (scope, sort) =>
+          set((s) => {
+            const sorts = { ...s.sorts };
+            if (sort === 'Newest first') delete sorts[scope];
+            else sorts[scope] = sort;
+            return { sorts };
           }),
         setToggle: (k) => set((s) => ({ tg: { ...s.tg, [k]: !s.tg[k] } })),
         setSeg: (k, v) => set((s) => ({ sv: { ...s.sv, [k]: v } })),

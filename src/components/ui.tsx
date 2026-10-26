@@ -1,4 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { SORTS, type Sort } from '../store';
+
+export const selectStyle: CSSProperties = { width: 'auto', fontSize: 12.5, minHeight: 36, paddingRight: 6, cursor: 'pointer' };
+
+export function SortSelect({ value, onPick }: { value: Sort; onPick: (v: Sort) => void }) {
+  return (
+    <select className="input" aria-label="Sort episodes" title="Sort episodes" value={value} style={selectStyle}
+      onChange={(e) => onPick(e.target.value as Sort)}>
+      {SORTS.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
 
 /** Artwork tile: the feed's image, or a monogram placeholder when there is none (or it fails to load). */
 export function Art({ bg, mono, img, size, font, radius = 6, weight = 600, style, children }: {

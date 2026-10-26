@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import {
   COUNTRIES, SOURCES, countryName, normalizeFeedUrl, suggestions, type DirectoryResult, type Source, type SourceChoice, type Suggestions,
 } from '../lib/directory';
-import { Art } from './ui';
+import { Art, selectStyle } from './ui';
 
 const n = (x: number) => x.toLocaleString('en-US');
 
@@ -73,7 +73,6 @@ function SourceTag({ source }: { source: Source }) {
 
 export const resultGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: 'var(--space-4)' };
 
-const selectStyle: CSSProperties = { width: 'auto', fontSize: 12.5, minHeight: 36, paddingRight: 6, cursor: 'pointer' };
 
 export function CountrySelect({ style }: { style?: CSSProperties }) {
   const country = useStore((s) => s.directory.country);
