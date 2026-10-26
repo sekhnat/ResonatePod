@@ -346,6 +346,8 @@ try {
   await step('preferences and discover render', async () => {
     await page.locator('nav button', { hasText: 'Preferences' }).click();
     await page.getByText('Sync server').waitFor();
+    // The header shows the version from package.json.
+    await page.getByText(`Resonate ${JSON.parse(readFileSync('package.json', 'utf8')).version}`, { exact: true }).waitFor();
     await shot('07-settings');
   });
 
