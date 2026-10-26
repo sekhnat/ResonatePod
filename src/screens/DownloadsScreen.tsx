@@ -10,7 +10,6 @@ const MB = 1048576;
 
 export function DownloadsScreen() {
   const s = useStore();
-  const par = parseInt(s.sv.par, 10);
   // Ticks the "Retrying in …" countdown.
   const [now, setNow] = useState(Date.now());
   const counting = s.dl.some((d) => d.retryAt);
@@ -41,7 +40,7 @@ export function DownloadsScreen() {
           if (!e) return null;
           const failed = !!d.error;
           const waiting = !failed && !!d.retryAt;
-          const running = !failed && !waiting && !blocked && s.dl.filter((x) => !x.error && !x.retryAt).findIndex((x) => x.key === d.key) < par;
+          const running = !failed && !waiting && !blocked && !!d.active;
           const size = d.total ? `${Math.round(d.total / MB)} MB` : 'size unknown';
           const status = failed
             ? `Failed · ${d.error}`

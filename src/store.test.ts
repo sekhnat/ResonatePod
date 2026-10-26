@@ -297,6 +297,20 @@ describe('download lifecycle', () => {
     start.mockRestore();
   });
 
+  it('lets "Retry now" restart a download that is waiting to retry, and drops the countdown once it is queued', () => {
+    platform.isDesktop = true;
+    const start = vi.spyOn(platform.download, 'start').mockImplementation(() => {});
+    st().startDownload(K42);
+    st().onDownloadEvent({ type: 'retry', key: K42, attempt: 1, at: 123, message: 'the connection stalled' });
+    st().startDownload(K42);
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(st().dl[0].retryAt).toBeUndefined();
+    st().onDownloadEvent({ type: 'retry', key: K42, attempt: 1, at: 456, message: 'HTTP 503' });
+    st().onDownloadEvent({ type: 'requeue', key: K42 });
+    expect(st().dl[0]).toMatchObject({ key: K42, retryAt: undefined, speed: 0 });
+    start.mockRestore();
+  });
+
   it('moves downloaded files and updates their paths', async () => {
     useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), file: '/old/KP/a.mp3' }, [K41]: { ...getEp(st(), K41), file: '/other/b.mp3' } } });
     const move = vi.spyOn(platform, 'moveFiles').mockResolvedValue([{ from: '/old/KP/a.mp3', to: '/new/KP/a.mp3' }]);
