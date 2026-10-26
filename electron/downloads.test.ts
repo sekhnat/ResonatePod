@@ -134,6 +134,27 @@ describe('DownloadManager', () => {
     if (done.type === 'done') expect(readFileSync(done.path).equals(BODY)).toBe(true);
   });
 
+  it('tells the UI when a due retry is queued for a slot, and runs it before untouched jobs', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
+    const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+    const calls: Record<string, number> = {};
+    const fakeFetch = async (url: string) => {
+      const id = new URL(url).pathname.slice(1);
+      calls[id] = (calls[id] ?? 0) + 1;
+      if (id === 'a' && calls[id] === 1) throw new Error('socket hang up');
+      if (id === 'b') await sleep(150); // keeps the only slot busy past a's retry delay
+      return new Response('data', { status: 200, headers: { 'Content-Length': '4' } });
+    };
+    const m = new DownloadManager(fakeFetch as never, { retryDelays: [20] });
+    m.setConcurrency(1);
+    const events: string[] = [];
+    m.on('event', (e: DownloadEvent) => { if (e.type !== 'progress') events.push(`${e.type} ${e.key}`); });
+    for (const id of ['a', 'b', 'c']) m.start({ ...job(dir, id), url: `http://x/${id}` });
+    await new Promise<void>((ok) => m.on('event', (e: DownloadEvent) => { if (e.type === 'done' && e.key === 'c') ok(); }));
+    // a failed first and is due again while b holds the slot: the UI hears it is queued, and a runs before c.
+    expect(events).toEqual(['retry a', 'requeue a', 'done b', 'done a', 'done c']);
+  });
+
   it('takes the total size from Content-Range when resuming', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
     const j = job(dir, 'c:1');

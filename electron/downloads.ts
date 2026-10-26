@@ -60,8 +60,12 @@ export class DownloadManager extends EventEmitter {
 
   start(job: DownloadJob) {
     if (this.running.has(job.key) || this.queue.some((q) => q.job.key === job.key)) return;
+    // A retry that was waiting out its delay goes first: it has already waited, and has data on disk.
+    const retrying = this.waiting.has(job.key);
     this.clearWait(job.key);
-    this.queue.push({ job, attempt: 0 });
+    const item = { job, attempt: 0 };
+    if (retrying) this.queue.unshift(item);
+    else this.queue.push(item);
     this.pump();
   }
 
@@ -83,7 +87,7 @@ export class DownloadManager extends EventEmitter {
     if (paused === this.paused) return;
     this.paused = paused;
     if (paused) {
-      for (const [key, r] of this.running) { r.ctrl.abort('pause'); this.queue.unshift({ job: r.job, attempt: r.attempt }); this.running.delete(key); }
+      for (const [key, r] of this.running) { r.ctrl.abort('pause'); this.queue.unshift({ job: r.job, attempt: r.attempt }); this.running.delete(key); this.emitEvent({ type: 'requeue', key }); }
     }
     this.pump();
   }
@@ -95,6 +99,7 @@ export class DownloadManager extends EventEmitter {
       r.ctrl.abort('pause');
       this.running.delete(key);
       this.queue.unshift({ job: r.job, attempt: r.attempt });
+      this.emitEvent({ type: 'requeue', key });
     }
     this.pump();
   }
@@ -125,7 +130,8 @@ export class DownloadManager extends EventEmitter {
     const delay = this.retryDelays[r.attempt];
     if (retryable(err) && delay != null) {
       const item = { job: r.job, attempt: r.attempt + 1 };
-      const timer = setTimeout(() => { this.waiting.delete(r.job.key); this.queue.push(item); this.pump(); }, delay);
+      // Due again: it has waited its turn already, so it goes ahead of jobs that haven't started.
+      const timer = setTimeout(() => { this.waiting.delete(r.job.key); this.queue.unshift(item); this.emitEvent({ type: 'requeue', key: r.job.key }); this.pump(); }, delay);
       this.waiting.set(r.job.key, { item, timer });
       this.emitEvent({ type: 'retry', key: r.job.key, attempt: item.attempt, at: Date.now() + delay, message });
     } else {

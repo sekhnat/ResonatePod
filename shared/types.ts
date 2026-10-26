@@ -72,6 +72,8 @@ export type DownloadEvent =
   | { type: 'progress'; key: string; received: number; total: number; speed: number }
   | { type: 'done'; key: string; path: string; bytes: number }
   | { type: 'retry'; key: string; attempt: number; at: number; message: string }
+  /** The job is waiting for a free slot (a due retry, or one pushed out by pause or a lower limit). */
+  | { type: 'requeue'; key: string }
   | { type: 'error'; key: string; message: string };
 
 export interface TrayState {

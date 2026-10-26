@@ -35,6 +35,8 @@ export interface ActiveDl {
   speed: number;
   /** Set while waiting to retry automatically (ms since epoch). */
   retryAt?: number;
+  /** A transfer is under way (not waiting for a slot, waiting to retry, or failed). */
+  active?: boolean;
   /** Set once retries are exhausted; the row stays until retried or removed. */
   error?: string;
 }
@@ -600,10 +602,10 @@ export const useStore = create<State>()(
           const s = get();
           const info = epInfo(s, key);
           const existing = s.dl.find((d) => d.key === key);
-          if (!info || (existing && !existing.error) || getEp(s, key).file) return;
+          if (!info || (existing && !existing.error && !existing.retryAt) || getEp(s, key).file) return;
           if (!platform.isDesktop) { s.toast('Downloading needs the Resonate desktop app'); return; }
           set({
-            dl: existing ? s.dl.map((d) => (d.key === key ? { ...d, error: undefined, retryAt: undefined } : d)) : [...s.dl, { key, received: 0, total: info.ep.sizeBytes, speed: 0 }],
+            dl: existing ? s.dl.map((d) => (d.key === key ? { ...d, error: undefined, retryAt: undefined, active: false } : d)) : [...s.dl, { key, received: 0, total: info.ep.sizeBytes, speed: 0 }],
             dlPending: s.dlPending.includes(key) ? s.dlPending : [...s.dlPending, key],
           });
           platform.download.start({ key, url: info.ep.enclosureUrl, folder: s.folder, showTitle: info.show.title, title: info.title, pubDate: info.ep.pubDate, mime: info.ep.enclosureType });
@@ -653,9 +655,11 @@ export const useStore = create<State>()(
           const patch = (p: Partial<ActiveDl>) => set({ dl: s.dl.map((d) => (d.key === e.key ? { ...d, ...p } : d)) });
           if (e.type === 'progress') {
             const d = s.dl.find((x) => x.key === e.key);
-            patch({ received: e.received, total: e.total || d?.total || 0, speed: e.speed, retryAt: undefined });
+            patch({ received: e.received, total: e.total || d?.total || 0, speed: e.speed, retryAt: undefined, active: true });
           } else if (e.type === 'retry') {
-            patch({ retryAt: e.at, speed: 0 });
+            patch({ retryAt: e.at, speed: 0, active: false });
+          } else if (e.type === 'requeue') {
+            patch({ retryAt: undefined, speed: 0, active: false });
           } else if (e.type === 'done') {
             set({
               dl: s.dl.filter((d) => d.key !== e.key),
@@ -673,7 +677,7 @@ export const useStore = create<State>()(
             }
             void get().cleanupStorage({ quiet: true });
           } else {
-            patch({ error: e.message, retryAt: undefined, speed: 0 });
+            patch({ error: e.message, retryAt: undefined, speed: 0, active: false });
             s.toast(`Download failed: ${epInfo(s, e.key)?.title ?? 'episode'} (${e.message})`);
           }
         },
