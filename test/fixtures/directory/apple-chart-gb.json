@@ -1,0 +1,45 @@
+{
+ "feed": {
+  "entry": {
+   "im:name": {
+    "label": "The Allotment Hour"
+   },
+   "im:image": [
+    {
+     "label": "https://feeds.example/art/2003-55.png",
+     "attributes": {
+      "height": "55"
+     }
+    },
+    {
+     "label": "https://feeds.example/art/2003-170.png",
+     "attributes": {
+      "height": "170"
+     }
+    }
+   ],
+   "summary": {
+    "label": "Gardening, gossip and the occasional disaster from a Sheffield allotment."
+   },
+   "im:artist": {
+    "label": "Shed Studios"
+   },
+   "title": {
+    "label": "The Allotment Hour - Shed Studios"
+   },
+   "id": {
+    "label": "https://podcasts.apple.com/us/podcast/x/id2003?uo=2",
+    "attributes": {
+     "im:id": "2003"
+    }
+   },
+   "category": {
+    "attributes": {
+     "im:id": "1318",
+     "term": "Technology",
+     "label": "Technology"
+    }
+   }
+  }
+ }
+}

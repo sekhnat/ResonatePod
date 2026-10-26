@@ -1,0 +1,24 @@
+[
+ {
+  "url": "https://feeds.example/history-hour.xml",
+  "title": "History Hour",
+  "description": "One historical oddity, explained in under an hour.",
+  "subscribers": 8800,
+  "subscribers_last_week": 8797,
+  "logo_url": "https://feeds.example/art/gp-history.png",
+  "scaled_logo_url": "https://gpodder.net/logo/64/712.jpg",
+  "website": "https://example.org/",
+  "mygpo_link": "https://gpodder.net/podcast/x"
+ },
+ {
+  "url": "https://feeds.example/kernel-panic.xml",
+  "title": "Kernel Panic Hour",
+  "description": "Two sysadmins talk through the week in free software.",
+  "subscribers": 9120,
+  "subscribers_last_week": 9117,
+  "logo_url": "https://feeds.example/art/gp-kernel.png",
+  "scaled_logo_url": "https://gpodder.net/logo/64/558.jpg",
+  "website": "https://example.org/",
+  "mygpo_link": "https://gpodder.net/podcast/x"
+ }
+]

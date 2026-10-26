@@ -14,7 +14,7 @@ export function HeaderBar() {
     show: [show?.title ?? 'Show', show?.author ?? ''],
     queue: ['Queue', 'Up next'],
     downloads: ['Downloads', s.dl.length ? [`${s.dl.filter((d) => !d.error).length} in progress`, ...(s.dl.some((d) => d.error) ? [`${s.dl.filter((d) => d.error).length} failed`] : [])].join(' · ') : 'All done'],
-    discover: ['Discover', 'Browse the directory'],
+    discover: ['Discover', 'Apple Podcasts · gpodder.net · fyyd'],
     settings: ['Preferences', 'Resonate 1.4'],
   };
   const [title, sub] = s.shows.length || s.screen === 'discover' || s.screen === 'settings' ? titles[s.screen] : ['Welcome', 'Resonate'];

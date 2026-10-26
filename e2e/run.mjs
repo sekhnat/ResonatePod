@@ -66,11 +66,42 @@ ${item('Chaptered episode', 'm-1', '/p/chapters.mp3', 'audio/mpeg', 3, `<podcast
 </channel></rss>`;
 };
 
+// ---- podcast directories (recorded responses; the app reaches them through RESONATE_URL_REWRITE) ----
+const dirFixture = (name) => readFileSync(`test/fixtures/directory/${name}.json`, 'utf8').replaceAll('https://www.feeds.example', `${base}/feeds`).replaceAll('http://feeds.example', `${base}/feeds`).replaceAll('https://feeds.example', `${base}/feeds`).replaceAll('https://gpodder.net/logo/', `${base}/feeds/art/logo-`);
+const directoryRequests = [];
+function directory(url, query) {
+  directoryRequests.push(url + (query ? `?${query}` : ''));
+  const p = new URLSearchParams(query);
+  if (url === '/apple/search') return dirFixture(p.get('entity') === 'podcastEpisode' ? 'apple-episodes' : 'apple-search');
+  if (url === '/apple/lookup') {
+    const ids = (p.get('id') ?? '').split(',');
+    const all = JSON.parse(dirFixture('apple-lookup'));
+    return JSON.stringify({ results: all.results.filter((r) => ids.includes(String(r.collectionId))) });
+  }
+  const chart = /^\/apple\/(\w\w)\/rss\/toppodcasts\//.exec(url);
+  if (chart) return dirFixture(chart[1] === 'gb' ? 'apple-chart-gb' : 'apple-chart-us');
+  if (url === '/gpodder/search.json') return dirFixture('gpodder-search');
+  if (url === '/gpodder/toplist/50.json') return dirFixture('gpodder-toplist');
+  if (url === '/gpodder/api/2/tag/technology/50.json') return dirFixture('gpodder-tag-technology');
+  if (url === '/fyyd/0.2/search/podcast') return dirFixture('fyyd-search');
+  return null;
+}
+// Every show a directory lists gets a one-episode feed at /feeds/<slug>.xml.
+const titleFor = (slug) => slug.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ').replace('Kernel Panic', 'Kernel Panic Hour').replace('Linux Unplugged', 'LINUX Unplugged');
+const directoryFeed = (slug) => `<?xml version="1.0"?><rss version="2.0"><channel><title>${titleFor(slug)}</title><description>From the directory.</description>
+<item><title>${titleFor(slug)} #1</title><guid>${slug}-1</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item></channel></rss>`;
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAwS2OUAAAAABJRU5ErkJggg==', 'base64');
+
 const server = createServer((req, res) => {
   const url = req.url.split('?')[0];
   const hit = (hits[url] = (hits[url] ?? 0) + 1);
   (rangesFor[url] ??= []).push(req.headers.range);
   if (url === '/old.xml') return res.writeHead(301, { Location: '/feed.xml' }).end();
+  const dir = directory(url, req.url.split('?')[1] ?? '');
+  if (dir != null) return res.writeHead(200, { 'Content-Type': 'application/json' }).end(dir);
+  if (url.startsWith('/feeds/art/')) return res.writeHead(200, { 'Content-Type': 'image/png' }).end(PNG);
+  const listed = /^\/feeds\/([\w-]+)\.xml$/.exec(url);
+  if (listed) return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(directoryFeed(listed[1]));
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
   if ((url === '/private.xml' || url.startsWith('/p/')) && req.headers.authorization !== AUTH) {
     return res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="members"' }).end();
@@ -111,7 +142,8 @@ async function launch() {
   app = await electron.launch({
     executablePath: packaged ? path.resolve(packaged) : electronPath,
     args: packaged ? ['--no-sandbox'] : ['.', '--no-sandbox'],
-    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: path.join(home, 'config'), XDG_CURRENT_DESKTOP: 'KDE' },
+    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: path.join(home, 'config'), XDG_CURRENT_DESKTOP: 'KDE',
+      RESONATE_URL_REWRITE: JSON.stringify({ 'https://itunes.apple.com': `${base}/apple`, 'https://gpodder.net': `${base}/gpodder`, 'https://api.fyyd.de': `${base}/fyyd` }) },
   });
   page = await app.firstWindow();
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -131,6 +163,9 @@ try {
   await step('onboarding is shown on first run', async () => {
     await page.getByText('Welcome to Resonate').waitFor();
     assert.equal(await page.locator('.plasma').count(), 0, 'no fake taskbar');
+    // AntennaPod-style suggestions: the regional Apple chart.
+    await page.getByRole('region', { name: 'Popular in your region' }).getByText('Daily Bytes').waitFor();
+    assert.ok(directoryRequests.some((u) => u.startsWith('/apple/us/rss/toppodcasts/limit=25/explicit=true/json')), directoryRequests.join('\n'));
     await shot('01-welcome');
   });
 
@@ -298,6 +333,60 @@ try {
     await page.locator('nav button', { hasText: 'Preferences' }).click();
     await page.getByText('Sync server').waitFor();
     await shot('07-settings');
+  });
+
+  await step('Discover suggests shows and lists the regional chart', async () => {
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    const suggested = page.getByRole('region', { name: 'Suggested for you' });
+    await suggested.getByText('Deep Field').waitFor();
+    await suggested.getByText('Apple top chart · United States').waitFor();
+    await shot('13-discover');
+    await page.getByRole('button', { name: 'Technology', exact: true }).click();
+    await page.getByRole('region', { name: 'Top Technology podcasts · United States' }).getByText('Kernel Panic Hour').waitFor();
+    assert.ok(directoryRequests.some((u) => u.startsWith('/apple/us/rss/toppodcasts/limit=30/genre=1318/explicit=true/json')));
+    await page.getByRole('button', { name: 'Popular', exact: true }).click();
+  });
+
+  await step('searching all directories merges and labels the results', async () => {
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill('linux');
+    const shows = page.getByRole('region', { name: 'Shows' });
+    await shows.getByText('from Apple Podcasts, gpodder.net, fyyd').waitFor();
+    const lu = shows.getByTestId('directory-card').filter({ hasText: 'LINUX Unplugged' });
+    assert.equal(await lu.count(), 1, 'one card per feed');
+    assert.deepEqual(await lu.locator('[title^="Found on"]').allInnerTexts(), ['Apple', 'gpodder']);
+    await shows.getByText('Ubuntu Podcast', { exact: true }).waitFor(); // fyyd only
+    await shows.getByText('Linux Voice', { exact: true }).waitFor(); // gpodder.net only
+    assert.equal(await shows.getByText('Linux Exclusive', { exact: true }).count(), 0, 'shows without a public feed are skipped');
+    await page.getByRole('region', { name: 'Episodes' }).getByText('Wayland, five years on').waitFor();
+    await shot('14-search-all');
+  });
+
+  await step('gpodder.net as the directory, and subscribing from it', async () => {
+    await page.getByLabel('Directory').selectOption('gpodder');
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill('');
+    const top = page.getByRole('region', { name: 'Most subscribed on gpodder.net' });
+    await top.getByText('15,402 subscribers').waitFor();
+    await top.getByRole('button', { name: 'Subscribe: Open Source Radio' }).click();
+    await top.getByRole('button', { name: 'Subscribed: Open Source Radio' }).waitFor();
+    await page.locator('nav').getByText('Open Source Radio').waitFor();
+    await page.getByLabel('Directory').selectOption('all');
+  });
+
+  await step('an Apple Podcasts link subscribes to the show’s feed', async () => {
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill('https://podcasts.apple.com/us/podcast/kernel-panic-hour/id1004');
+    await page.getByText('That’s an Apple Podcasts link').waitFor();
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading', { name: 'Kernel Panic Hour' }).waitFor();
+    assert.ok(directoryRequests.some((u) => /^\/apple\/lookup\?id=1004/.test(u)));
+  });
+
+  await step('changing the region changes the chart', async () => {
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    await page.getByLabel('Region').selectOption('gb');
+    await page.getByRole('region', { name: 'Suggested for you' }).getByText('Apple top chart · United Kingdom').waitFor();
+    await page.getByRole('region', { name: 'Suggested for you' }).getByText('The Allotment Hour').waitFor();
+    assert.ok(directoryRequests.some((u) => u.startsWith('/apple/gb/rss/toppodcasts/')));
+    await shot('15-region');
   });
 
   assert.deepEqual(errors.filter((e) => !/itunes\.apple\.com|ERR_NAME|ERR_TUNNEL|ERR_PROXY/.test(e)), [], 'console errors');

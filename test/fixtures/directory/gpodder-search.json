@@ -1,0 +1,24 @@
+[
+ {
+  "url": "http://feeds.example/linux-unplugged.xml/",
+  "title": "LINUX Unplugged",
+  "description": "The Linux Action Show was retired. This is what came next.",
+  "subscribers": 4210,
+  "subscribers_last_week": 4207,
+  "logo_url": "https://feeds.example/art/gp-linux.png",
+  "scaled_logo_url": "https://gpodder.net/logo/64/172.jpg",
+  "website": "https://example.org/",
+  "mygpo_link": "https://gpodder.net/podcast/x"
+ },
+ {
+  "url": "https://feeds.example/linux-voice.xml",
+  "title": "Linux Voice",
+  "description": "The Linux Voice podcast. Opinion and interviews from the free software world.",
+  "subscribers": 1830,
+  "subscribers_last_week": 1827,
+  "logo_url": "https://feeds.example/art/gp-linux.png",
+  "scaled_logo_url": "https://gpodder.net/logo/64/298.jpg",
+  "website": "https://example.org/",
+  "mygpo_link": "https://gpodder.net/podcast/x"
+ }
+]

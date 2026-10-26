@@ -1,0 +1,84 @@
+{
+ "resultCount": 4,
+ "results": [
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 1001,
+   "trackId": 1001,
+   "artistName": "Jupiter Broadcasting",
+   "collectionName": "LINUX Unplugged",
+   "trackName": "LINUX Unplugged",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/linux-unplugged/id1001?uo=4",
+   "artworkUrl100": "https://feeds.example/art/linux-unplugged-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/linux-unplugged-600.jpg",
+   "primaryGenreName": "Technology",
+   "trackCount": 580,
+   "country": "USA",
+   "genres": [
+    "Technology",
+    "Podcasts"
+   ],
+   "feedUrl": "https://feeds.example/linux-unplugged.xml"
+  },
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 1002,
+   "trackId": 1002,
+   "artistName": "Late Night Linux Ltd",
+   "collectionName": "Late Night Linux",
+   "trackName": "Late Night Linux",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/late-night-linux/id1002?uo=4",
+   "artworkUrl100": "https://feeds.example/art/late-night-linux-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/late-night-linux-600.jpg",
+   "primaryGenreName": "Technology",
+   "trackCount": 300,
+   "country": "USA",
+   "genres": [
+    "Technology",
+    "Podcasts"
+   ],
+   "feedUrl": "https://feeds.example/late-night-linux.xml"
+  },
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 1003,
+   "trackId": 1003,
+   "artistName": "Fruit Co",
+   "collectionName": "Linux Exclusive",
+   "trackName": "Linux Exclusive",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/linux-exclusive/id1003?uo=4",
+   "artworkUrl100": "https://feeds.example/art/linux-exclusive-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/linux-exclusive-600.jpg",
+   "primaryGenreName": "Technology",
+   "trackCount": 200,
+   "country": "USA",
+   "genres": [
+    "Technology",
+    "Podcasts"
+   ]
+  },
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 1004,
+   "trackId": 1004,
+   "artistName": "Ines Varga & Tom Achebe",
+   "collectionName": "Kernel Panic Hour",
+   "trackName": "Kernel Panic Hour",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/kernel-panic/id1004?uo=4",
+   "artworkUrl100": "https://feeds.example/art/kernel-panic-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/kernel-panic-600.jpg",
+   "primaryGenreName": "Technology",
+   "trackCount": 200,
+   "country": "USA",
+   "genres": [
+    "Technology",
+    "Podcasts"
+   ],
+   "feedUrl": "https://feeds.example/kernel-panic.xml"
+  }
+ ]
+}

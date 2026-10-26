@@ -31,6 +31,14 @@ const authFor = (url: string): Record<string, string> => {
 };
 const userAgent = () => `Resonate/${app.getVersion()}`;
 
+// Test hook: RESONATE_URL_REWRITE='{"https://itunes.apple.com":"http://127.0.0.1:8080/apple"}'
+// points outside services at a local fixture server (used by the e2e test only).
+const rewrites = Object.entries((() => { try { return JSON.parse(process.env.RESONATE_URL_REWRITE ?? '{}') as Record<string, string>; } catch { return {}; } })());
+const rewrite = (url: string) => {
+  for (const [from, to] of rewrites) if (url.startsWith(from)) return to + url.slice(from.length);
+  return url;
+};
+
 const downloads = new DownloadManager((url, init) =>
   net.fetch(url, { ...init, headers: { 'User-Agent': userAgent(), ...authFor(url), ...init?.headers } } as RequestInit));
 
@@ -122,7 +130,7 @@ async function serveFile(file: string, range: string | null): Promise<Response> 
 }
 
 async function serveRemote(url: string, range: string | null): Promise<Response> {
-  const res = await net.fetch(url, { headers: { 'User-Agent': userAgent(), ...authFor(url), ...(range ? { Range: range } : {}) } });
+  const res = await net.fetch(rewrite(url), { headers: { 'User-Agent': userAgent(), ...authFor(url), ...(range ? { Range: range } : {}) } });
   const headers = new Headers({ 'Access-Control-Allow-Origin': '*' });
   for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
     const v = res.headers.get(h);
@@ -220,7 +228,7 @@ interface TextResponse { status: number; text: string; header(name: string): str
 /** GET/POST with redirects followed by hand, so we know whether every hop was permanent. */
 function request(url: string, req: HttpRequest): Promise<TextResponse> {
   return new Promise((resolve, reject) => {
-    const r = net.request({ url, method: req.method ?? 'GET', redirect: 'manual' });
+    const r = net.request({ url: rewrite(url), method: req.method ?? 'GET', redirect: 'manual' });
     const headers = { 'User-Agent': userAgent(), ...authFor(url), ...req.headers };
     for (const [k, v] of Object.entries(headers)) r.setHeader(k, v);
     let finalUrl = url;
