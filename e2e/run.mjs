@@ -53,6 +53,13 @@ const feed = () => `<?xml version="1.0"?>
 <podcast:chapters url="${base}/ch.json" type="application/json+chapters"/><podcast:transcript url="${base}/t.vtt" type="text/vtt"/></item>
 </channel></rss>`;
 
+// A show whose title and author are far longer than a grid card.
+const longFeed = () => `<?xml version="1.0"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+<channel><title>The Strange Case of Starship Iris and Other Remarkably Long Podcast Titles</title><itunes:author>Jessica Best (Procyon Podcast Network) with Friends</itunes:author><description>Long names.</description>
+<item><title>Pilot</title><guid>long-1</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>
+</channel></rss>`;
+
 const html = '<html><body><cite>Ana:</cite><time>0:00:00</time><p>Welcome to the members feed.</p><cite>Ben:</cite><time>0:00:02</time><p>Mail time.</p></body></html>';
 const privateFeed = () => {
   const item = (title, guid, file, type, ago, extra = '') => `<item><title>${title}</title><guid>${guid}</guid><pubDate>${new Date(Date.now() - ago * 36e5).toUTCString()}</pubDate><enclosure url="${base}${file}" length="${media[file].length}" type="${type}"/>${extra}</item>`;
@@ -103,6 +110,7 @@ const server = createServer((req, res) => {
   const listed = /^\/feeds\/([\w-]+)\.xml$/.exec(url);
   if (listed) return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(directoryFeed(listed[1]));
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
+  if (url === '/long.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(longFeed());
   if ((url === '/private.xml' || url.startsWith('/p/')) && req.headers.authorization !== AUTH) {
     return res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="members"' }).end();
   }
@@ -423,6 +431,29 @@ try {
     await page.getByRole('region', { name: 'Suggested for you' }).getByText('The Allotment Hour').waitFor();
     assert.ok(directoryRequests.some((u) => u.startsWith('/apple/gb/rss/toppodcasts/')));
     await shot('15-region');
+  });
+
+  await step('long titles and authors stay inside their cards on the Shows grid', async () => {
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/long.xml`);
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading', { name: /Remarkably Long Podcast Titles/ }).waitFor();
+    await page.locator('nav button', { hasText: 'Shows' }).click();
+    await page.getByText('Jessica Best (Procyon Podcast Network) with Friends').waitFor();
+    const layout = await page.evaluate(() => {
+      const grid = document.querySelector('main > div > div:last-child');
+      const track = parseFloat(getComputedStyle(grid).gridTemplateColumns.split(' ')[0]);
+      return [...grid.children].map((card) => {
+        const box = card.getBoundingClientRect();
+        const spill = [...card.querySelectorAll('span:not(.tag):not(.h-ring)')].map((t) => t.getBoundingClientRect().right - box.right).filter((d) => d > 0.5);
+        return { name: card.textContent, width: box.width, track, spill };
+      });
+    });
+    for (const c of layout) {
+      assert.ok(c.width <= c.track + 0.5, `${c.name}: card is ${c.width}px in a ${c.track}px column`);
+      assert.deepEqual(c.spill, [], `${c.name}: text spills out of its card`);
+    }
+    await shot('16-long-names');
   });
 
   assert.deepEqual(errors.filter((e) => !/itunes\.apple\.com|ERR_NAME|ERR_TUNNEL|ERR_PROXY/.test(e)), [], 'console errors');
