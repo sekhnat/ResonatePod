@@ -1,8 +1,9 @@
 import { art, mono } from '../data';
+import { Art } from './ui';
 import { useStore, type Screen } from '../store';
 import { totalUnplayed, unplayedFor } from '../model';
 
-export function Sidebar({ showSubs }: { showSubs: boolean }) {
+export function Sidebar() {
   const s = useStore();
   const active = s.screen === 'show' ? 'shows' : s.screen;
   const unplayed = totalUnplayed(s);
@@ -13,7 +14,7 @@ export function Sidebar({ showSubs }: { showSubs: boolean }) {
     ['downloads', 'Downloads', 'ph ph-download-simple', s.dl.length ? String(s.dl.length) : ''],
     ['discover', 'Discover', 'ph ph-compass', ''],
   ];
-  const usedGb = s.usedMb / 1024;
+  const usedGb = s.usedBytes / 1024 ** 3;
   const pct = Math.min(100, (usedGb / s.storageLimitGb) * 100);
 
   return (
@@ -31,7 +32,7 @@ export function Sidebar({ showSubs }: { showSubs: boolean }) {
           );
         })}
       </div>
-      {showSubs && (
+      {s.shows.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-500)', padding: '0 10px 6px' }}>Subscriptions</div>
           {s.shows.map((x) => {
@@ -40,7 +41,7 @@ export function Sidebar({ showSubs }: { showSubs: boolean }) {
             return (
               <button key={x.id} className="h-n900" onClick={() => s.openShow(x.id)}
                 style={{ display: 'flex', alignItems: 'center', gap: 9, height: 32, padding: '0 10px', border: 'none', borderRadius: 'var(--radius-md)', background: on ? 'var(--color-neutral-900)' : 'transparent', color: 'var(--color-text)', fontSize: 12.5, cursor: 'pointer', textAlign: 'left' }}>
-                <span style={{ width: 20, height: 20, flex: 'none', borderRadius: 4, background: art(x.hue), display: 'grid', placeItems: 'center', fontSize: 8, fontWeight: 600, color: 'var(--color-neutral-100)' }}>{mono(x.title)}</span>
+                <Art bg={art(x.hue)} mono={mono(x.title)} img={x.imageUrl} size={20} font={8} radius={4} />
                 <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.title}</span>
                 {n > 0 && <span style={{ fontSize: 10.5, color: 'var(--color-accent-300)' }}>{n}</span>}
               </button>

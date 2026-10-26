@@ -1,12 +1,14 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-/** Monogram artwork tile (artwork is lettered placeholders by design). */
-export function Art({ bg, mono, size, font, radius = 6, weight = 600, style, children }: {
-  bg: string; mono: string; size: number; font: number; radius?: number | string; weight?: number; style?: CSSProperties; children?: ReactNode;
+/** Artwork tile: the feed's image, or a monogram placeholder when there is none (or it fails to load). */
+export function Art({ bg, mono, img, size, font, radius = 6, weight = 600, style, children }: {
+  bg: string; mono: string; img?: string; size: number | string; font: number; radius?: number | string; weight?: number; style?: CSSProperties; children?: ReactNode;
 }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const showImg = img && failed !== img;
   return (
-    <span style={{ width: size, height: size, flex: 'none', borderRadius: radius, background: bg, display: 'grid', placeItems: 'center', fontSize: font, fontWeight: weight, color: 'var(--color-neutral-100)', ...style }}>
-      {mono}
+    <span style={{ width: size, height: size, flex: 'none', borderRadius: radius, background: bg, display: 'grid', placeItems: 'center', fontSize: font, fontWeight: weight, color: 'var(--color-neutral-100)', overflow: 'hidden', position: 'relative', ...style }}>
+      {showImg ? <img src={img} alt="" loading="lazy" onError={() => setFailed(img)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : mono}
       {children}
     </span>
   );
@@ -61,7 +63,7 @@ export function PageHeader({ title, sub, children }: { title: string; sub?: Reac
 /** Round play/pause button used on every episode row. */
 export function RowPlay({ isCur, isPlaying, onClick }: { isCur: boolean; isPlaying: boolean; onClick: () => void }) {
   return (
-    <button className="btn btn-icon btn-secondary" onClick={onClick} title={isPlaying ? 'Pause' : 'Play'}
+    <button className="btn btn-icon btn-secondary" onClick={onClick} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}
       style={{ width: 32, height: 32, borderRadius: '50%', color: isCur ? 'var(--color-accent)' : 'var(--color-neutral-300)', borderColor: isCur ? 'var(--color-accent)' : 'var(--color-divider)' }}>
       <i className={isPlaying ? 'ph-fill ph-pause' : 'ph-fill ph-play'} style={{ fontSize: 13 }} />
     </button>

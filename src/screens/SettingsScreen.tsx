@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { useStore, type SegValues, type Toggles } from '../store';
 import { Seg, Toggle, h1Style } from '../components/ui';
+import { platform } from '../platform';
+import { clockLabel } from '../model';
+import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
 
 type Row = { label: string; hint?: string } & (
   | { kind: 'toggle'; k: keyof Toggles }
@@ -10,6 +13,12 @@ type Row = { label: string; hint?: string } & (
 
 export function SettingsScreen() {
   const s = useStore();
+  const changeFolder = async () => {
+    if (!platform.isDesktop) { s.set({ dialog: 'folder' }); return; }
+    const folder = await platform.pickFolder(s.folder);
+    if (folder) { s.setPrefs({ folder }); s.toast(`New downloads will be saved to ${folder}`); }
+  };
+  const usedGb = (s.usedBytes / 1024 ** 3).toFixed(1);
   const groups: { title: string; rows: Row[] }[] = [
     { title: 'Downloads', rows: [
       { label: 'Download new episodes automatically', hint: 'Applies to shows without their own rule', kind: 'toggle', k: 'auto' },
@@ -18,9 +27,9 @@ export function SettingsScreen() {
       { label: 'Simultaneous downloads', kind: 'seg', k: 'par', opts: ['1', '2', '4'] },
     ] },
     { title: 'Storage', rows: [
-      { label: 'Download folder', kind: 'value', value: s.folder, action: 'Change…', run: () => s.set({ dialog: 'folder' }) },
-      { label: 'Delete played episodes', kind: 'seg', k: 'del', opts: ['Never', '1 day', '1 week'] },
-      { label: 'Storage limit', hint: 'Oldest played files are removed first', kind: 'value', value: `${s.storageLimitGb} GB`, action: 'Edit', run: () => s.set({ dialog: 'storage' }) },
+      { label: 'Download folder', hint: platform.isDesktop ? 'One sub-folder per show' : 'Downloads need the desktop app', kind: 'value', value: s.folder, action: 'Change…', run: () => void changeFolder() },
+      { label: 'Delete played episodes', hint: 'Downloaded files only; the episode stays in your library', kind: 'seg', k: 'del', opts: ['Never', '1 day', '1 week'] },
+      { label: 'Storage limit', hint: `${usedGb} GB used · oldest played files are removed first`, kind: 'value', value: `${s.storageLimitGb} GB`, action: 'Edit', run: () => s.set({ dialog: 'storage' }) },
     ] },
     { title: 'Playback', rows: [
       { label: 'Default speed', kind: 'seg', k: 'speed', opts: ['1×', '1.2×', '1.5×', '2×'] },
@@ -29,8 +38,9 @@ export function SettingsScreen() {
       { label: 'Notify on new episodes', kind: 'toggle', k: 'notify' },
     ] },
     { title: 'Sync & subscriptions', rows: [
-      { label: 'Sync server', hint: `gpodder-compatible · last synced ${s.lastSynced}`, kind: 'value', value: s.syncServer, action: 'Configure', run: () => s.set({ dialog: 'sync' }) },
-      { label: 'Subscriptions', kind: 'value', value: `${s.shows.length} feeds`, action: 'Export OPML', run: () => window.dispatchEvent(new Event('resonate:export-opml')) },
+      { label: 'Sync server', hint: s.sync.server ? `gpodder-compatible · ${s.syncing ? 'syncing…' : `last synced ${clockLabel(s.sync.lastSynced)}`}` : 'gpodder-compatible · subscriptions and play positions', kind: 'value', value: s.sync.server ? `${s.sync.user}@${s.sync.server.replace(/^https?:\/\//, '')}` : 'Not connected', action: 'Configure', run: () => s.set({ dialog: 'sync' }) },
+      { label: 'Subscriptions', hint: 'OPML works with almost every podcast app', kind: 'value', value: `${s.shows.length} feeds`, action: 'Export OPML', run: () => void exportOpmlFile() },
+      { label: 'Import subscriptions', kind: 'value', value: '', action: 'Import OPML…', run: () => void importOpmlFile() },
     ] },
   ];
 

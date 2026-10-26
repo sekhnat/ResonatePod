@@ -30,7 +30,7 @@ export function QueueScreen() {
             style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '9px 10px', borderRadius: 'var(--radius-md)', background: e.isCur ? 'color-mix(in srgb,var(--color-accent-900) 70%,transparent)' : 'transparent' }}>
             <i className="ph ph-dots-six-vertical" title="Drag to reorder" style={{ fontSize: 16, color: 'var(--color-neutral-600)', cursor: 'grab' }} />
             <span style={{ width: 18, fontSize: 12, color: 'var(--color-neutral-500)', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
-            <Art bg={e.art} mono={e.mono} size={40} font={12} />
+            <Art bg={e.art} mono={e.mono} img={e.imageUrl} size={40} font={12} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: titleColor(e) }}>{e.title}</span>
               <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{e.showTitle} · {e.meta}</span>
