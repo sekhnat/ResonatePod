@@ -4,11 +4,13 @@ import { Seg, Toggle, h1Style } from '../components/ui';
 import { platform } from '../platform';
 import { clockLabel } from '../model';
 import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
+import { CountrySelect, SourceSelect } from '../components/DirectoryCard';
 
 type Row = { label: string; hint?: string } & (
   | { kind: 'toggle'; k: keyof Toggles }
   | { kind: 'seg'; k: keyof SegValues; opts: string[] }
   | { kind: 'value'; value: string; action: string; run: () => void }
+  | { kind: 'node'; node: ReactNode }
 );
 
 export function SettingsScreen() {
@@ -45,6 +47,11 @@ export function SettingsScreen() {
     ...(platform.isDesktop ? [{ title: 'Desktop', rows: [
       { label: 'Start Resonate when you log in', hint: 'Opens hidden in the tray', kind: 'toggle', k: 'autostart' },
     ] as Row[] }] : []),
+    { title: 'Discover', rows: [
+      { label: 'Region', hint: 'Charts, suggestions and Apple Podcasts search', kind: 'node', node: <CountrySelect /> },
+      { label: 'Search', hint: 'All directories merges Apple Podcasts, gpodder.net, fyyd and Podcast Index', kind: 'node', node: <SourceSelect /> },
+      { label: 'Podcast Index', hint: s.directory.podcastIndex ? 'Included when searching all directories' : 'Needs a free API key from api.podcastindex.org', kind: 'value', value: s.directory.podcastIndex ? 'Key saved' : 'Off', action: s.directory.podcastIndex ? 'Change…' : 'Add key…', run: () => s.set({ dialog: 'podcastIndex' }) },
+    ] },
     { title: 'Sync & subscriptions', rows: [
       { label: 'Sync server', hint: s.sync.server ? `gpodder-compatible · ${s.syncing ? 'syncing…' : `last synced ${clockLabel(s.sync.lastSynced)}`}` : 'gpodder-compatible · subscriptions and play positions', kind: 'value', value: s.sync.server ? `${s.sync.user}@${s.sync.server.replace(/^https?:\/\//, '')}` : 'Not connected', action: 'Configure', run: () => s.set({ dialog: 'sync' }) },
       { label: 'Subscriptions', hint: 'OPML works with almost every podcast app', kind: 'value', value: `${s.shows.length} feeds`, action: 'Export OPML', run: () => void exportOpmlFile() },
@@ -55,6 +62,7 @@ export function SettingsScreen() {
   const control = (r: Row): ReactNode => {
     if (r.kind === 'toggle') return <Toggle on={s.tg[r.k]} onToggle={() => s.setToggle(r.k)} label={r.label} />;
     if (r.kind === 'seg') return <Seg options={r.opts} value={s.sv[r.k]} onPick={(v) => s.setSeg(r.k, v)} />;
+    if (r.kind === 'node') return r.node;
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)', fontFamily: 'ui-monospace,monospace' }}>{r.value}</span>

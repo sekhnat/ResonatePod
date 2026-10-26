@@ -66,6 +66,24 @@ export class GpodderClient {
   putActions(actions: EpisodeAction[]) {
     return this.call<{ timestamp: number }>(`/api/2/episodes/${this.u}.json`, 'POST', actions);
   }
+
+  /** Podcasts the server recommends for this account (gpodder.net only; others answer 404). */
+  suggestions(n: number) {
+    return this.call<GpodderPodcast[]>(`/suggestions/${n}.json`);
+  }
+}
+
+/** A podcast as gpodder.net's directory endpoints describe it. */
+export interface GpodderPodcast {
+  url: string;
+  title: string;
+  author?: string;
+  description?: string;
+  subscribers?: number;
+  logo_url?: string | null;
+  scaled_logo_url?: string | null;
+  website?: string | null;
+  mygpo_link?: string;
 }
 
 export interface SyncInput {

@@ -151,6 +151,8 @@ export function Dialogs() {
       return <SyncDialog />;
     case 'feedAuth':
       return <FeedAuthDialog />;
+    case 'podcastIndex':
+      return <PodcastIndexDialog />;
     case 'move': {
       const mv = s.pendingMove;
       if (!mv) return null;
@@ -297,6 +299,53 @@ function FeedAuthDialog() {
         <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || !user.trim()} onClick={() => void save()}>
           {busy ? <i className="ph ph-circle-notch spin" /> : null}Sign in
         </button>
+      </div>
+    </Modal>
+  );
+}
+
+function PodcastIndexDialog() {
+  const s = useStore();
+  const [key, setKey] = useState('');
+  const [secret, setSecret] = useState('');
+  const close = () => s.set({ dialog: null });
+  const ok = key.trim() && secret.trim();
+  const save = async () => {
+    if (!ok) return;
+    await s.setPodcastIndexKey({ key: key.trim(), secret: secret.trim() });
+    s.toast('Podcast Index added to search');
+    close();
+  };
+  const field = (id: string, label: string, value: string, set: (v: string) => void, type = 'text') => (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} className="input" type={type} value={value} autoComplete="off" spellCheck={false} autoFocus={id === 'pi-key'}
+        style={{ fontFamily: 'ui-monospace,monospace', fontSize: 13 }}
+        onChange={(e) => set(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
+    </div>
+  );
+  return (
+    <Modal onClose={close} width={460} label="Podcast Index">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="dialog-title">Podcast Index</span>
+        <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+          The open Podcast Index lists over four million shows. Its API needs a key: sign up for free at
+          {' '}<a href="https://api.podcastindex.org/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-accent)' }}>api.podcastindex.org</a>, then paste the key and secret here.
+          They’re stored encrypted with your system keyring.
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {field('pi-key', 'API key', key, setKey)}
+        {field('pi-secret', 'API secret', secret, setSecret, 'password')}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        {s.directory.podcastIndex
+          ? <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => { void s.setPodcastIndexKey(null); s.toast('Podcast Index removed'); close(); }}>Remove key</button>
+          : <span />}
+        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+          <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={close}>Cancel</button>
+          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={!ok} onClick={() => void save()}>Save</button>
+        </div>
       </div>
     </Modal>
   );

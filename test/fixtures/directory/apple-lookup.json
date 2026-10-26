@@ -1,0 +1,104 @@
+{
+ "resultCount": 5,
+ "results": [
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 2001,
+   "trackId": 2001,
+   "artistName": "Bytes Media",
+   "collectionName": "Daily Bytes",
+   "trackName": "Daily Bytes",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/daily-bytes/id2001?uo=4",
+   "artworkUrl100": "https://feeds.example/art/daily-bytes-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/daily-bytes-600.jpg",
+   "primaryGenreName": "Technology",
+   "trackCount": 200,
+   "country": "USA",
+   "genres": [
+    "Technology",
+    "Podcasts"
+   ],
+   "feedUrl": "https://feeds.example/daily-bytes.xml"
+  },
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 1004,
+   "trackId": 1004,
+   "artistName": "Ines Varga & Tom Achebe",
+   "collectionName": "Kernel Panic Hour",
+   "trackName": "Kernel Panic Hour",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/kernel-panic/id1004?uo=4",
+   "artworkUrl100": "https://feeds.example/art/kernel-panic-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/kernel-panic-600.jpg",
+   "primaryGenreName": "Technology",
+   "trackCount": 200,
+   "country": "USA",
+   "genres": [
+    "Technology",
+    "Podcasts"
+   ],
+   "feedUrl": "https://feeds.example/kernel-panic.xml"
+  },
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 2002,
+   "trackId": 2002,
+   "artistName": "Observatory Audio",
+   "collectionName": "Deep Field",
+   "trackName": "Deep Field",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/deep-field/id2002?uo=4",
+   "artworkUrl100": "https://feeds.example/art/deep-field-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/deep-field-600.jpg",
+   "primaryGenreName": "Science",
+   "trackCount": 200,
+   "country": "USA",
+   "genres": [
+    "Science",
+    "Podcasts"
+   ],
+   "feedUrl": "https://feeds.example/deep-field.xml"
+  },
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 2003,
+   "trackId": 2003,
+   "artistName": "Shed Studios",
+   "collectionName": "The Allotment Hour",
+   "trackName": "The Allotment Hour",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/allotment-hour/id2003?uo=4",
+   "artworkUrl100": "https://feeds.example/art/allotment-hour-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/allotment-hour-600.jpg",
+   "primaryGenreName": "Leisure",
+   "trackCount": 200,
+   "country": "USA",
+   "genres": [
+    "Leisure",
+    "Podcasts"
+   ],
+   "feedUrl": "https://feeds.example/allotment-hour.xml"
+  },
+  {
+   "wrapperType": "track",
+   "kind": "podcast",
+   "collectionId": 1003,
+   "trackId": 1003,
+   "artistName": "Fruit Co",
+   "collectionName": "Linux Exclusive",
+   "trackName": "Linux Exclusive",
+   "collectionViewUrl": "https://podcasts.apple.com/us/podcast/linux-exclusive/id1003?uo=4",
+   "artworkUrl100": "https://feeds.example/art/linux-exclusive-100.jpg",
+   "artworkUrl600": "https://feeds.example/art/linux-exclusive-600.jpg",
+   "primaryGenreName": "Technology",
+   "trackCount": 200,
+   "country": "USA",
+   "genres": [
+    "Technology",
+    "Podcasts"
+   ]
+  }
+ ]
+}

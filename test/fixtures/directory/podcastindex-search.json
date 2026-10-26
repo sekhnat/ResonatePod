@@ -1,0 +1,32 @@
+{
+ "status": "true",
+ "feeds": [
+  {
+   "id": 41,
+   "title": "LINUX Unplugged",
+   "url": "https://feeds.example/linux-unplugged.xml",
+   "author": "Jupiter Broadcasting",
+   "description": "Weekly Linux talk show.",
+   "image": "https://feeds.example/art/lu.png",
+   "artwork": "https://feeds.example/art/lu-big.png",
+   "episodeCount": 580,
+   "categories": {
+    "102": "Technology"
+   }
+  },
+  {
+   "id": 42,
+   "title": "Destination Linux",
+   "url": "https://feeds.example/destination-linux.xml",
+   "author": "Destination Linux Network",
+   "description": "News, opinion and interviews.",
+   "image": "",
+   "artwork": "",
+   "episodeCount": 390,
+   "categories": null
+  }
+ ],
+ "count": 2,
+ "query": "linux",
+ "description": "Found matching feeds."
+}

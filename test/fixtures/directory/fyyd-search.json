@@ -1,0 +1,36 @@
+{
+ "status": 1,
+ "msg": "ok",
+ "meta": {
+  "paging": {
+   "count": 2,
+   "page": 0
+  }
+ },
+ "data": [
+  {
+   "id": 31,
+   "title": "Late Night Linux",
+   "xmlURL": "https://www.feeds.example/late-night-linux.xml",
+   "author": "Late Night Linux Ltd",
+   "description": "A podcast about Linux, free software and open source, recorded late at night.",
+   "imgURL": "https://feeds.example/art/lnl.png",
+   "thumbImageURL": "https://feeds.example/art/lnl-thumb.png",
+   "episode_count": 301
+  },
+  {
+   "id": 32,
+   "title": "Ubuntu Podcast",
+   "xmlURL": "https://feeds.example/ubuntu-podcast.xml",
+   "author": "Ubuntu Podcast team",
+   "description": "Upbeat and family-friendly show about Ubuntu.",
+   "thumbImageURL": "https://feeds.example/art/up-thumb.png",
+   "episode_count": 500
+  },
+  {
+   "id": 33,
+   "title": "Feedless",
+   "author": "Nobody"
+  }
+ ]
+}

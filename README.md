@@ -22,7 +22,7 @@ many feeds won't load there because of CORS.
 | **Private feeds** | Token URLs (Patreon, Supercast, …) work as-is. Feeds behind HTTP Basic auth ask for a username and password, or take them from a pasted `https://user:pass@…` URL. Credentials are kept per server, encrypted with the system keyring, and also sent for enclosures on the same server. *Feed login…* in a show's settings changes them. |
 | **Feeds** | RSS 2.0 with iTunes tags, Podcasting 2.0 `podcast:chapters` / `podcast:transcript`, and Podlove Simple Chapters. Show notes are shown as plain text. |
 | **Video podcasts** | Video episodes show their picture in Now playing (double-click for full screen); audio keeps all the usual controls. |
-| **Discover** | Apple Podcasts directory: top charts by category, and search. Pasting a feed URL subscribes directly. |
+| **Discover** | Searches Apple Podcasts ([Search API](https://performance-partners.apple.com/search-api)), [gpodder.net](https://gpodder.net/) and fyyd at once — plus [Podcast Index](https://api.podcastindex.org/) with your own free API key — merging results AntennaPod-style (each directory's rank, weighted and summed per feed). Or pick one directory. Apple episode matches are listed too. *Suggested for you* works like AntennaPod's: Apple's top chart for your region minus shows you follow, led by gpodder.net's personal suggestions when sync is connected. Browse Apple's regional charts or gpodder.net's most subscribed, by category. Pasting an Apple Podcasts link subscribes to the show's real feed. |
 | **Playback** | Streams, or plays the downloaded file. Resumes where you left off. Speed changes keep pitch. Skip intervals, chapter skip, a draggable seek bar, and volume/mute. |
 | **Silence trim** | Web Audio level detection plays quiet stretches at 3×. Time saved is tracked. |
 | **Chapters & transcripts** | Clickable chapter list, from the feed or, failing that, from inside the file: ID3 `CHAP` frames (MP3) or Nero `chpl` (M4A), read from disk or with a few small Range requests while streaming. VTT/SRT/JSON and timed HTML transcripts follow playback; HTML and plain-text transcripts without timestamps are shown as text. |
@@ -43,7 +43,7 @@ Keyboard: <kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> skip ·
 <kbd>Ctrl</kbd>+<kbd>W</kbd> close to tray · <kbd>Ctrl</kbd>+<kbd>Q</kbd> quit.
 
 Data lives in `~/.config/Resonate/`: `library.json`, `window.json`, and `secrets.json`
-holding the encrypted sync password and feed logins. The library is written only when
+holding the encrypted sync password, feed logins and Podcast Index key. The library is written only when
 something in it changes (debounced); the playback position is saved every 30 s while
 playing, on pause, and on quit.
 
@@ -57,10 +57,12 @@ shared/         code used on both sides: feed parser, chapters/transcripts, embe
 src/
   platform.ts   typed bridge to the main process, with a browser fallback
   store.ts      Zustand store: library, playback state, downloads, rules, sync
+  lib/directory/ Apple, gpodder.net, fyyd and Podcast Index clients; combined search and suggestions
   audio/        the playback engine (one media element + Web Audio + MediaSession)
   services.ts   wires the store to downloads, tray, network checks and timers
   screens/      one file per screen;  components/  shared UI
-e2e/run.mjs     Playwright-driven Electron test against a local feed server
+e2e/run.mjs     Playwright-driven Electron test against a local feed server (directories are served
+                from test/fixtures/directory via the RESONATE_URL_REWRITE test hook)
 test/fixtures/  sample feed, chapters, transcript, and small media files (chaptered MP3/M4A, video)
 ```
 

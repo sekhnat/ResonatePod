@@ -1,0 +1,19 @@
+{
+ "resultCount": 1,
+ "results": [
+  {
+   "wrapperType": "podcastEpisode",
+   "kind": "podcast-episode",
+   "trackId": 9001,
+   "trackName": "Wayland, five years on",
+   "collectionId": 1004,
+   "collectionName": "Kernel Panic Hour",
+   "feedUrl": "https://feeds.example/kernel-panic.xml",
+   "artworkUrl600": "https://feeds.example/art/kernel-panic-600.jpg",
+   "releaseDate": "2026-10-19T06:00:00Z",
+   "trackTimeMillis": 4323000,
+   "description": "Fractional scaling, screen sharing and the portals that made it work. Plus your mail.",
+   "episodeUrl": "https://feeds.example/kp42.mp3"
+  }
+ ]
+}

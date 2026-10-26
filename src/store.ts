@@ -8,6 +8,7 @@ import {
   chaptersFor, epKey, episodeInfo, hueFor, parseKey, type Episode, type EpisodeInfo, type EpisodeMeta, type Show,
 } from './data';
 import type { OpmlFeed } from './lib/opml';
+import { defaultCountry, gpodderResult, resolveFeedUrl, type DirectoryResult, type SourceChoice } from './lib/directory';
 import { platform } from './platform';
 
 export type Screen = 'inbox' | 'shows' | 'show' | 'queue' | 'downloads' | 'discover' | 'settings';
@@ -40,7 +41,14 @@ export type Sleep =
   | { mode: 'timer'; minutes: number; remaining: number }
   | { mode: 'chapter' }
   | { mode: 'episode' };
-export type DialogKind = 'unsubscribe' | 'folder' | 'storage' | 'sync' | 'shortcuts' | 'about' | 'move' | 'feedAuth';
+export type DialogKind = 'unsubscribe' | 'folder' | 'storage' | 'sync' | 'shortcuts' | 'about' | 'move' | 'feedAuth' | 'podcastIndex';
+export interface DirectoryPrefs {
+  /** Apple storefront for charts and search, e.g. "gb". */
+  country: string;
+  source: SourceChoice;
+  /** A Podcast Index key is saved (the key itself lives in secrets). */
+  podcastIndex: boolean;
+}
 export interface Toast { id: number; text: string }
 export interface Toggles { auto: boolean; metered: boolean; silence: boolean; notify: boolean; deletePlayed: boolean; autostart: boolean }
 export interface SegValues { keep: string; par: string; speed: string; del: string; skip: string }
@@ -77,6 +85,7 @@ interface Data {
   sync: SyncState;
   lastChecked: number;
   trimSaved: number;
+  directory: DirectoryPrefs;
 }
 
 interface Ui {
@@ -169,6 +178,11 @@ interface Actions {
   setToggle(k: keyof Toggles): void;
   setSeg(k: keyof SegValues, v: string): void;
   setPrefs(patch: Partial<Pick<Data, 'folder' | 'storageLimitGb'>>): void;
+
+  setDirectory(patch: Partial<DirectoryPrefs>): void;
+  setPodcastIndexKey(key: { key: string; secret: string } | null): Promise<void>;
+  /** gpodder.net's personal recommendations for the sync account; [] without sync or support. */
+  gpodderSuggestions(): Promise<DirectoryResult[]>;
 
   configureSync(server: string, user: string, password: string): Promise<boolean>;
   disconnectSync(): void;
@@ -339,6 +353,7 @@ const initialData: Data = {
   sync: { server: '', user: '', device: '', subsSince: 0, actionsSince: 0, known: [], pending: [], lastSynced: 0 },
   lastChecked: 0,
   trimSaved: 0,
+  directory: { country: defaultCountry(), source: 'all', podcastIndex: false },
 };
 
 const initialUi: Ui = {
@@ -758,6 +773,13 @@ export const useStore = create<State>()(
           const cred = splitCredentials(clean);
           if (cred) { clean = cred.url; await platform.setFeedAuth(clean, cred.user, cred.password); }
           const s = get();
+          // Apple Podcasts page links stand for the show's real feed.
+          try {
+            clean = await resolveFeedUrl(clean);
+          } catch (err) {
+            if (!opts.quiet) s.toast(`Couldn’t add that show: ${(err as Error).message}`);
+            return null;
+          }
           const already = (u: string) => {
             const existing = get().shows.find((x) => x.feedUrl === u);
             if (existing && !opts.quiet) s.toast(`You’re already subscribed to ${existing.title}`);
@@ -839,6 +861,20 @@ export const useStore = create<State>()(
         setToggle: (k) => set((s) => ({ tg: { ...s.tg, [k]: !s.tg[k] } })),
         setSeg: (k, v) => set((s) => ({ sv: { ...s.sv, [k]: v } })),
         setPrefs: (patch) => set(patch),
+
+        setDirectory: (patch) => set((s) => ({ directory: { ...s.directory, ...patch } })),
+        setPodcastIndexKey: async (key) => {
+          await platform.setSecret('podcastindex', key ? JSON.stringify(key) : null);
+          set((s) => ({ directory: { ...s.directory, podcastIndex: !!key, source: !key && s.directory.source === 'podcastindex' ? 'all' : s.directory.source } }));
+        },
+        gpodderSuggestions: async () => {
+          const s = get();
+          if (!s.sync.server) return [];
+          const password = (await platform.getSecret('gpodder')) ?? '';
+          const client = new GpodderClient({ server: s.sync.server, user: s.sync.user, password, device: s.sync.device }, platform.http);
+          const list = await client.suggestions(12).catch(() => []);
+          return (Array.isArray(list) ? list : []).map((p) => gpodderResult(p)).filter((r): r is DirectoryResult => !!r);
+        },
 
         configureSync: async (server, user, password) => {
           const device = get().sync.device || `resonate-${slug(platform.hostname)}-${Math.random().toString(36).slice(2, 6)}`;

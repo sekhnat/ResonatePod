@@ -344,3 +344,38 @@ describe('embedded chapters', () => {
   });
 });
 
+
+describe('directories', () => {
+  it('subscribes to the real feed behind an Apple Podcasts link', async () => {
+    st().unsubscribe('kernel-panic-hour', true);
+    const base = http.getMockImplementation()!;
+    http.mockImplementation(async (url, req) => (url.startsWith('https://itunes.apple.com/lookup?id=1004')
+      ? { status: 200, text: JSON.stringify({ results: [{ collectionId: 1004, collectionName: 'Kernel Panic Hour', feedUrl: FEED_URL }] }) }
+      : base(url, req)));
+    const id = await st().addFeed('https://podcasts.apple.com/gb/podcast/kernel-panic-hour/id1004', { quiet: true });
+    expect(id).toBe('kernel-panic-hour');
+    expect(st().shows[0].feedUrl).toBe(FEED_URL);
+  });
+
+  it('asks gpodder.net for personal suggestions only when sync is set up', async () => {
+    expect(await st().gpodderSuggestions()).toEqual([]);
+    expect(http).not.toHaveBeenCalledWith(expect.stringContaining('/suggestions/'), expect.anything());
+    useStore.setState({ sync: { ...st().sync, server: 'gpodder.net', user: 'ines', device: 'd' } });
+    http.mockImplementation(async (url) => (url === 'https://gpodder.net/suggestions/12.json'
+      ? { status: 200, text: readFileSync('test/fixtures/directory/gpodder-suggestions.json', 'utf8') }
+      : { status: 404, text: '' }));
+    expect((await st().gpodderSuggestions()).map((r) => r.title)).toEqual(['History Hour', 'Kernel Panic Hour']);
+    http.mockImplementation(async () => ({ status: 404, text: '' }));
+    expect(await st().gpodderSuggestions()).toEqual([]);
+  });
+
+  it('saves the Podcast Index key as a secret and falls back to all directories when removed', async () => {
+    const setSecret = vi.spyOn(platform, 'setSecret');
+    await st().setPodcastIndexKey({ key: 'k', secret: 's' });
+    expect(setSecret).toHaveBeenLastCalledWith('podcastindex', JSON.stringify({ key: 'k', secret: 's' }));
+    st().setDirectory({ source: 'podcastindex' });
+    await st().setPodcastIndexKey(null);
+    expect(st().directory).toMatchObject({ podcastIndex: false, source: 'all' });
+    setSecret.mockRestore();
+  });
+});

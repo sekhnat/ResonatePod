@@ -70,7 +70,7 @@ export function CommandPalette() {
               <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{p.hint}</span>
             </button>
           ))}
-          {!items.length && <div style={{ padding: '16px 10px', fontSize: 13, color: 'var(--color-neutral-500)' }}>No matches. Press Enter to search the directory.</div>}
+          {!items.length && <div style={{ padding: '16px 10px', fontSize: 13, color: 'var(--color-neutral-500)' }}>No matches. Press Enter to search podcast directories.</div>}
         </div>
       </div>
     </div>

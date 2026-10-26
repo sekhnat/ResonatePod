@@ -1,0 +1,24 @@
+[
+ {
+  "url": "https://feeds.example/open-source-radio.xml",
+  "title": "Open Source Radio",
+  "description": "Weekly news and long-form interviews about free and open source software.",
+  "subscribers": 15402,
+  "subscribers_last_week": 15399,
+  "logo_url": "https://feeds.example/art/gp-open.png",
+  "scaled_logo_url": "https://gpodder.net/logo/64/594.jpg",
+  "website": "https://example.org/",
+  "mygpo_link": "https://gpodder.net/podcast/x"
+ },
+ {
+  "url": "https://feeds.example/linux-voice.xml",
+  "title": "Linux Voice",
+  "description": "The Linux Voice podcast.",
+  "subscribers": 1830,
+  "subscribers_last_week": 1827,
+  "logo_url": "https://feeds.example/art/gp-linux.png",
+  "scaled_logo_url": "https://gpodder.net/logo/64/298.jpg",
+  "website": "https://example.org/",
+  "mygpo_link": "https://gpodder.net/podcast/x"
+ }
+]

@@ -1,0 +1,137 @@
+{
+ "feed": {
+  "author": {
+   "name": {
+    "label": "iTunes Store"
+   }
+  },
+  "entry": [
+   {
+    "im:name": {
+     "label": "Daily Bytes"
+    },
+    "im:image": [
+     {
+      "label": "https://feeds.example/art/2001-55.png",
+      "attributes": {
+       "height": "55"
+      }
+     },
+     {
+      "label": "https://feeds.example/art/2001-170.png",
+      "attributes": {
+       "height": "170"
+      }
+     }
+    ],
+    "summary": {
+     "label": "The tech news you need, every weekday morning. Ten minutes, no fluff."
+    },
+    "im:artist": {
+     "label": "Bytes Media"
+    },
+    "title": {
+     "label": "Daily Bytes - Bytes Media"
+    },
+    "id": {
+     "label": "https://podcasts.apple.com/us/podcast/x/id2001?uo=2",
+     "attributes": {
+      "im:id": "2001"
+     }
+    },
+    "category": {
+     "attributes": {
+      "im:id": "1318",
+      "term": "Technology",
+      "label": "Technology"
+     }
+    }
+   },
+   {
+    "im:name": {
+     "label": "Kernel Panic Hour"
+    },
+    "im:image": [
+     {
+      "label": "https://feeds.example/art/1004-55.png",
+      "attributes": {
+       "height": "55"
+      }
+     },
+     {
+      "label": "https://feeds.example/art/1004-170.png",
+      "attributes": {
+       "height": "170"
+      }
+     }
+    ],
+    "summary": {
+     "label": "Two sysadmins talk through the week in free software. And answer mail."
+    },
+    "im:artist": {
+     "label": "Ines Varga & Tom Achebe"
+    },
+    "title": {
+     "label": "Kernel Panic Hour - Ines Varga & Tom Achebe"
+    },
+    "id": {
+     "label": "https://podcasts.apple.com/us/podcast/x/id1004?uo=2",
+     "attributes": {
+      "im:id": "1004"
+     }
+    },
+    "category": {
+     "attributes": {
+      "im:id": "1318",
+      "term": "Technology",
+      "label": "Technology"
+     }
+    }
+   },
+   {
+    "im:name": {
+     "label": "Deep Field"
+    },
+    "im:image": [
+     {
+      "label": "https://feeds.example/art/2002-55.png",
+      "attributes": {
+       "height": "55"
+      }
+     },
+     {
+      "label": "https://feeds.example/art/2002-170.png",
+      "attributes": {
+       "height": "170"
+      }
+     }
+    ],
+    "summary": {
+     "label": "Astronomers on the questions they cannot stop thinking about. New every Tuesday."
+    },
+    "im:artist": {
+     "label": "Observatory Audio"
+    },
+    "title": {
+     "label": "Deep Field - Observatory Audio"
+    },
+    "id": {
+     "label": "https://podcasts.apple.com/us/podcast/x/id2002?uo=2",
+     "attributes": {
+      "im:id": "2002"
+     }
+    },
+    "category": {
+     "attributes": {
+      "im:id": "1318",
+      "term": "Technology",
+      "label": "Technology"
+     }
+    }
+   }
+  ],
+  "title": {
+   "label": "iTunes Store: Top Podcasts"
+  }
+ }
+}
