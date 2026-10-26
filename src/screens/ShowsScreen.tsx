@@ -27,7 +27,7 @@ export function ShowsScreen() {
                 <span className="h-ring" style={{ position: 'absolute', inset: 0, borderRadius: 'inherit' }} />
                 {n > 0 && <span className="tag tag-accent" style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, padding: '2px 7px' }}>{n} new</span>}
               </Art>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
                 <span className="clamp-2" style={{ fontSize: 13, fontWeight: 500 }}>{x.title}</span>
                 <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.author}</span>
               </div>
