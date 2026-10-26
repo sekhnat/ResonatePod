@@ -7,38 +7,78 @@ const SILENCE_MS = 250;
 const TRIM_RATE = 3;
 const ANALYSE_MS = 50;
 
+// ---- where the picture goes for video podcasts ----
+// The media element lives in a hidden host; a visible view borrows it while mounted.
+// Moving a playing element within the document doesn't interrupt playback.
+let media: HTMLVideoElement | null = null;
+let host: HTMLElement | null = null;
+const views: HTMLElement[] = [];
+
+function placeMedia() {
+  if (!media) return;
+  const target = views[views.length - 1] ?? host;
+  if (target && media.parentElement !== target) target.appendChild(media);
+  media.style.display = views.length ? 'block' : 'none';
+}
+
+export function attachVideo(el: HTMLElement) {
+  if (!views.includes(el)) views.push(el);
+  placeMedia();
+}
+
+export function detachVideo(el: HTMLElement) {
+  const i = views.indexOf(el);
+  if (i >= 0) views.splice(i, 1);
+  placeMedia();
+}
+
 /**
- * Drives a single <audio> element from the store: loads the current episode
+ * Drives a single media element from the store: loads the current episode
  * (the local file when downloaded, else the stream), mirrors play/pause, speed and
  * volume, reports time/duration/end back, trims silence, and publishes MediaSession
- * metadata so desktop media keys and MPRIS widgets work.
+ * metadata so desktop media keys and MPRIS widgets work. It's a <video> element so
+ * video podcasts have a picture; audio-only files play the same way.
  */
 export function startEngine() {
-  const audio = new Audio();
+  const audio = document.createElement('video');
   audio.preload = 'auto';
   audio.preservesPitch = true;
+  audio.playsInline = true;
+  audio.setAttribute('aria-label', 'Episode video');
   if (platform.canAnalyse) audio.crossOrigin = 'anonymous';
+  Object.assign(audio.style, { width: '100%', height: '100%', objectFit: 'contain', background: '#000', display: 'none' });
+  host = document.createElement('div');
+  host.hidden = true;
+  document.body.appendChild(host);
+  media = audio;
+  placeMedia();
 
   const st = () => useStore.getState();
   let loadedKey: string | null = null;
+  /** The local file the element is playing, if any (undefined when streaming). */
+  let loadedFile: string | undefined;
   let pendingSeek: number | null = null;
   let trimming = false;
 
   const rate = (s: State) => (trimming && s.speed < TRIM_RATE ? TRIM_RATE : s.speed);
 
-  function load(s: State) {
+  function load(s: State, resumeAt?: number) {
     loadedKey = s.cur;
     const info = epInfo(s, s.cur);
+    loadedFile = info ? getEp(s, info.key).file : undefined;
     if (!info) {
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
       if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+      if (s.video) useStore.setState({ video: false });
       return;
     }
-    audio.src = platform.mediaUrl(getEp(s, info.key).file, info.ep.enclosureUrl);
-    pendingSeek = s.pos;
+    audio.src = platform.mediaUrl(loadedFile, info.ep.enclosureUrl);
+    pendingSeek = resumeAt ?? s.pos;
     audio.load();
+    if (resumeAt != null) return;
+    if (s.video) useStore.setState({ video: false });
     if ('mediaSession' in navigator && typeof MediaMetadata !== 'undefined') {
       const img = info.ep.imageUrl ?? info.show.imageUrl;
       navigator.mediaSession.metadata = new MediaMetadata({
@@ -51,6 +91,8 @@ export function startEngine() {
   function apply(s: State) {
     if (!s.hydrated) return;
     if (s.cur !== loadedKey) load(s);
+    // The local file moved or was deleted under us: pick up where we were from the new source.
+    else if (s.cur && loadedFile && getEp(s, s.cur).file !== loadedFile) load(s, audio.currentTime);
     if (!s.cur) return;
     const r = rate(s);
     if (audio.playbackRate !== r) audio.playbackRate = r;
@@ -69,6 +111,8 @@ export function startEngine() {
     if (pendingSeek != null && pendingSeek > 0) audio.currentTime = Math.min(pendingSeek, audio.duration || pendingSeek);
     pendingSeek = null;
     st().onDuration(audio.duration);
+    const video = audio.videoWidth > 0;
+    if (st().video !== video) useStore.setState({ video });
   });
   let lastPosState = 0;
   audio.addEventListener('timeupdate', () => {

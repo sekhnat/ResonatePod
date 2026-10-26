@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
+import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
 
 const env = ipcRenderer.sendSync('env') as { desktop: 'KDE' | 'GNOME'; hostname: string };
 
@@ -20,6 +20,13 @@ const api = {
     },
   },
   deleteFile: (file: string): Promise<void> => ipcRenderer.invoke('fs:delete', file),
+  moveFiles: (from: string, to: string, files: string[]): Promise<{ from: string; to: string }[]> => ipcRenderer.invoke('fs:move', from, to, files),
+  embeddedChapters: (file: string | null, url: string): Promise<Chapter[] | null> => ipcRenderer.invoke('media:chapters', file, url),
+  setFeedAuth: (url: string, user: string | null, password: string | null): Promise<void> => ipcRenderer.invoke('auth:set', url, user, password),
+  setAutostart: (on: boolean): Promise<void> => ipcRenderer.invoke('autostart:set', on),
+  onFlush: (cb: () => Promise<void>) => {
+    ipcRenderer.on('app:flush', () => { cb().catch(() => {}).finally(() => ipcRenderer.send('app:flushed')); });
+  },
   diskUsage: (folder: string): Promise<number> => ipcRenderer.invoke('fs:usage', folder),
   showInFolder: (file: string): Promise<void> => ipcRenderer.invoke('fs:showInFolder', file),
   openFolder: (folder: string): Promise<string> => ipcRenderer.invoke('fs:openFolder', folder),

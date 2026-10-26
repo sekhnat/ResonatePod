@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { autoDownloadKeys, cleanupKeys, epInfo, getEp, useStore } from './store';
+import { autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, useStore } from './store';
 import { inboxKeys, totalUnplayed } from './model';
 import { platform } from './platform';
 
@@ -226,3 +226,121 @@ describe('sync', () => {
     expect(st().sync.pending).toEqual([expect.objectContaining({ podcast: FEED_URL, episode: 'https://cdn.example/kp42.mp3', action: 'play', started: 0, position: 120, total: 4323 })]);
   });
 });
+
+describe('moved and private feeds', () => {
+  it('follows a permanent redirect to the feed’s new address', async () => {
+    const NEW = 'https://new.example/kp.xml';
+    http.mockImplementation(async () => ({ status: 200, text: feed, etag: '"v9"', movedTo: NEW }));
+    await st().refresh();
+    expect(st().shows[0]).toMatchObject({ feedUrl: NEW, etag: '"v9"' });
+    expect(st().toasts.map((t) => t.text)).toContain('Kernel Panic Hour moved to a new address');
+  });
+
+  it('follows itunes:new-feed-url, dropping the old validators', async () => {
+    feedBody = feed.replace('<channel>', '<channel><itunes:new-feed-url>https://new.example/kp.xml</itunes:new-feed-url>');
+    await st().refresh();
+    expect(st().shows[0]).toMatchObject({ feedUrl: 'https://new.example/kp.xml', etag: undefined });
+  });
+
+  it('subscribes at the address a feed redirected to', async () => {
+    st().unsubscribe('kernel-panic-hour', true);
+    http.mockImplementation(async (url) => (url === 'https://old.example/feed' ? { status: 200, text: feed, movedTo: FEED_URL } : { status: 404, text: '' }));
+    await st().addFeed('https://old.example/feed', { quiet: true });
+    expect(st().shows[0].feedUrl).toBe(FEED_URL);
+  });
+
+  it('asks for a password on 401 and keeps credentials out of the stored URL', async () => {
+    const auth = vi.spyOn(platform, 'setFeedAuth');
+    http.mockImplementation(async (_url, req) => ({ status: req?.headers?.Authorization || authed ? 200 : 401, text: feed }));
+    let authed = false;
+    expect(await st().addFeed('https://private.example/feed.xml')).toBeNull();
+    expect(st()).toMatchObject({ dialog: 'feedAuth', authFor: { url: 'https://private.example/feed.xml' } });
+    authed = true;
+    expect(await st().signInFeed('https://private.example/feed.xml', 'ana', 's3cret')).toBe('ok');
+    expect(auth).toHaveBeenCalledWith('https://private.example/feed.xml', 'ana', 's3cret');
+
+    authed = false;
+    st().unsubscribe(st().shows[1].id, true);
+    authed = true;
+    await st().addFeed('https://bo%40b:p%3Ass@private.example/feed.xml', { quiet: true });
+    expect(auth).toHaveBeenLastCalledWith('https://private.example/feed.xml', 'bo@b', 'p:ss');
+    expect(st().shows[1].feedUrl).toBe('https://private.example/feed.xml');
+    auth.mockRestore();
+  });
+
+  it('counts feeds that need a password when refreshing', async () => {
+    http.mockImplementation(async () => ({ status: 401, text: '' }));
+    await st().refresh();
+    expect(st().toasts.at(-1)?.text).toBe('Feeds refreshed · no new episodes · 1 feed needs a password');
+  });
+});
+
+describe('download lifecycle', () => {
+  it('keeps failed downloads listed and remembers pending ones across restarts', () => {
+    platform.isDesktop = true;
+    const start = vi.spyOn(platform.download, 'start').mockImplementation(() => {});
+    st().startDownload(K42);
+    expect(st().dlPending).toEqual([K42]);
+    st().onDownloadEvent({ type: 'retry', key: K42, attempt: 1, at: 123, message: 'HTTP 503' });
+    expect(st().dl[0]).toMatchObject({ key: K42, retryAt: 123 });
+    st().onDownloadEvent({ type: 'error', key: K42, message: 'HTTP 503' });
+    expect(st().dl[0]).toMatchObject({ key: K42, error: 'HTTP 503' });
+    expect(st().dlPending).toEqual([K42]);
+    st().startDownload(K42);
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(st().dl[0].error).toBeUndefined();
+    st().onDownloadEvent({ type: 'done', key: K42, path: '/p/a.mp3', bytes: 1 });
+    expect(st().dlPending).toEqual([]);
+    st().startDownload(K41);
+    st().cancelDownload(K41);
+    expect(st()).toMatchObject({ dl: [], dlPending: [] });
+    start.mockRestore();
+  });
+
+  it('moves downloaded files and updates their paths', async () => {
+    useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), file: '/old/KP/a.mp3' }, [K41]: { ...getEp(st(), K41), file: '/other/b.mp3' } } });
+    const move = vi.spyOn(platform, 'moveFiles').mockResolvedValue([{ from: '/old/KP/a.mp3', to: '/new/KP/a.mp3' }]);
+    await st().moveDownloads('/old', '/new');
+    expect(move).toHaveBeenCalledWith('/old', '/new', ['/old/KP/a.mp3', '/other/b.mp3']);
+    expect(getEp(st(), K42).file).toBe('/new/KP/a.mp3');
+    expect(getEp(st(), K41).file).toBe('/other/b.mp3');
+    move.mockRestore();
+  });
+});
+
+describe('persistence', () => {
+  it('skips writes when only playback position, progress or UI state change', async () => {
+    await flushSave();
+    const save = vi.spyOn(platform, 'saveLibrary').mockResolvedValue();
+    st().play(K42);
+    await flushSave();
+    save.mockClear();
+    for (let t = 1; t < 20; t++) st().onTime(t);
+    useStore.setState({ dl: [{ key: K41, received: 5, total: 10, speed: 1 }], screen: 'queue' });
+    await flushSave();
+    expect(save).not.toHaveBeenCalled();
+    st().checkpoint();
+    await flushSave();
+    expect(save).toHaveBeenCalledTimes(1);
+    const written = JSON.parse(save.mock.calls[0][0]);
+    expect(written.state.pos).toBeUndefined();
+    expect(written.state.eps[K42].pos).toBe(19);
+    save.mockRestore();
+  });
+});
+
+describe('embedded chapters', () => {
+  it('reads chapters from the media file when the feed has none', async () => {
+    const embedded = vi.spyOn(platform, 'embeddedChapters').mockResolvedValue([{ t: 'Cold open', at: 0 }, { t: 'Mail', at: 600 }]);
+    st().play(K40);
+    await vi.waitFor(() => expect(st().meta[K40]?.chapters).toHaveLength(2));
+    expect(embedded).toHaveBeenCalledWith(undefined, 'https://cdn.example/kp40.mp3');
+    expect(chaptersOf(st(), epInfo(st(), K40)!).map((c) => c.t)).toEqual(['Cold open', 'Mail']);
+    embedded.mockClear();
+    st().play(K41); // Podlove chapters in the feed: the file isn't read
+    await vi.waitFor(() => expect(st().meta[K41]).toBeDefined());
+    expect(embedded).not.toHaveBeenCalled();
+    embedded.mockRestore();
+  });
+});
+

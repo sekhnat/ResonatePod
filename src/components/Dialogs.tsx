@@ -50,7 +50,11 @@ export function ShowSettingsDialog() {
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => s.set({ cfgOpen: false, dialog: 'unsubscribe' })}>Unsubscribe…</button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => s.set({ cfgOpen: false, dialog: 'unsubscribe' })}>Unsubscribe…</button>
+          <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} title="For private feeds that ask for a username and password"
+            onClick={() => s.set({ cfgOpen: false, dialog: 'feedAuth', authFor: { url: sh.feedUrl, showId: sh.id } })}>Feed login…</button>
+        </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
           <button className="btn btn-secondary" onClick={() => s.resetOverride(sh.id)} style={{ fontSize: 12 }}>Reset to global</button>
           <button className="btn btn-primary" onClick={close} style={{ fontSize: 12 }}>Done</button>
@@ -145,6 +149,29 @@ export function Dialogs() {
         onSave={(v) => { s.setPrefs({ storageLimitGb: +v }); void s.cleanupStorage(); }} />;
     case 'sync':
       return <SyncDialog />;
+    case 'feedAuth':
+      return <FeedAuthDialog />;
+    case 'move': {
+      const mv = s.pendingMove;
+      if (!mv) return null;
+      const files = Object.values(s.eps).filter((e) => e.file);
+      const gb = files.reduce((a, e) => a + (e.fileBytes ?? 0), 0) / 1024 ** 3;
+      const leave = () => { s.set({ dialog: null, pendingMove: null }); s.toast(`New downloads will be saved to ${mv.to}`); };
+      return (
+        <Modal onClose={leave} width={440} label="Move downloads">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="dialog-title">Move downloaded episodes?</span>
+            <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+              New downloads go to {mv.to}. Move the {files.length} episode{files.length === 1 ? '' : 's'} already in {mv.from} ({gb < 0.1 ? `${Math.max(1, Math.round(gb * 1024))} MB` : `${gb.toFixed(1)} GB`}) there too?
+            </span>
+          </div>
+          <div className="dialog-actions" style={{ margin: 0, gap: 'var(--space-3)' }}>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={leave}>Leave them</button>
+            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => void s.moveDownloads(mv.from, mv.to)}>Move</button>
+          </div>
+        </Modal>
+      );
+    }
     case 'shortcuts':
       return (
         <Modal onClose={close} width={460} label="Keyboard shortcuts">
@@ -220,6 +247,56 @@ function SyncDialog() {
             {busy ? <i className="ph ph-circle-notch spin" /> : null}{connected ? 'Save' : 'Connect'}
           </button>
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+function FeedAuthDialog() {
+  const s = useStore();
+  const target = s.authFor;
+  const [user, setUser] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (!target) return null;
+  const host = (() => { try { return new URL(target.url).host; } catch { return target.url; } })();
+  const close = () => s.set({ dialog: null, authFor: null });
+  const save = async () => {
+    if (!user.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    const r = await s.signInFeed(target.url, user.trim(), password, target.showId);
+    setBusy(false);
+    if (r === 'denied') { setErr('The server didn’t accept that username and password.'); return; }
+    if (r === 'ok') s.toast(target.showId ? `Saved the login for ${host}` : `Signed in to ${host}`);
+    if (useStore.getState().authFor === target) close();
+  };
+  const field = (id: string, label: string, value: string, set: (v: string) => void, type = 'text') => (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} className="input" type={type} value={value} autoComplete="off" autoFocus={id === 'feed-user'}
+        onChange={(e) => { set(e.target.value); setErr(null); }} onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
+    </div>
+  );
+  return (
+    <Modal onClose={close} width={440} label="Feed login">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="dialog-title">This feed needs a login</span>
+        <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+          {host} asks for a username and password. Resonate stores them encrypted with your system keyring and only sends them to {host}.
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {field('feed-user', 'Username', user, setUser)}
+        {field('feed-pass', 'Password', password, setPassword, 'password')}
+        {err && <div style={{ fontSize: 12, color: 'var(--color-accent-300)' }}>{err}</div>}
+      </div>
+      <div className="dialog-actions" style={{ margin: 0, gap: 'var(--space-3)' }}>
+        <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={close}>Cancel</button>
+        <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || !user.trim()} onClick={() => void save()}>
+          {busy ? <i className="ph ph-circle-notch spin" /> : null}Sign in
+        </button>
       </div>
     </Modal>
   );

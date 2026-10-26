@@ -38,6 +38,8 @@ export interface Feed {
   imageUrl?: string;
   link?: string;
   category: string;
+  /** `itunes:new-feed-url`: the publisher moved the feed here. */
+  newFeedUrl?: string;
   episodes: Episode[];
 }
 
@@ -46,6 +48,8 @@ export interface HttpResponse {
   text: string;
   etag?: string;
   lastModified?: string;
+  /** Set when every redirect on the way was permanent (301/308): the resource now lives here. */
+  movedTo?: string;
 }
 
 export interface HttpRequest {
@@ -67,6 +71,7 @@ export interface DownloadJob {
 export type DownloadEvent =
   | { type: 'progress'; key: string; received: number; total: number; speed: number }
   | { type: 'done'; key: string; path: string; bytes: number }
+  | { type: 'retry'; key: string; attempt: number; at: number; message: string }
   | { type: 'error'; key: string; message: string };
 
 export interface TrayState {

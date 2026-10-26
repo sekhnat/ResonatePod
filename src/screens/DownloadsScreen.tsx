@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useStore, epInfo, getEp, downloadsBlocked } from '../store';
 import { art, dateLabel, mono } from '../data';
 import { dlSummary, fmtSpeed } from '../model';
@@ -10,6 +11,14 @@ const MB = 1048576;
 export function DownloadsScreen() {
   const s = useStore();
   const par = parseInt(s.sv.par, 10);
+  // Ticks the "Retrying in …" countdown.
+  const [now, setNow] = useState(Date.now());
+  const counting = s.dl.some((d) => d.retryAt);
+  useEffect(() => {
+    if (!counting) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [counting]);
   const blocked = downloadsBlocked(s);
   const meteredPause = !s.dlPaused && blocked;
   const done = s.dlDone.map((d) => ({ d, info: epInfo(s, d.key), file: getEp(s, d.key).file })).filter((x) => x.info);
@@ -27,14 +36,20 @@ export function DownloadsScreen() {
       {!platform.isDesktop && <Empty icon="ph ph-info" text="Downloads are available in the desktop app. In the browser, episodes stream." />}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         <div style={sectionLabel}>Active</div>
-        {s.dl.map((d, i) => {
+        {s.dl.map((d) => {
           const e = epInfo(s, d.key);
           if (!e) return null;
-          const queued = blocked || i >= par;
+          const failed = !!d.error;
+          const waiting = !failed && !!d.retryAt;
+          const running = !failed && !waiting && !blocked && s.dl.filter((x) => !x.error && !x.retryAt).findIndex((x) => x.key === d.key) < par;
           const size = d.total ? `${Math.round(d.total / MB)} MB` : 'size unknown';
-          const status = queued
-            ? `${s.dlPaused ? 'Paused' : meteredPause ? 'Waiting for unmetered connection' : 'Queued'} · ${size}`
-            : `${(d.received / MB).toFixed(1)} / ${d.total ? `${Math.round(d.total / MB)} MB` : '?'}${d.speed ? ` · ${fmtSpeed(d.speed)}` : ''}`;
+          const status = failed
+            ? `Failed · ${d.error}`
+            : waiting
+              ? `Retrying in ${Math.max(1, Math.ceil((d.retryAt! - now) / 1000))} s`
+              : !running
+                ? `${s.dlPaused ? 'Paused' : meteredPause ? 'Waiting for unmetered connection' : 'Queued'} · ${size}`
+                : `${(d.received / MB).toFixed(1)} / ${d.total ? `${Math.round(d.total / MB)} MB` : '?'}${d.speed ? ` · ${fmtSpeed(d.speed)}` : ''}`;
           const pct = d.total ? Math.min(100, (d.received / d.total) * 100) : 0;
           return (
             <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)' }}>
@@ -42,13 +57,14 @@ export function DownloadsScreen() {
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title}</span>
-                  <span style={{ fontSize: 11.5, color: 'var(--color-neutral-400)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{status}</span>
+                  <span title={status} style={{ fontSize: 11.5, color: failed ? 'var(--color-accent-300)' : 'var(--color-neutral-400)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '55%' }}>{status}</span>
                 </div>
                 <div style={{ height: 4, borderRadius: 2, background: 'var(--color-neutral-800)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-accent)', transition: 'width .3s linear' }} />
+                  <div style={{ height: '100%', width: `${pct}%`, background: failed ? 'var(--color-neutral-600)' : 'var(--color-accent)', transition: 'width .3s linear' }} />
                 </div>
               </div>
-              <GhostIcon icon="ph ph-x" title="Cancel download" iconSize={15} onClick={() => s.cancelDownload(d.key)} />
+              {(failed || waiting) && <GhostIcon icon="ph ph-arrow-clockwise" title="Retry now" iconSize={15} onClick={() => s.startDownload(d.key)} />}
+              <GhostIcon icon="ph ph-x" title={failed ? 'Remove' : 'Cancel download'} iconSize={15} onClick={() => s.cancelDownload(d.key)} />
             </div>
           );
         })}

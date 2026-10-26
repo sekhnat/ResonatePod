@@ -13,7 +13,7 @@ export function HeaderBar() {
     shows: ['Shows', `${s.shows.length} subscription${s.shows.length === 1 ? '' : 's'}`],
     show: [show?.title ?? 'Show', show?.author ?? ''],
     queue: ['Queue', 'Up next'],
-    downloads: ['Downloads', s.dl.length ? `${s.dl.length} in progress` : 'All done'],
+    downloads: ['Downloads', s.dl.length ? [`${s.dl.filter((d) => !d.error).length} in progress`, ...(s.dl.some((d) => d.error) ? [`${s.dl.filter((d) => d.error).length} failed`] : [])].join(' · ') : 'All done'],
     discover: ['Discover', 'Browse the directory'],
     settings: ['Preferences', 'Resonate 1.4'],
   };

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { cadence, parseFeed } from '../shared/feed';
 import { parseJsonChapters, parseTranscript } from '../shared/meta';
 import { GpodderClient, syncOnce, type EpisodeAction } from '../shared/gpodder';
@@ -23,7 +23,16 @@ export interface EpState {
   playedAt?: number;
   lastPlayed?: number;
 }
-export interface ActiveDl { key: string; received: number; total: number; speed: number }
+export interface ActiveDl {
+  key: string;
+  received: number;
+  total: number;
+  speed: number;
+  /** Set while waiting to retry automatically (ms since epoch). */
+  retryAt?: number;
+  /** Set once retries are exhausted; the row stays until retried or removed. */
+  error?: string;
+}
 export interface DoneDl { key: string; when: number }
 export interface Override { dl?: string; speed?: string; trim?: string; intro?: string }
 export type Sleep =
@@ -31,9 +40,9 @@ export type Sleep =
   | { mode: 'timer'; minutes: number; remaining: number }
   | { mode: 'chapter' }
   | { mode: 'episode' };
-export type DialogKind = 'unsubscribe' | 'folder' | 'storage' | 'sync' | 'shortcuts' | 'about';
+export type DialogKind = 'unsubscribe' | 'folder' | 'storage' | 'sync' | 'shortcuts' | 'about' | 'move' | 'feedAuth';
 export interface Toast { id: number; text: string }
-export interface Toggles { auto: boolean; metered: boolean; silence: boolean; notify: boolean; deletePlayed: boolean }
+export interface Toggles { auto: boolean; metered: boolean; silence: boolean; notify: boolean; deletePlayed: boolean; autostart: boolean }
 export interface SegValues { keep: string; par: string; speed: string; del: string; skip: string }
 export interface SyncState {
   server: string;
@@ -56,6 +65,8 @@ interface Data {
   muted: boolean;
   queue: string[];
   dlDone: DoneDl[];
+  /** Downloads queued, running or failed; restarted (resuming from the .part file) on launch. */
+  dlPending: string[];
   dlPaused: boolean;
   ovr: Record<string, Override>;
   tg: Toggles;
@@ -73,6 +84,12 @@ interface Ui {
   playing: boolean;
   dl: ActiveDl[];
   meta: Record<string, EpisodeMeta>;
+  /** The current episode has a picture (video podcast). */
+  video: boolean;
+  /** Folder change waiting on the "move downloaded files?" dialog. */
+  pendingMove: { from: string; to: string } | null;
+  /** Feed that needs a username and password (the show, when already subscribed). */
+  authFor: { url: string; showId?: string } | null;
   metered: boolean | null;
   screen: Screen;
   history: { screen: Screen; showId: string }[];
@@ -124,11 +141,15 @@ interface Actions {
 
   startDownload(key: string): void;
   cancelDownload(key: string): void;
+  /** Saves the playback position into the episode record (written to disk with the library). */
+  checkpoint(): void;
+  moveDownloads(from: string, to: string): Promise<void>;
+  signInFeed(url: string, user: string, password: string, showId?: string): Promise<'ok' | 'denied' | 'failed'>;
   deleteFile(key: string, quiet?: boolean): Promise<void>;
   toggleDlPause(): void;
   onDownloadEvent(e: DownloadEvent): void;
   updateUsage(): Promise<void>;
-  cleanupStorage(): Promise<void>;
+  cleanupStorage(opts?: { quiet?: boolean }): Promise<void>;
 
   addToQueue(key: string): void;
   removeFromQueue(key: string): void;
@@ -259,13 +280,40 @@ export function cleanupKeys(s: Pick<Data, 'eps' | 'sv' | 'usedBytes' | 'storageL
   return [...out];
 }
 
-function showFromFeed(url: string, xml: string, id: string, etag?: string, lastModified?: string): Show {
+function showFromFeed(url: string, xml: string, id: string, etag?: string, lastModified?: string): { show: Show; newFeedUrl?: string } {
   const f = parseFeed(xml);
-  return {
+  const show: Show = {
     id, title: f.title, author: f.author, hue: hueFor(f.title), cat: f.category, freq: cadence(f.episodes),
     desc: f.description, feedUrl: url, imageUrl: f.imageUrl, link: f.link, eps: f.episodes,
     etag, lastModified, subscribedAt: Date.now(),
   };
+  return { show, newFeedUrl: f.newFeedUrl && f.newFeedUrl !== url ? f.newFeedUrl : undefined };
+}
+
+/** `https://user:pass@host/feed` → the bare URL plus the credentials. */
+function splitCredentials(url: string): { url: string; user: string; password: string } | null {
+  try {
+    const u = new URL(url);
+    if (!u.username && !u.password) return null;
+    const cred = { user: decodeURIComponent(u.username), password: decodeURIComponent(u.password) };
+    u.username = '';
+    u.password = '';
+    return { url: u.toString(), ...cred };
+  } catch {
+    return null;
+  }
+}
+
+/** Chapters from the feed's chapters file, else from inside the media file. */
+async function loadChapters(info: EpisodeInfo, file: string | undefined) {
+  const { chaptersUrl, inlineChapters, enclosureUrl } = info.ep;
+  if (chaptersUrl) {
+    const r = await platform.http(chaptersUrl).catch(() => null);
+    const ch = r?.status === 200 ? (() => { try { return parseJsonChapters(r.text); } catch { return []; } })() : [];
+    if (ch.length) return ch;
+  }
+  if (inlineChapters?.length) return undefined;
+  return (await platform.embeddedChapters(file, enclosureUrl).catch(() => null)) ?? undefined;
 }
 
 // ---------- initial state ----------
@@ -280,9 +328,10 @@ const initialData: Data = {
   muted: false,
   queue: [],
   dlDone: [],
+  dlPending: [],
   dlPaused: false,
   ovr: {},
-  tg: { auto: true, metered: true, silence: true, notify: false, deletePlayed: true },
+  tg: { auto: true, metered: true, silence: true, notify: false, deletePlayed: true, autostart: false },
   sv: { keep: '3', par: '2', speed: '1.2×', del: '1 week', skip: '15 / 30 s' },
   folder: '~/Podcasts',
   storageLimitGb: 40,
@@ -297,6 +346,9 @@ const initialUi: Ui = {
   playing: false,
   dl: [],
   meta: {},
+  video: false,
+  pendingMove: null,
+  authFor: null,
   metered: null,
   screen: 'inbox',
   history: [],
@@ -322,20 +374,35 @@ let toastId = 0;
 let lastChapterIdx = -1;
 let playStartedAt: number | null = null;
 
-// Debounced persistence through the platform bridge (~/.config/Resonate/library.json on desktop).
+// Persistence through the platform bridge (~/.config/Resonate/library.json on desktop).
+// Writes are skipped when no persisted field changed (download progress, UI state),
+// then debounced, so the library is serialised at most every couple of seconds.
+type Persisted = Partial<Data>;
+const SAVE_DELAY = 2000;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingSave: string | null = null;
-export const flushSave = () => {
+let pendingSave: StorageValue<Persisted> | null = null;
+let lastQueued: Persisted | null = null;
+export const flushSave = async () => {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
-  if (pendingSave != null) { void platform.saveLibrary(pendingSave); pendingSave = null; }
+  const value = pendingSave;
+  pendingSave = null;
+  if (value) await platform.saveLibrary(JSON.stringify(value));
 };
-if (typeof window !== 'undefined') window.addEventListener('pagehide', flushSave);
-const libraryStorage = {
-  getItem: () => platform.loadLibrary(),
-  setItem: (_: string, value: string) => {
+if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { void flushSave(); });
+const libraryStorage: PersistStorage<Persisted> = {
+  getItem: async () => {
+    const raw = await platform.loadLibrary();
+    if (!raw) return null;
+    try { return JSON.parse(raw) as StorageValue<Persisted>; } catch { return null; }
+  },
+  setItem: (_, value) => {
+    const prev = lastQueued;
+    const keys = Object.keys(value.state) as (keyof Data)[];
+    if (prev && keys.every((k) => prev[k] === value.state[k])) return;
+    lastQueued = value.state;
     pendingSave = value;
-    if (!saveTimer) saveTimer = setTimeout(flushSave, 1000);
+    if (!saveTimer) saveTimer = setTimeout(() => { void flushSave(); }, SAVE_DELAY);
   },
   removeItem: () => platform.saveLibrary('{}'),
 };
@@ -492,25 +559,59 @@ export const useStore = create<State>()(
           if (!info || s.meta[key]) return;
           const meta: EpisodeMeta = {};
           set({ meta: { ...get().meta, [key]: meta } });
-          const { chaptersUrl, transcriptUrl, transcriptType } = info.ep;
+          const { transcriptUrl, transcriptType } = info.ep;
           await Promise.all([
-            chaptersUrl && platform.http(chaptersUrl).then((r) => { if (r.status === 200) meta.chapters = parseJsonChapters(r.text); }).catch(() => {}),
-            transcriptUrl && platform.http(transcriptUrl).then((r) => { if (r.status === 200) meta.transcript = parseTranscript(r.text, transcriptType); }).catch(() => {}),
+            loadChapters(info, getEp(s, key).file).then((ch) => { meta.chapters = ch; }),
+            transcriptUrl && platform.http(transcriptUrl).then((r) => {
+              const t = r.status === 200 ? parseTranscript(r.text, transcriptType) : null;
+              meta.transcript = t?.lines ?? null;
+              meta.transcriptTimed = t?.timed;
+            }).catch(() => { meta.transcript = null; }),
           ]);
-          set({ meta: { ...get().meta, [key]: { ...meta } } });
+          if (get().meta[key] === meta) set({ meta: { ...get().meta, [key]: { ...meta } } });
         },
 
         startDownload: (key) => {
           const s = get();
           const info = epInfo(s, key);
-          if (!info || s.dl.some((d) => d.key === key) || getEp(s, key).file) return;
+          const existing = s.dl.find((d) => d.key === key);
+          if (!info || (existing && !existing.error) || getEp(s, key).file) return;
           if (!platform.isDesktop) { s.toast('Downloading needs the Resonate desktop app'); return; }
-          set({ dl: [...s.dl, { key, received: 0, total: info.ep.sizeBytes, speed: 0 }] });
+          set({
+            dl: existing ? s.dl.map((d) => (d.key === key ? { ...d, error: undefined, retryAt: undefined } : d)) : [...s.dl, { key, received: 0, total: info.ep.sizeBytes, speed: 0 }],
+            dlPending: s.dlPending.includes(key) ? s.dlPending : [...s.dlPending, key],
+          });
           platform.download.start({ key, url: info.ep.enclosureUrl, folder: s.folder, showTitle: info.show.title, title: info.title, pubDate: info.ep.pubDate, mime: info.ep.enclosureType });
         },
         cancelDownload: (key) => {
           platform.download.cancel(key);
-          set((s) => ({ dl: s.dl.filter((d) => d.key !== key) }));
+          set((s) => ({ dl: s.dl.filter((d) => d.key !== key), dlPending: s.dlPending.filter((k) => k !== key) }));
+        },
+        checkpoint: () => {
+          const s = get();
+          if (s.cur && Math.abs(getEp(s, s.cur).pos - s.pos) >= 1) set({ eps: saveCurPos() });
+        },
+        moveDownloads: async (from, to) => {
+          const files = Object.values(get().eps).map((e) => e.file).filter((f): f is string => !!f);
+          set({ pendingMove: null, dialog: null });
+          if (!files.length) return;
+          get().toast(`Moving downloaded episodes to ${to}…`);
+          const moved = await platform.moveFiles(from, to, files).catch(() => []);
+          const map = new Map(moved.map((m) => [m.from, m.to]));
+          set((x) => ({ eps: Object.fromEntries(Object.entries(x.eps).map(([k, v]) => [k, v.file && map.has(v.file) ? { ...v, file: map.get(v.file) } : v])) }));
+          get().toast(moved.length ? `Moved ${moved.length} episode${moved.length > 1 ? 's' : ''} to ${to}` : 'No files were moved');
+          void get().updateUsage();
+        },
+        signInFeed: async (url, user, password, showId) => {
+          await platform.setFeedAuth(url, user, password);
+          const res = await platform.http(url).catch(() => null);
+          if (res?.status === 401) { await platform.setFeedAuth(url, null, null); return 'denied'; }
+          if (showId) { void get().refresh(); return 'ok'; }
+          const id = await get().addFeed(url);
+          if (!id) return 'failed';
+          set({ discoverQuery: '' });
+          get().openShow(id);
+          return 'ok';
         },
         deleteFile: async (key, quiet) => {
           const s = get();
@@ -524,18 +625,30 @@ export const useStore = create<State>()(
         toggleDlPause: () => set((s) => ({ dlPaused: !s.dlPaused })),
         onDownloadEvent: (e) => {
           const s = get();
+          const patch = (p: Partial<ActiveDl>) => set({ dl: s.dl.map((d) => (d.key === e.key ? { ...d, ...p } : d)) });
           if (e.type === 'progress') {
-            set({ dl: s.dl.map((d) => (d.key === e.key ? { ...d, received: e.received, total: e.total || d.total, speed: e.speed } : d)) });
+            const d = s.dl.find((x) => x.key === e.key);
+            patch({ received: e.received, total: e.total || d?.total || 0, speed: e.speed, retryAt: undefined });
+          } else if (e.type === 'retry') {
+            patch({ retryAt: e.at, speed: 0 });
           } else if (e.type === 'done') {
             set({
               dl: s.dl.filter((d) => d.key !== e.key),
+              dlPending: s.dlPending.filter((k) => k !== e.key),
               eps: { ...s.eps, [e.key]: { ...getEp(s, e.key), file: e.path, fileBytes: e.bytes } },
               dlDone: [{ key: e.key, when: Date.now() }, ...s.dlDone.filter((d) => d.key !== e.key)].slice(0, 50),
               usedBytes: s.usedBytes + e.bytes,
             });
-            void get().cleanupStorage();
+            // Streaming may not have allowed reading chapters from the file; try the local copy.
+            if (e.key === s.cur && !s.meta[e.key]?.chapters?.length) {
+              const meta = { ...get().meta };
+              delete meta[e.key];
+              set({ meta });
+              void get().loadMeta(e.key);
+            }
+            void get().cleanupStorage({ quiet: true });
           } else {
-            set({ dl: s.dl.filter((d) => d.key !== e.key) });
+            patch({ error: e.message, retryAt: undefined, speed: 0 });
             s.toast(`Download failed: ${epInfo(s, e.key)?.title ?? 'episode'} (${e.message})`);
           }
         },
@@ -544,12 +657,12 @@ export const useStore = create<State>()(
           const bytes = await platform.diskUsage(get().folder).catch(() => null);
           if (bytes != null) set({ usedBytes: bytes });
         },
-        cleanupStorage: async () => {
+        cleanupStorage: async (opts = {}) => {
           const s = get();
           const keys = cleanupKeys({ ...s, sv: s.tg.deletePlayed ? s.sv : { ...s.sv, del: 'Never' } });
           for (const k of keys) await get().deleteFile(k, true);
           if (keys.length) s.toast(`Freed space: removed ${keys.length} played episode${keys.length > 1 ? 's' : ''}`);
-          if (get().usedBytes > s.storageLimitGb * GB) s.toast('Storage limit reached — delete episodes or raise the limit in Preferences');
+          if (!opts.quiet && get().usedBytes > s.storageLimitGb * GB) s.toast('Storage limit reached — delete episodes or raise the limit in Preferences');
         },
 
         addToQueue: (key) => {
@@ -585,6 +698,8 @@ export const useStore = create<State>()(
           set({ refreshing: true });
           let fresh = 0;
           let failed = 0;
+          let needAuth = 0;
+          const moved: string[] = [];
           const shows = get().shows;
           const work = [...shows];
           const worker = async () => {
@@ -594,12 +709,21 @@ export const useStore = create<State>()(
                 if (sh.etag) headers['If-None-Match'] = sh.etag;
                 if (sh.lastModified) headers['If-Modified-Since'] = sh.lastModified;
                 const res = await platform.http(sh.feedUrl, { headers });
+                if (res.status === 401) { needAuth++; continue; }
                 if (res.status === 304) continue;
                 if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-                const upd = showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
+                const { show: upd, newFeedUrl } = showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
                 const s = get();
                 const live = findShow(s, sh.id);
                 if (!live) continue;
+                // Follow the feed when it has moved: a permanent redirect, or itunes:new-feed-url.
+                const target = res.movedTo ?? newFeedUrl;
+                if (target && !s.shows.some((x) => x.feedUrl === target)) {
+                  upd.feedUrl = target;
+                  // A validator from the old address means nothing to the new one.
+                  if (!res.movedTo) { upd.etag = undefined; upd.lastModified = undefined; }
+                  moved.push(upd.title);
+                }
                 const prev = new Map(live.eps.map((e) => [e.guid, e]));
                 const added = upd.eps.filter((e) => !prev.has(e.guid));
                 fresh += added.length;
@@ -621,22 +745,38 @@ export const useStore = create<State>()(
           const parts = [fresh ? `${fresh} new episode${fresh > 1 ? 's' : ''}` : 'no new episodes'];
           if (queued.length && platform.isDesktop) parts.push(`${queued.length} downloading`);
           if (failed) parts.push(`${failed} feed${failed > 1 ? 's' : ''} failed`);
+          if (needAuth) parts.push(`${needAuth} feed${needAuth > 1 ? 's need' : ' needs'} a password`);
           if (shows.length) s.toast(`Feeds refreshed · ${parts.join(' · ')}`);
+          for (const title of moved) s.toast(`${title} moved to a new address`);
           if (fresh && s.tg.notify && typeof Notification !== 'undefined') new Notification('Resonate', { body: `${fresh} new episode${fresh > 1 ? 's' : ''}` });
-          void get().cleanupStorage();
+          void get().cleanupStorage({ quiet: true });
           if (s.sync.server) void get().runSync();
         },
 
         addFeed: async (url, opts = {}) => {
-          const clean = url.trim();
+          let clean = url.trim();
+          const cred = splitCredentials(clean);
+          if (cred) { clean = cred.url; await platform.setFeedAuth(clean, cred.user, cred.password); }
           const s = get();
-          const existing = s.shows.find((x) => x.feedUrl === clean);
-          if (existing) { if (!opts.quiet) s.toast(`You’re already subscribed to ${existing.title}`); return existing.id; }
+          const already = (u: string) => {
+            const existing = get().shows.find((x) => x.feedUrl === u);
+            if (existing && !opts.quiet) s.toast(`You’re already subscribed to ${existing.title}`);
+            return existing?.id;
+          };
+          const known = already(clean);
+          if (known) return known;
           set((x) => ({ adding: x.adding + 1 }));
           try {
             const res = await platform.http(clean);
+            if (res.status === 401) {
+              if (!opts.quiet) set({ dialog: 'feedAuth', authFor: { url: clean } });
+              return null;
+            }
             if (res.status !== 200) throw new Error(`the server responded with HTTP ${res.status}`);
-            const parsed = showFromFeed(clean, res.text, '', res.etag, res.lastModified);
+            const feedUrl = res.movedTo ?? clean;
+            const dup = res.movedTo && already(feedUrl);
+            if (dup) return dup;
+            const { show: parsed } = showFromFeed(feedUrl, res.text, '', res.etag, res.lastModified);
             let id = slug(parsed.title);
             while (findShow(get(), id)) id += '-';
             const show = { ...parsed, id };
@@ -672,10 +812,14 @@ export const useStore = create<State>()(
           for (const [k, v] of Object.entries(s.eps)) if (!k.startsWith(prefix)) eps[k] = v;
           const ovr = { ...s.ovr };
           delete ovr[id];
+          // Forget feed credentials once no remaining show lives on that server.
+          const origin = (u: string) => { try { return new URL(u).origin; } catch { return u; } };
+          if (!shows.some((x) => origin(x.feedUrl) === origin(show.feedUrl))) void platform.setFeedAuth(show.feedUrl, null, null);
           const patch: Partial<State> = {
             shows, eps, ovr,
             queue: s.queue.filter((k) => !k.startsWith(prefix)),
             dl: s.dl.filter((d) => !d.key.startsWith(prefix)),
+            dlPending: s.dlPending.filter((k) => !k.startsWith(prefix)),
             cfgOpen: false,
             dialog: null,
           };
@@ -756,14 +900,17 @@ export const useStore = create<State>()(
     {
       name: 'resonate-library',
       version: 2,
-      storage: createJSONStorage(() => libraryStorage),
+      storage: libraryStorage,
+      // The live position changes several times a second; it's saved through
+      // eps[cur].pos (on pause, switch, a 30 s checkpoint and quit) instead.
       partialize: (s) => {
         const data: Partial<Data> = {};
-        for (const k of Object.keys(initialData) as (keyof Data)[]) (data as Record<string, unknown>)[k] = s[k];
+        for (const k of Object.keys(initialData) as (keyof Data)[]) if (k !== 'pos') (data as Record<string, unknown>)[k] = s[k];
         return data;
       },
       onRehydrateStorage: () => (state) => {
-        useStore.setState({ hydrated: true, showId: state?.shows[0]?.id ?? '' });
+        const pos = state?.cur ? getEp(state, state.cur).pos || state.pos : 0;
+        useStore.setState({ hydrated: true, showId: state?.shows[0]?.id ?? '', pos });
       },
     },
   ),

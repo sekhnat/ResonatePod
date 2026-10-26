@@ -10,7 +10,7 @@ export const expandHome = (p: string) => (p === '~' || p.startsWith('~/') ? path
 
 const safe = (s: string) => s.replace(/[/\\:*?"<>|\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) || 'untitled';
 
-const EXT: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/mp4': 'mp4' };
+const EXT: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/mp4': 'mp4', 'video/x-m4v': 'm4v', 'video/quicktime': 'mov', 'video/webm': 'webm' };
 
 export function targetPath(job: DownloadJob) {
   const fromUrl = /\.([a-z0-9]{2,4})(?:$|[?#])/i.exec(new URL(job.url).pathname)?.[1];
@@ -19,36 +19,63 @@ export function targetPath(job: DownloadJob) {
   return path.join(expandHome(job.folder), safe(job.showTitle), `${date} - ${safe(job.title)}.${ext}`);
 }
 
-interface Running { job: DownloadJob; ctrl: AbortController }
+interface Queued { job: DownloadJob; attempt: number }
+interface Running extends Queued { ctrl: AbortController }
+
+export interface DownloadOptions {
+  /** Waits before each automatic retry; the length is the number of retries. */
+  retryDelays?: number[];
+  /** Abort and retry when no data arrives for this long. */
+  stallMs?: number;
+}
+
+class HttpError extends Error {
+  constructor(readonly status: number) { super(`HTTP ${status}`); }
+}
+
+/** Network errors, stalls, timeouts, rate limits and server errors are worth retrying; other HTTP errors are not. */
+const retryable = (err: unknown) => !(err instanceof HttpError) || err.status === 408 || err.status === 429 || err.status >= 500;
 
 /**
  * Downloads episodes with a concurrency limit. Partial data goes to `<file>.part`;
  * pausing aborts the request but keeps the part file so resuming sends a Range request.
+ * Failures that look temporary are retried with backoff, resuming from the part file.
  */
 export class DownloadManager extends EventEmitter {
-  private queue: DownloadJob[] = [];
+  private queue: Queued[] = [];
   private running = new Map<string, Running>();
+  private waiting = new Map<string, { item: Queued; timer: ReturnType<typeof setTimeout> }>();
   private concurrency = 2;
   private paused = false;
+  private retryDelays: number[];
+  private stallMs: number;
 
-  constructor(private fetchImpl: Fetch = fetch) { super(); }
+  constructor(private fetchImpl: Fetch = fetch, opts: DownloadOptions = {}) {
+    super();
+    this.retryDelays = opts.retryDelays ?? [5_000, 15_000, 45_000, 120_000, 300_000];
+    this.stallMs = opts.stallMs ?? 60_000;
+  }
 
   emitEvent(e: DownloadEvent) { this.emit('event', e); }
 
   start(job: DownloadJob) {
-    if (this.running.has(job.key) || this.queue.some((j) => j.key === job.key)) return;
-    this.queue.push(job);
+    if (this.running.has(job.key) || this.queue.some((q) => q.job.key === job.key)) return;
+    this.clearWait(job.key);
+    this.queue.push({ job, attempt: 0 });
     this.pump();
   }
 
   cancel(key: string) {
-    this.queue = this.queue.filter((j) => j.key !== key);
+    this.queue = this.queue.filter((q) => q.job.key !== key);
+    const w = this.waiting.get(key);
+    this.clearWait(key);
     const r = this.running.get(key);
     if (r) {
       this.running.delete(key);
       r.ctrl.abort('cancel');
-      fs.rm(targetPath(r.job) + '.part', { force: true }).catch(() => {});
     }
+    const job = r?.job ?? w?.item.job;
+    if (job) fs.rm(targetPath(job) + '.part', { force: true }).catch(() => {});
     this.pump();
   }
 
@@ -56,7 +83,7 @@ export class DownloadManager extends EventEmitter {
     if (paused === this.paused) return;
     this.paused = paused;
     if (paused) {
-      for (const [key, r] of this.running) { r.ctrl.abort('pause'); this.queue.unshift(r.job); this.running.delete(key); }
+      for (const [key, r] of this.running) { r.ctrl.abort('pause'); this.queue.unshift({ job: r.job, attempt: r.attempt }); this.running.delete(key); }
     }
     this.pump();
   }
@@ -67,62 +94,96 @@ export class DownloadManager extends EventEmitter {
       const [key, r] = [...this.running].pop()!;
       r.ctrl.abort('pause');
       this.running.delete(key);
-      this.queue.unshift(r.job);
+      this.queue.unshift({ job: r.job, attempt: r.attempt });
     }
     this.pump();
   }
 
-  /** Keys in order: running first, then queued. */
-  pending() { return [...this.running.keys(), ...this.queue.map((j) => j.key)]; }
+  /** Keys in order: running first, then queued, then waiting to retry. */
+  pending() { return [...this.running.keys(), ...this.queue.map((q) => q.job.key), ...this.waiting.keys()]; }
+
+  private clearWait(key: string) {
+    const w = this.waiting.get(key);
+    if (w) { clearTimeout(w.timer); this.waiting.delete(key); }
+  }
 
   private pump() {
     while (!this.paused && this.running.size < this.concurrency && this.queue.length) {
-      const job = this.queue.shift()!;
-      const r: Running = { job, ctrl: new AbortController() };
-      this.running.set(job.key, r);
-      this.run(r).catch((err) => {
-        if (r.ctrl.signal.aborted) return;
-        this.running.delete(job.key);
-        this.emitEvent({ type: 'error', key: job.key, message: (err as Error).message });
-        this.pump();
-      });
+      const item = this.queue.shift()!;
+      const r: Running = { ...item, ctrl: new AbortController() };
+      this.running.set(item.job.key, r);
+      this.run(r).catch((err) => this.failed(r, err));
     }
+  }
+
+  private failed(r: Running, err: unknown) {
+    const stalled = r.ctrl.signal.aborted && r.ctrl.signal.reason === 'stall';
+    if (r.ctrl.signal.aborted && !stalled) return; // paused or cancelled
+    if (this.running.get(r.job.key) !== r) return;
+    this.running.delete(r.job.key);
+    const message = stalled ? 'the connection stalled' : (err as Error).message;
+    const delay = this.retryDelays[r.attempt];
+    if (retryable(err) && delay != null) {
+      const item = { job: r.job, attempt: r.attempt + 1 };
+      const timer = setTimeout(() => { this.waiting.delete(r.job.key); this.queue.push(item); this.pump(); }, delay);
+      this.waiting.set(r.job.key, { item, timer });
+      this.emitEvent({ type: 'retry', key: r.job.key, attempt: item.attempt, at: Date.now() + delay, message });
+    } else {
+      this.emitEvent({ type: 'error', key: r.job.key, message });
+    }
+    this.pump();
   }
 
   private async run(r: Running) {
     const dest = targetPath(r.job);
     const part = dest + '.part';
-    await fs.mkdir(path.dirname(dest), { recursive: true });
-    const have = await fs.stat(part).then((s) => s.size, () => 0);
-    const res = await this.fetchImpl(r.job.url, { headers: have ? { Range: `bytes=${have}-` } : {}, signal: r.ctrl.signal });
-    if (!res.ok && res.status !== 206) throw new Error(`HTTP ${res.status}`);
-    const resumed = res.status === 206 && have > 0;
-    let received = resumed ? have : 0;
-    const len = Number(res.headers.get('content-length') ?? 0);
-    const total = len ? len + received : 0;
-    const out = createWriteStream(part, { flags: resumed ? 'a' : 'w' });
-    const reader = res.body!.getReader();
-    let lastEmit = 0;
-    let window = { t: Date.now(), bytes: received };
-    let speed = 0;
+    let lastData = Date.now();
+    const dog = setInterval(() => { if (Date.now() - lastData > this.stallMs) r.ctrl.abort('stall'); }, Math.min(5000, Math.max(10, this.stallMs / 4)));
     try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!out.write(value)) await new Promise((ok) => out.once('drain', ok));
-        received += value.byteLength;
-        const now = Date.now();
-        if (now - window.t >= 1000) { speed = ((received - window.bytes) * 1000) / (now - window.t); window = { t: now, bytes: received }; }
-        if (now - lastEmit > 250) { lastEmit = now; this.emitEvent({ type: 'progress', key: r.job.key, received, total, speed }); }
+      await fs.mkdir(path.dirname(dest), { recursive: true });
+      const have = await fs.stat(part).then((s) => s.size, () => 0);
+      const res = await this.fetchImpl(r.job.url, { headers: have ? { Range: `bytes=${have}-` } : {}, signal: r.ctrl.signal });
+      if (res.status === 416 && have) {
+        // The part file doesn't match what the server has now; start over.
+        await fs.rm(part, { force: true });
+        throw new Error('the server rejected the resume');
       }
+      if (!res.ok && res.status !== 206) throw new HttpError(res.status);
+      lastData = Date.now();
+      const resumed = res.status === 206 && have > 0;
+      let received = resumed ? have : 0;
+      const len = Number(res.headers.get('content-length') ?? 0);
+      const fromRange = Number(/\/(\d+)\s*$/.exec(res.headers.get('content-range') ?? '')?.[1] ?? 0);
+      const total = fromRange || (len ? len + received : 0);
+      this.emitEvent({ type: 'progress', key: r.job.key, received, total, speed: 0 });
+      const out = createWriteStream(part, { flags: resumed ? 'a' : 'w' });
+      const reader = res.body!.getReader();
+      let lastEmit = 0;
+      let window = { t: Date.now(), bytes: received };
+      let speed = 0;
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!out.write(value)) await new Promise((ok) => out.once('drain', ok));
+          received += value.byteLength;
+          const now = Date.now();
+          lastData = now;
+          if (now - window.t >= 1000) { speed = ((received - window.bytes) * 1000) / (now - window.t); window = { t: now, bytes: received }; }
+          if (now - lastEmit > 250) { lastEmit = now; this.emitEvent({ type: 'progress', key: r.job.key, received, total, speed }); }
+        }
+      } finally {
+        await new Promise<void>((ok) => out.end(ok));
+      }
+      if (r.ctrl.signal.aborted) return;
+      if (total && received < total) throw new Error('the connection closed early');
+      await fs.rename(part, dest);
+      this.running.delete(r.job.key);
+      this.emitEvent({ type: 'done', key: r.job.key, path: dest, bytes: received });
+      this.pump();
     } finally {
-      await new Promise<void>((ok) => out.end(ok));
+      clearInterval(dog);
     }
-    if (r.ctrl.signal.aborted) return;
-    await fs.rename(part, dest);
-    this.running.delete(r.job.key);
-    this.emitEvent({ type: 'done', key: r.job.key, path: dest, bytes: received });
-    this.pump();
   }
 }
 
@@ -139,4 +200,35 @@ export async function diskUsage(folder: string): Promise<number> {
   };
   await walk(root);
   return total;
+}
+
+/**
+ * Moves downloaded files from one download folder to another, keeping their
+ * place relative to the folder (`<Show>/<file>`). Files outside `from` are left
+ * alone. Falls back to copy + delete across file systems. Returns what moved.
+ */
+export async function moveFiles(from: string, to: string, files: string[]): Promise<{ from: string; to: string }[]> {
+  const src = expandHome(from);
+  const dst = expandHome(to);
+  const moved: { from: string; to: string }[] = [];
+  for (const f of files) {
+    const rel = path.relative(src, f);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
+    const target = path.join(dst, rel);
+    try {
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      try {
+        await fs.rename(f, target);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+        await fs.copyFile(f, target);
+        await fs.rm(f);
+      }
+      moved.push({ from: f, to: target });
+      await fs.rmdir(path.dirname(f)).catch(() => {}); // only succeeds once the show folder is empty
+    } catch {
+      // Missing or unreadable: leave its record pointing where it was.
+    }
+  }
+  return moved;
 }

@@ -41,7 +41,7 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
   const isCur = s.cur === key;
   const dlItem = s.dl.find((d) => d.key === key);
   const played = st.played && !isCur;
-  const status: EpStatus = dlItem ? 'downloading' : played ? 'played' : st.file ? 'downloaded' : 'cloud';
+  const status: EpStatus = dlItem && !dlItem.error ? 'downloading' : played ? 'played' : st.file ? 'downloaded' : 'cloud';
   const [stIcon, stColor, stLabel] = STATUS[status];
   const pos = isCur ? s.pos : st.pos;
   const parts = [e.date];
@@ -49,7 +49,9 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
   if (isCur && e.dur) parts.push(`${fmt(e.dur - s.pos)} left`);
   else if (!played && pos > 30 && e.dur) parts.push(`${fmt(e.dur - pos)} left`);
   if (e.sizeMb) parts.push(`${e.sizeMb} MB`);
-  if (dlItem && dlItem.total) parts.push(`${Math.round((dlItem.received / dlItem.total) * 100)}%`);
+  if (e.ep.enclosureType.startsWith('video/')) parts.push('Video');
+  if (dlItem?.error) parts.push('Download failed');
+  else if (dlItem && dlItem.total) parts.push(`${Math.round((dlItem.received / dlItem.total) * 100)}%`);
   return {
     key,
     title: e.title,
@@ -66,7 +68,7 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
     isPlaying: isCur && s.playing,
     played,
     downloaded: !!st.file,
-    downloading: !!dlItem,
+    downloading: !!dlItem && !dlItem.error,
     progress: e.dur ? pos / e.dur : 0,
     file: st.file,
   };
@@ -101,11 +103,14 @@ export function ruleLabel(s: State, showId: string) {
 const MB = 1048576;
 
 export function dlSummary(s: State) {
-  if (!s.dl.length) return 'Nothing downloading';
-  const left = s.dl.reduce((a, d) => a + Math.max(0, d.total - d.received), 0);
-  const unknown = s.dl.some((d) => !d.total);
+  const active = s.dl.filter((d) => !d.error);
+  const failed = s.dl.length - active.length;
+  const failedLabel = failed ? `${failed} failed` : '';
+  if (!active.length) return failedLabel || 'Nothing downloading';
+  const left = active.reduce((a, d) => a + Math.max(0, d.total - d.received), 0);
+  const unknown = active.some((d) => !d.total);
   const state = downloadsBlocked(s) ? ' · paused' : '';
-  return `${s.dl.length} active · ${unknown ? 'about ' : ''}${Math.round(left / MB)} MB remaining${state}`;
+  return `${active.length} active · ${unknown ? 'about ' : ''}${Math.round(left / MB)} MB remaining${state}${failed ? ` · ${failedLabel}` : ''}`;
 }
 
 export const fmtSpeed = (bps: number) => (bps >= MB ? `${(bps / MB).toFixed(1)} MB/s` : `${Math.round(bps / 1024)} KB/s`);

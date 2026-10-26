@@ -54,7 +54,7 @@ export function plainText(html: string): string {
     .trim();
 }
 
-const TRANSCRIPT_PREF = ['text/vtt', 'application/x-subrip', 'application/srt', 'application/json', 'text/plain'];
+const TRANSCRIPT_PREF = ['text/vtt', 'application/x-subrip', 'application/srt', 'application/json', 'text/html', 'text/plain'];
 
 function parseItem(it: Record<string, unknown>): Episode | null {
   const enc = (it.enclosure as unknown[] | undefined)?.[0];
@@ -104,6 +104,7 @@ export function parseFeed(xml: string): Feed {
     .sort((a, b) => b.pubDate - a.pubDate);
   const links = (ch.link as unknown[]) ?? [];
   const link = links.map(text).find((l) => /^https?:/.test(l));
+  const moved = text(ch['itunes:new-feed-url']);
   return {
     title: text(ch.title) || 'Untitled podcast',
     author: text(ch['itunes:author']) || text((ch['itunes:owner'] as Record<string, unknown>)?.['itunes:name']) || text(ch.managingEditor) || '',
@@ -111,6 +112,7 @@ export function parseFeed(xml: string): Feed {
     imageUrl: attr(ch['itunes:image'], 'href') || text((ch.image as Record<string, unknown>)?.url) || undefined,
     link,
     category: attr(ch['itunes:category'], 'text') || 'Podcast',
+    newFeedUrl: /^https?:\/\//.test(moved) ? moved : undefined,
     episodes,
   };
 }
