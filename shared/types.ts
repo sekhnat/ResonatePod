@@ -44,6 +44,13 @@ export interface Feed {
   episodes: Episode[];
 }
 
+/** Whether passwords saved on this computer would be protected (see electron/secrets.ts). */
+export interface SecretStatus {
+  secure: boolean;
+  /** What keeps them: a keyring's name, "system", "basic_text" (no keyring) or "none". */
+  backend: string;
+}
+
 export interface HttpResponse {
   status: number;
   text: string;

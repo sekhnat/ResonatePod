@@ -11,6 +11,7 @@ import { DownloadManager, diskUsage, expandHome, moveFiles } from './downloads';
 import { DownloadRoots, rootsFromLibrary } from './paths';
 import { hopHeaders, originOf } from './hops';
 import { checkRequest } from './bridge';
+import { secretStatus } from './secrets';
 import { LibraryDb, openLibrary } from './db/library';
 import { importLegacyLibrary } from './db/legacy';
 
@@ -509,9 +510,10 @@ function registerIpc() {
     });
   }));
 
+  ipcMain.handle('secret:status', () => secretStatus(safeStorage));
   ipcMain.handle('secret:get', async (_e, key: string) => {
     const v = (await readSecrets())[key];
-    return v ? decrypt(v) : null;
+    try { return v ? decrypt(v) : null; } catch { return null; } // saved on another machine or keyring: as good as not saved
   });
   ipcMain.handle('secret:set', (_e, key: string, value: string | null) => writeSecret(key, value));
 
