@@ -6,7 +6,7 @@ import { parseJsonChapters, parseTranscript } from '../shared/meta';
 import { GpodderClient, syncOnce, type EpisodeAction } from '../shared/gpodder';
 import type { DownloadEvent } from '../shared/types';
 import {
-  chaptersFor, epKey, episodeInfo, hueFor, parseKey, type Episode, type EpisodeInfo, type EpisodeMeta, type Show,
+  chaptersFor, epKey, episodeInfo, hueFor, parseKey, sameEpisode, type Episode, type EpisodeInfo, type EpisodeMeta, type Show,
 } from './data';
 import type { OpmlFeed } from './lib/opml';
 import { defaultCountry, gpodderResult, resolveFeedUrl, type DirectoryResult, type SourceChoice } from './lib/directory';
@@ -828,11 +828,17 @@ export const useStore = create<State>()(
                   const prev = new Map(live.eps.map((e) => [e.guid, e]));
                   const added = upd.eps.filter((e) => !prev.has(e.guid));
                   fresh += added.length;
-                  const eps = { ...s.eps };
+                  const eps = added.length ? { ...s.eps } : s.eps;
                   for (const e of added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
-                  // Keep durations the player measured when the feed doesn't carry one.
-                  const merged: Episode[] = upd.eps.map((e) => ({ ...e, duration: e.duration || prev.get(e.guid)?.duration || 0 }));
-                  set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: merged } : x)) });
+                  // Keep durations the player measured when the feed doesn't carry one, and the very same object for an
+                  // episode that didn't change, so what is cached per episode (and per list) stays valid across refreshes.
+                  const merged: Episode[] = upd.eps.map((e) => {
+                    const old = prev.get(e.guid);
+                    const next = { ...e, duration: e.duration || old?.duration || 0 };
+                    return old && sameEpisode(old, next) ? old : next;
+                  });
+                  const unchanged = merged.length === live.eps.length && merged.every((e, i) => e === live.eps[i]);
+                  set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: unchanged ? x.eps : merged } : x)) });
                 } catch {
                   failed++;
                 }
