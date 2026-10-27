@@ -44,6 +44,16 @@ export const fmt = (sec: number) => {
 
 export const epKey = (showId: string, guid: string) => `${showId}:${guid}`;
 
+const sameChapters = (a?: Chapter[], b?: Chapter[]) => a === b || (!!a && !!b && a.length === b.length && a.every((c, i) => c.at === b[i].at && c.t === b[i].t));
+
+/** Whether two parses of an episode say the same thing (every field, chapters compared by value). */
+export function sameEpisode(a: Episode, b: Episode) {
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof Episode>) {
+    if (k === 'inlineChapters' ? !sameChapters(a[k], b[k]) : a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
 /** Show ids never contain ':', so split on the first one (GUIDs often contain colons). */
 export const parseKey = (key: string): [string, string] => {
   const at = key.indexOf(':');

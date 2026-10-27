@@ -67,6 +67,33 @@ describe('subscribing and refreshing', () => {
     expect(st().lastChecked).toBeGreaterThan(0);
   });
 
+  it('keeps the same episode objects when a refresh changes nothing, and replaces only what changed', async () => {
+    const before = st().shows[0];
+    const eps = st().eps;
+    await st().refresh();
+    expect(st().shows[0].eps).toBe(before.eps);
+    expect(st().eps).toBe(eps);
+    feedBody = feed.replace('Wayland, five years on', 'Wayland, six years on');
+    await st().refresh();
+    const after = st().shows[0];
+    expect(after.eps).not.toBe(before.eps);
+    expect(after.eps[0]).not.toBe(before.eps[0]);
+    expect(after.eps[0].title).toBe('Wayland, six years on');
+    expect(after.eps[1]).toBe(before.eps[1]);
+    expect(after.eps[2]).toBe(before.eps[2]);
+  });
+
+  it('keeps a duration the player measured when the feed carries none', async () => {
+    useStore.setState({ shows: st().shows.map((s) => ({ ...s, eps: s.eps.map((e) => (e.guid === 'https://cdn.example/kp40.mp3' ? { ...e, duration: 1234 } : e)) })) });
+    feedBody = feed.replace('<itunes:duration>58:00</itunes:duration>', '');
+    await st().refresh();
+    expect(st().shows[0].eps.find((e) => e.guid === 'https://cdn.example/kp40.mp3')!.duration).toBe(1234);
+    // ...but a duration the feed does give wins.
+    feedBody = feed;
+    await st().refresh();
+    expect(st().shows[0].eps.find((e) => e.guid === 'https://cdn.example/kp40.mp3')!.duration).toBe(3480);
+  });
+
   it('sends the stored ETag and accepts 304 Not Modified', async () => {
     useStore.setState({ shows: st().shows.map((s) => ({ ...s, etag: '"v2"' })) });
     await st().refresh();
