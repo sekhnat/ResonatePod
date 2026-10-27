@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { isFeedUrl } from '../lib/opml';
 import { importOpmlFile } from '../lib/library-io';
@@ -7,7 +8,7 @@ import { CountrySelect, DirectoryCard, useSuggestions } from '../components/Dire
 
 /** First run: no subscriptions yet. */
 export function WelcomeScreen() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ addFeed: s.addFeed, adding: s.adding, go: s.go, openShow: s.openShow, set: s.set })));
   const [q, setQ] = useState('');
   const submit = async () => {
     const v = q.trim();

@@ -4,10 +4,13 @@ import { Profiler, act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommandPalette } from './components/CommandPalette';
+import { Dialogs } from './components/Dialogs';
 import { HeaderBar } from './components/HeaderBar';
 import { NowPlayingPanel } from './components/NowPlaying';
 import { PlayerBar } from './components/PlayerBar';
 import { Sidebar } from './components/Sidebar';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { ShowsScreen } from './screens/ShowsScreen';
 import { useStore } from './store';
 import { makeShow } from '../test/perf/fixture';
 
@@ -79,6 +82,19 @@ describe('the command palette', () => {
     expect(view.commits()).toBe(0);
     change({ query: 'episode 3' });
     expect(view.container.textContent).toContain('Episode 3');
+  });
+});
+
+describe('screens and dialogs that do not show the position', () => {
+  it.each([
+    ['Dialogs', () => <Dialogs />],
+    ['Preferences', () => <SettingsScreen />],
+    ['Shows', () => <ShowsScreen />],
+  ])('%s stays put while playback advances and downloads make progress', (_name, ui) => {
+    view = mount(ui());
+    for (let t = 1; t <= 10; t++) change({ pos: t });
+    for (let i = 1; i <= 10; i++) change({ dl: [{ key: K, received: i * 100, total: 5000, speed: 100 }] });
+    expect(view.commits()).toBe(0);
   });
 });
 

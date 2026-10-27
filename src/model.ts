@@ -156,7 +156,7 @@ export function ruleLabel(s: State, showId: string) {
 
 const MB = 1048576;
 
-export function dlSummary(s: State) {
+export function dlSummary(s: Pick<State, 'dl' | 'dlPaused' | 'tg' | 'metered'>) {
   const active = s.dl.filter((d) => !d.error);
   const failed = s.dl.length - active.length;
   const failedLabel = failed ? `${failed} failed` : '';

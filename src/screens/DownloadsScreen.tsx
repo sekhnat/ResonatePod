@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore, epInfo, getEp, downloadsBlocked } from '../store';
 import { art, dateLabel, mono } from '../data';
 import { dlSummary, fmtSpeed } from '../model';
@@ -9,7 +10,10 @@ import { Empty } from './ShowScreen';
 const MB = 1048576;
 
 export function DownloadsScreen() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({
+    dl: s.dl, dlDone: s.dlDone, dlPaused: s.dlPaused, metered: s.metered, tg: s.tg, shows: s.shows, eps: s.eps,
+    cancelDownload: s.cancelDownload, deleteFile: s.deleteFile, startDownload: s.startDownload, toggleDlPause: s.toggleDlPause,
+  })));
   // Ticks the "Retrying in …" countdown.
   const [now, setNow] = useState(Date.now());
   const counting = s.dl.some((d) => d.retryAt);

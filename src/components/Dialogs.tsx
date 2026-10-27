@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { art, mono } from '../data';
 import { useStore, type Override } from '../store';
 import { APP_VERSION } from '../version';
@@ -15,7 +16,7 @@ function Modal({ onClose, width = 480, children, label }: { onClose: () => void;
 }
 
 export function ShowSettingsDialog() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ cur: s.cur, ovr: s.ovr, resetOverride: s.resetOverride, set: s.set, setOverride: s.setOverride, setSpeed: s.setSpeed, showId: s.showId, shows: s.shows, sv: s.sv, tg: s.tg })));
   const sh = s.shows.find((x) => x.id === s.showId);
   if (!sh) return null;
   const close = () => s.set({ cfgOpen: false });
@@ -69,7 +70,7 @@ function FieldDialog({ title, body, label, initial, suffix, validate, onSave }: 
   title: string; body: string; label: string; initial: string; suffix?: string;
   validate: (v: string) => string | null; onSave: (v: string) => void;
 }) {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ set: s.set })));
   const [v, setV] = useState(initial);
   const [err, setErr] = useState<string | null>(null);
   const ref = useRef<HTMLInputElement>(null);
@@ -119,7 +120,10 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 export function Dialogs() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({
+    cleanupStorage: s.cleanupStorage, dialog: s.dialog, eps: s.eps, folder: s.folder, moveDownloads: s.moveDownloads, pendingMove: s.pendingMove, set: s.set,
+    setPrefs: s.setPrefs, showId: s.showId, shows: s.shows, storageLimitGb: s.storageLimitGb, toast: s.toast, unsubscribe: s.unsubscribe, usedBytes: s.usedBytes,
+  })));
   const close = () => s.set({ dialog: null });
   const sh = s.shows.find((x) => x.id === s.showId);
 
@@ -208,7 +212,7 @@ export function Dialogs() {
 }
 
 function SyncDialog() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ configureSync: s.configureSync, disconnectSync: s.disconnectSync, runSync: s.runSync, set: s.set, sync: s.sync, syncing: s.syncing, toast: s.toast })));
   const [server, setServer] = useState(s.sync.server || 'gpodder.net');
   const [user, setUser] = useState(s.sync.user);
   const [password, setPassword] = useState('');
@@ -256,7 +260,7 @@ function SyncDialog() {
 }
 
 function FeedAuthDialog() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ authFor: s.authFor, set: s.set, signInFeed: s.signInFeed, toast: s.toast })));
   const target = s.authFor;
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
@@ -306,7 +310,7 @@ function FeedAuthDialog() {
 }
 
 function PodcastIndexDialog() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ directory: s.directory, set: s.set, setPodcastIndexKey: s.setPodcastIndexKey, toast: s.toast })));
   const [key, setKey] = useState('');
   const [secret, setSecret] = useState('');
   const close = () => s.set({ dialog: null });
