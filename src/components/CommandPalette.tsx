@@ -105,24 +105,22 @@ export function CommandPalette() {
   };
 
   return (
-    <div onClick={close} style={{ position: 'absolute', inset: 0, background: 'color-mix(in srgb,var(--color-bg) 55%,transparent)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'center', paddingTop: 90, zIndex: 10 }}>
-      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Command palette" style={{ width: 540, height: 'fit-content', borderRadius: 'var(--radius-lg)', background: 'var(--color-surface)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', boxShadow: '0 1px 0 var(--color-neutral-800)' }}>
-          <i className="ph ph-magnifying-glass" style={{ fontSize: 17, color: 'var(--color-neutral-400)' }} />
-          <input ref={ref} value={s.query} onChange={(e) => s.set({ query: e.target.value })} onKeyDown={onKey} placeholder="Type a command, show or episode…" aria-label="Command"
-            style={{ flex: 1, border: 'none', outline: 'none', background: 'none', color: 'var(--color-text)', font: 'inherit', fontSize: 15, caretColor: 'var(--color-accent)' }} />
-          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 4, background: 'var(--color-neutral-900)', color: 'var(--color-neutral-400)' }}>Esc</span>
+    <div className="palette-backdrop" onClick={close}>
+      <div className="palette" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Command palette">
+        <div className="palette-input-row">
+          <i className="ph ph-magnifying-glass palette-search-icon" />
+          <input ref={ref} value={s.query} onChange={(e) => s.set({ query: e.target.value })} onKeyDown={onKey} placeholder="Type a command, show or episode…" aria-label="Command" className="palette-input" />
+          <span className="palette-esc">Esc</span>
         </div>
-        <div role="listbox" style={{ display: 'flex', flexDirection: 'column', padding: 6, maxHeight: 360, overflow: 'auto' }}>
+        <div role="listbox" className="palette-list">
           {items.map((p, i) => (
-            <button key={p.label + p.hint} role="option" aria-selected={i === sel} onClick={p.run} onMouseEnter={() => setSel(i)}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 10px', border: 'none', borderRadius: 'var(--radius-md)', background: i === sel ? 'var(--color-neutral-800)' : 'transparent', color: 'var(--color-text)', fontSize: 13, textAlign: 'left', cursor: 'pointer' }}>
-              <i className={p.icon} style={{ fontSize: 16, color: 'var(--color-neutral-400)' }} />
-              <span style={{ flex: 1 }}>{p.label}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{p.hint}</span>
+            <button key={p.label + p.hint} role="option" aria-selected={i === sel} onClick={p.run} onMouseEnter={() => setSel(i)} className="palette-item">
+              <i className={`${p.icon} palette-item-icon`} />
+              <span className="palette-item-label">{p.label}</span>
+              <span className="palette-item-hint">{p.hint}</span>
             </button>
           ))}
-          {!items.length && <div style={{ padding: '16px 10px', fontSize: 13, color: 'var(--color-neutral-500)' }}>No matches. Press Enter to search podcast directories.</div>}
+          {!items.length && <div className="palette-empty">No matches. Press Enter to search podcast directories.</div>}
         </div>
       </div>
     </div>

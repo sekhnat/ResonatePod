@@ -36,10 +36,10 @@ export function VirtualList({ count, estimate, itemKey, overscan = 8, children }
   const virtual = useVirtualizer({ count, getScrollElement: () => scroller, estimateSize: () => estimate, overscan, scrollMargin: margin, getItemKey: itemKey });
 
   return (
-    <div ref={listRef} style={{ position: 'relative', height: virtual.getTotalSize() }}>
+    <div ref={listRef} className="vlist" style={{ height: virtual.getTotalSize() }}>
       {virtual.getVirtualItems().map((item) => (
         <div key={item.key} data-index={item.index} ref={virtual.measureElement}
-          style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start - margin}px)` }}>
+          className="vlist-item" style={{ transform: `translateY(${item.start - margin}px)` }}>
           {children(item.index)}
         </div>
       ))}

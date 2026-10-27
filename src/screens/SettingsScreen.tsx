@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { trackedBytes, useStore, type Settings, type Toggles } from '../store';
 import { delLabel, keepLabel, skipLabel, speedLabel } from '../settings-labels';
-import { Seg, Toggle, h1Style } from '../components/ui';
+import { Seg, Toggle } from '../components/ui';
 import { platform } from '../platform';
 import { clockLabel } from '../model';
 import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
@@ -80,7 +80,7 @@ export function SettingsScreen() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)', maxWidth: 640 }}>
-      <h1 style={h1Style}>Preferences</h1>
+      <h1 className="page-title">Preferences</h1>
       {groups.map((g) => (
         <section key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-accent-300)', paddingBottom: 4 }}>{g.title}</div>

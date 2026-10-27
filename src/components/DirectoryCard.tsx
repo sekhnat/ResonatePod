@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import {
   COUNTRIES, SOURCES, countryName, normalizeFeedUrl, suggestions, type DirectoryResult, type Source, type SourceChoice, type Suggestions,
 } from '../lib/directory';
-import { Art, selectStyle } from './ui';
+import { Art } from './ui';
 
 const n = (x: number) => x.toLocaleString('en-US');
 
@@ -38,24 +38,23 @@ export function DirectoryCard({ r, showSources }: { r: DirectoryResult; showSour
   const on = !!subscribedId && !r.episode;
   const label = r.episode ? 'Open show' : on ? 'Subscribed' : 'Subscribe';
   return (
-    <div className="card" data-testid="directory-card" style={{ flexDirection: 'row', gap: 'var(--space-4)', padding: 'var(--space-4)', alignItems: 'flex-start' }}>
+    <div className="card dir-card" data-testid="directory-card">
       <Art bg={art(hueFor(r.title))} mono={mono(r.title)} img={r.artworkUrl} size={64} font={18} weight={500} />
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <span className="card-title clamp-2" style={{ fontSize: 14 }}>{r.title}</span>
+      <div className="dir-card-body">
+        <span className="card-title clamp-2 dir-card-title">{r.title}</span>
         {r.episode ? (
-          <span className="clamp-2" style={{ fontSize: 11.5, color: 'var(--color-neutral-300)', lineHeight: 1.4 }}>
-            <i className="ph ph-microphone" style={{ marginRight: 4 }} />{r.episode.title}{r.episode.date ? ` · ${dateLabel(r.episode.date)}` : ''}
+          <span className="clamp-2 dir-card-line dir-card-episode">
+            <i className="ph ph-microphone dir-card-mic" />{r.episode.title}{r.episode.date ? ` · ${dateLabel(r.episode.date)}` : ''}
           </span>
         ) : (
-          <span className="clamp-2" style={{ fontSize: 11.5, color: 'var(--color-neutral-400)', lineHeight: 1.4 }}>{r.blurb || r.author}</span>
+          <span className="clamp-2 dir-card-line dir-card-blurb">{r.blurb || r.author}</span>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
-          <span className="card-meta" style={{ margin: 0, minWidth: 0, display: 'flex', gap: 4, alignItems: 'center', overflow: 'hidden' }}>
+        <div className="dir-card-foot">
+          <span className="card-meta dir-card-meta">
             {showSources && r.sources.map((src) => <SourceTag key={src} source={src} />)}
-            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta}</span>
+            <span className="dir-card-meta-text">{meta}</span>
           </span>
-          <button className="btn btn-primary" disabled={busy} onClick={() => void act()} aria-label={`${label}: ${r.title}`}
-            style={{ fontSize: 11.5, padding: '3px 10px', minHeight: 0, flex: 'none', color: on ? 'var(--color-neutral-400)' : 'var(--color-accent)', borderColor: on ? 'var(--color-divider)' : 'var(--color-accent)' }}>
+          <button className={`btn btn-primary dir-card-action${on ? ' on' : ''}`} disabled={busy} onClick={() => void act()} aria-label={`${label}: ${r.title}`}>
             {busy ? <i className="ph ph-circle-notch spin" /> : label}
           </button>
         </div>
@@ -66,7 +65,7 @@ export function DirectoryCard({ r, showSources }: { r: DirectoryResult; showSour
 
 function SourceTag({ source }: { source: Source }) {
   return (
-    <span title={`Found on ${SOURCES[source].label}`} style={{ flex: 'none', fontSize: 9.5, letterSpacing: '0.04em', padding: '1px 5px', borderRadius: 4, background: 'var(--color-neutral-800)', color: 'var(--color-neutral-300)' }}>
+    <span className="source-tag" title={`Found on ${SOURCES[source].label}`}>
       {SOURCES[source].short}
     </span>
   );
@@ -80,7 +79,7 @@ export function CountrySelect({ style }: { style?: CSSProperties }) {
   const setDirectory = useStore((s) => s.setDirectory);
   const options = COUNTRIES.map((cc) => ({ cc, name: countryName(cc) })).sort((a, b) => a.name.localeCompare(b.name));
   return (
-    <select className="input" aria-label="Region" title="Region for charts and search" value={country} style={{ ...selectStyle, ...style }}
+    <select className="input select-compact" aria-label="Region" title="Region for charts and search" value={country} style={style}
       onChange={(e) => setDirectory({ country: e.target.value })}>
       {options.map((o) => <option key={o.cc} value={o.cc}>{o.name}</option>)}
     </select>
@@ -95,7 +94,7 @@ export function SourceSelect({ style }: { style?: CSSProperties }) {
     ...(['apple', 'gpodder', 'fyyd', 'podcastindex'] as Source[]).filter((x) => x !== 'podcastindex' || podcastIndex).map((x) => [x, SOURCES[x].label] as [SourceChoice, string]),
   ];
   return (
-    <select className="input" aria-label="Directory" title="Which directory to search" value={source} style={{ ...selectStyle, ...style }}
+    <select className="input select-compact" aria-label="Directory" title="Which directory to search" value={source} style={style}
       onChange={(e) => setDirectory({ source: e.target.value as SourceChoice })}>
       {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
     </select>

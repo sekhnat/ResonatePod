@@ -4,7 +4,7 @@ import { useStore, epInfo, getEp, downloadsBlocked } from '../store';
 import { art, dateLabel, mono } from '../data';
 import { dlSummary, fmtSpeed } from '../model';
 import { platform } from '../platform';
-import { Art, GhostIcon, PageHeader, sectionLabel } from '../components/ui';
+import { Art, GhostIcon, PageHeader } from '../components/ui';
 import { Empty } from './ShowScreen';
 
 const MB = 1048576;
@@ -38,7 +38,7 @@ export function DownloadsScreen() {
       </PageHeader>
       {!platform.isDesktop && <Empty icon="ph ph-info" text="Downloads are available in the desktop app. In the browser, episodes stream." />}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <div style={sectionLabel}>Active</div>
+        <div className="section-label">Active</div>
         {s.dl.map((d) => {
           const e = epInfo(s, d.key);
           if (!e) return null;
@@ -75,7 +75,7 @@ export function DownloadsScreen() {
       </div>
       {done.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <div style={sectionLabel}>Completed</div>
+          <div className="section-label">Completed</div>
           <table className="table">
             <thead><tr><th>Episode</th><th>Show</th><th>Size</th><th>Finished</th><th /></tr></thead>
             <tbody>

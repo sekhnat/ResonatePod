@@ -5,7 +5,7 @@ import { currentChapter, epInfo, sleepLabel, trimOn, useStore } from '../store';
 import { useChapters, useCurrent } from '../current';
 import { usePlayhead } from '../playhead';
 import { attachVideo, detachVideo } from '../audio/engine';
-import { Art, GhostIcon, sectionLabel } from './ui';
+import { Art, GhostIcon } from './ui';
 
 /** What the transcript shows for the playing episode: three lines around the current one, or all of an untimed one. */
 function useTranscript(cur: EpisodeInfo | null) {
@@ -34,7 +34,7 @@ function Chapters({ big }: { big?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: big ? 8 : 6 }}>
-        <span style={sectionLabel}>Chapters</span>
+        <span className="section-label">Chapters</span>
         <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{ci + 1} of {ch.length}</span>
       </div>
       {ch.map((c, i) => (
@@ -61,7 +61,7 @@ function Transcript({ big }: { big?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: big ? 12 : 8, maxWidth: big ? 620 : undefined }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <span style={sectionLabel}>Transcript</span>
+        <span className="section-label">Transcript</span>
         <span style={{ fontSize: 11, color: 'var(--color-neutral-500)', textAlign: 'right' }}>{label}</span>
       </div>
       {lines.map((l, i) => (

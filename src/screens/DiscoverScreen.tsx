@@ -5,7 +5,6 @@ import { useStore } from '../store';
 import { isFeedUrl } from '../lib/opml';
 import { SOURCES, appleId, browse, countryName, normalizeFeedUrl, searchDirectories, type DirectoryResult, type SearchOutcome, type Source } from '../lib/directory';
 import { CountrySelect, DirectoryCard, SourceSelect, resultGrid, useSuggestions } from '../components/DirectoryCard';
-import { h1Style, sectionLabel } from '../components/ui';
 import { Empty } from './ShowScreen';
 
 const compact = { minHeight: 29, fontSize: 12, padding: '3px 6px', borderRadius: 999 };
@@ -35,7 +34,7 @@ export function DiscoverScreen() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <h1 style={h1Style}>Discover</h1>
+      <h1 className="page-title">Discover</h1>
       <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
         <div style={{ flex: 1, position: 'relative' }}>
           <i className="ph ph-magnifying-glass" style={{ position: 'absolute', left: 11, top: 11, fontSize: 15, color: 'var(--color-neutral-500)' }} />
@@ -92,7 +91,7 @@ function ErrorRow({ message, retry }: { message: string; retry: () => void }) {
 function SectionHead({ title, sub }: { title: string; sub?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-      <span style={sectionLabel}>{title}</span>
+      <span className="section-label">{title}</span>
       {sub && <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{sub}</span>}
     </div>
   );
