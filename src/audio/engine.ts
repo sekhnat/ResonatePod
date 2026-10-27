@@ -166,10 +166,18 @@ export function startEngine() {
   const buf = new Float32Array(2048);
   let silentMs = 0;
   let saved = 0;
-  setInterval(() => {
+  // Whether the current show wants trimming, worked out again only when something it depends on changes.
+  let wanted: { cur: string | null; shows: State['shows']; ovr: State['ovr']; tg: State['tg']; on: boolean } | null = null;
+  const trimWanted = (s: State) => {
+    if (!wanted || wanted.cur !== s.cur || wanted.shows !== s.shows || wanted.ovr !== s.ovr || wanted.tg !== s.tg) {
+      const info = epInfo(s, s.cur);
+      wanted = { cur: s.cur, shows: s.shows, ovr: s.ovr, tg: s.tg, on: !!info && trimOn(s, info.show.id) };
+    }
+    return wanted.on;
+  };
+  function tick() {
     const s = st();
-    const info = epInfo(s, s.cur);
-    const active = !!analyser && s.playing && !audio.paused && !!info && trimOn(s, info.show.id);
+    const active = s.playing && !audio.paused && trimWanted(s);
     if (!active) {
       silentMs = 0;
       if (trimming) { trimming = false; audio.playbackRate = s.speed; }
@@ -184,7 +192,19 @@ export function startEngine() {
     if (want !== trimming) { trimming = want; audio.playbackRate = rate(s); }
     if (trimming && s.speed < TRIM_RATE) saved += (ANALYSE_MS / 1000) * (TRIM_RATE / s.speed - 1);
     if (saved >= 1) { s.addTrimSaved(saved); saved = 0; }
-  }, ANALYSE_MS);
+  }
+  // Only listen while something is playing; a paused player has no silence to skip.
+  let analyseTimer: ReturnType<typeof setInterval> | null = null;
+  function startAnalyser() {
+    if (analyser && !analyseTimer) analyseTimer = setInterval(tick, ANALYSE_MS);
+  }
+  function stopAnalyser() {
+    if (analyseTimer) { clearInterval(analyseTimer); analyseTimer = null; }
+    silentMs = 0;
+    if (trimming) { trimming = false; audio.playbackRate = st().speed; }
+  }
+  audio.addEventListener('play', startAnalyser);
+  for (const ev of ['pause', 'ended', 'emptied']) audio.addEventListener(ev, stopAnalyser);
 
   useStore.subscribe(apply);
   apply(st());
