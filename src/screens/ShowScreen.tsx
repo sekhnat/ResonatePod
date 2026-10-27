@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { art, epKey, mono } from '../data';
 import { epInfo, sortFor, useStore } from '../store';
 import { applyFilter, applySort, ruleLabel, rowsFor, unplayedFor, type EpisodeRow } from '../model';
-import { Art, GhostIcon, RowPlay, Seg, SortSelect } from '../components/ui';
+import { Art, GhostIcon, RowMeta, RowPlay, Seg, SortSelect, useRowProgress } from '../components/ui';
 
 const FILTERS = ['All', 'Unplayed', 'Downloaded'] as const;
 
@@ -64,6 +64,7 @@ export function ShowScreen() {
 
 function ShowEpisodeRow({ e }: { e: EpisodeRow }) {
   const s = useStore();
+  const progress = useRowProgress(e);
   const [open, setOpen] = useState(false);
   const notes = open ? epInfo(s, e.key)?.ep.description : '';
   const dlIcon = e.downloading ? 'ph ph-x' : e.downloaded ? 'ph ph-trash' : 'ph ph-download-simple';
@@ -78,16 +79,16 @@ function ShowEpisodeRow({ e }: { e: EpisodeRow }) {
           {e.isNew && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent)', flex: 'none' }} />}
           <span onClick={() => setOpen((o) => !o)} title={open ? 'Hide show notes' : 'Show notes'} style={{ fontSize: 14, fontWeight: 500, color: titleColor(e), whiteSpace: open ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>{e.title}</span>
         </div>
-        <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{e.meta}</span>
+        <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}><RowMeta e={e} /></span>
         {open && <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-neutral-300)', whiteSpace: 'pre-line', maxHeight: 260, overflow: 'auto' }}>{notes || 'No show notes for this episode.'}</p>}
       </div>
       <div className="row-actions" style={{ display: 'flex' }}>
         <GhostIcon icon={e.played ? 'ph ph-arrow-u-up-left' : 'ph ph-checks'} title={e.played ? 'Mark unplayed' : 'Mark played'} onClick={() => s.markPlayed(e.key, !e.played)} />
         <GhostIcon icon="ph ph-queue" title="Add to queue" onClick={() => s.addToQueue(e.key)} />
       </div>
-      {e.progress > 0 && e.progress < 1 && (
+      {progress > 0 && progress < 1 && (
         <div style={{ width: 64, height: 3, borderRadius: 2, background: 'var(--color-neutral-800)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${Math.round(e.progress * 100)}%`, background: 'var(--color-accent-500)' }} />
+          <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'var(--color-accent-500)' }} />
         </div>
       )}
       <GhostIcon icon={dlIcon} title={dlLabel} onClick={onDl} />

@@ -1,5 +1,6 @@
 import { epInfo, getEp, setPlayer, trimOn, useStore, type State } from '../store';
 import { platform } from '../platform';
+import { getPlayhead } from '../playhead';
 
 /** Below this RMS level (~-42 dBFS) audio counts as silence for trimming. */
 const SILENCE_RMS = 0.008;
@@ -75,7 +76,7 @@ export function startEngine() {
       return;
     }
     audio.src = platform.mediaUrl(loadedFile, info.ep.enclosureUrl);
-    pendingSeek = resumeAt ?? s.pos;
+    pendingSeek = resumeAt ?? getPlayhead();
     audio.load();
     if (resumeAt != null) return;
     if (s.video) useStore.setState({ video: false });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { rowsFor } from '../model';
-import { Art, GhostIcon, PageHeader, RowPlay } from '../components/ui';
+import { Art, GhostIcon, PageHeader, RowMeta, RowPlay } from '../components/ui';
 import { Empty, titleColor } from './ShowScreen';
 
 export function QueueScreen() {
@@ -33,7 +33,7 @@ export function QueueScreen() {
             <Art bg={e.art} mono={e.mono} img={e.imageUrl} size={40} font={12} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: titleColor(e) }}>{e.title}</span>
-              <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{e.showTitle} · {e.meta}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}><RowMeta e={e} prefix={`${e.showTitle} · `} /></span>
             </div>
             <div className="row-actions" style={{ display: 'flex' }}>
               {i > 0 && <GhostIcon icon="ph ph-arrow-line-up" title="Play next" onClick={() => s.moveQueue(i, s.queue[0] === s.cur ? 1 : 0)} />}

@@ -1,6 +1,6 @@
 import { INBOX_SORT, sortFor, useStore } from '../store';
 import { agoLabel, applyFilter, applySort, inboxKeys, rowsFor } from '../model';
-import { Art, GhostIcon, PageHeader, RowPlay, Seg, SortSelect } from '../components/ui';
+import { Art, GhostIcon, PageHeader, RowMeta, RowPlay, Seg, SortSelect } from '../components/ui';
 import { Empty, titleColor } from './ShowScreen';
 
 const FILTERS = ['All', 'Unplayed', 'Downloaded'] as const;
@@ -27,7 +27,7 @@ export function InboxScreen() {
             </button>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: titleColor(e), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title}</span>
-              <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{e.showTitle} · {e.meta}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}><RowMeta e={e} prefix={`${e.showTitle} · `} /></span>
             </div>
             <i className={e.status === 'downloading' ? `${e.stIcon} spin` : e.stIcon} title={e.stLabel} style={{ fontSize: 16, color: e.stColor }} />
             <GhostIcon icon={s.queue.includes(e.key) ? 'ph-fill ph-queue' : 'ph ph-queue'} title={s.queue.includes(e.key) ? 'In queue' : 'Add to queue'} onClick={() => s.addToQueue(e.key)} />
