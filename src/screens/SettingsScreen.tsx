@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useStore, type SegValues, type Toggles } from '../store';
+import { trackedBytes, useStore, type SegValues, type Toggles } from '../store';
 import { Seg, Toggle, h1Style } from '../components/ui';
 import { platform } from '../platform';
 import { clockLabel } from '../model';
@@ -17,7 +17,8 @@ type Row = { label: string; hint?: string } & (
 export function SettingsScreen() {
   const s = useStore(useShallow((s) => ({
     directory: s.directory, eps: s.eps, folder: s.folder, set: s.set, setPrefs: s.setPrefs, setSeg: s.setSeg, setToggle: s.setToggle,
-    shows: s.shows, storageLimitGb: s.storageLimitGb, sv: s.sv, sync: s.sync, syncing: s.syncing, tg: s.tg, toast: s.toast, usedBytes: s.usedBytes,
+    shows: s.shows, storageLimitGb: s.storageLimitGb, sv: s.sv, sync: s.sync, syncing: s.syncing, tg: s.tg, toast: s.toast,
+    folderBytes: s.folderBytes, updateUsage: s.updateUsage,
   })));
   const changeFolder = async () => {
     if (!platform.isDesktop) { s.set({ dialog: 'folder' }); return; }
@@ -29,7 +30,7 @@ export function SettingsScreen() {
     if (Object.values(s.eps).some((e) => e.file)) s.set({ dialog: 'move', pendingMove: { from, to: folder } });
     else s.toast(`New downloads will be saved to ${folder}`);
   };
-  const usedGb = (s.usedBytes / 1024 ** 3).toFixed(1);
+  const usedGb = (trackedBytes(s.eps) / 1024 ** 3).toFixed(1);
   const groups: { title: string; rows: Row[] }[] = [
     { title: 'Downloads', rows: [
       { label: 'Download new episodes automatically', hint: 'Applies to shows without their own rule', kind: 'toggle', k: 'auto' },
@@ -40,7 +41,8 @@ export function SettingsScreen() {
     { title: 'Storage', rows: [
       { label: 'Download folder', hint: platform.isDesktop ? 'One sub-folder per show' : 'Downloads need the desktop app', kind: 'value', value: s.folder, action: 'Change…', run: () => void changeFolder() },
       { label: 'Delete played episodes', hint: 'Downloaded files only; the episode stays in your library', kind: 'seg', k: 'del', opts: ['Never', '1 day', '1 week'] },
-      { label: 'Storage limit', hint: `${usedGb} GB used · oldest played files are removed first`, kind: 'value', value: `${s.storageLimitGb} GB`, action: 'Edit', run: () => s.set({ dialog: 'storage' }) },
+      { label: 'Storage limit', hint: `${usedGb} GB of downloaded episodes · oldest played files are removed first`, kind: 'value', value: `${s.storageLimitGb} GB`, action: 'Edit', run: () => s.set({ dialog: 'storage' }) },
+      ...(platform.isDesktop ? [{ label: 'Folder size', hint: 'Everything in the folder, including files Resonate no longer tracks; the limit doesn’t count those', kind: 'value', value: s.folderBytes == null ? 'Not measured yet' : `${(s.folderBytes / 1024 ** 3).toFixed(1)} GB`, action: 'Recalculate', run: () => void s.updateUsage() } as Row] : []),
     ] },
     { title: 'Playback', rows: [
       { label: 'Default speed', kind: 'seg', k: 'speed', opts: ['1×', '1.2×', '1.5×', '2×'] },

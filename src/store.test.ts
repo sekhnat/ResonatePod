@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, useStore } from './store';
+import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, trackedBytes, useStore } from './store';
 import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
@@ -228,7 +228,36 @@ describe('downloads and storage', () => {
     expect(st().dl).toEqual([]);
     expect(getEp(st(), K42)).toMatchObject({ file: '/p/a.mp3', fileBytes: 100 });
     expect(st().dlDone[0].key).toBe(K42);
-    expect(st().usedBytes).toBe(100);
+    expect(trackedBytes(st().eps)).toBe(100);
+  });
+
+  it('counts what the tracked downloads take up, and follows deletions and unsubscribing', async () => {
+    const GBx = 1024 ** 3;
+    useStore.setState({ eps: { ...st().eps,
+      [K42]: { ...getEp(st(), K42), file: '/p/42.mp3', fileBytes: 2 * GBx },
+      [K41]: { ...getEp(st(), K41), file: '/p/41.m4a', fileBytes: 3 * GBx },
+      [K40]: { ...getEp(st(), K40), fileBytes: 9 * GBx }, // no file: not on disk, not counted
+    } });
+    expect(trackedBytes(st().eps)).toBe(5 * GBx);
+    expect(trackedBytes(st().eps)).toBe(5 * GBx);
+    const del = vi.spyOn(platform, 'deleteFile').mockResolvedValue();
+    await st().deleteFile(K42, true);
+    expect(trackedBytes(st().eps)).toBe(3 * GBx);
+    // The files of a show that was unsubscribed from stay on disk, but are no longer counted against the limit.
+    st().unsubscribe('kernel-panic-hour', true);
+    expect(trackedBytes(st().eps)).toBe(0);
+    del.mockRestore();
+  });
+
+  it('scans the folder for information only: it never trips the storage limit', async () => {
+    platform.isDesktop = true;
+    const walk = vi.spyOn(platform, 'diskUsage').mockResolvedValue(500 * 1024 ** 3);
+    useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), played: true, file: '/p/42.mp3', fileBytes: 1024 ** 3, playedAt: Date.now() } }, storageLimitGb: 5 });
+    await st().updateUsage();
+    expect(st().folderBytes).toBe(500 * 1024 ** 3);
+    expect(walk).toHaveBeenCalledWith('~/Podcasts');
+    expect(cleanupKeys(st())).toEqual([]); // 1 GB tracked against a 5 GB limit, whatever else is in the folder
+    walk.mockRestore();
   });
 
   it('deletes played files by age, then oldest-played first to fit the limit', () => {
@@ -240,7 +269,7 @@ describe('downloads and storage', () => {
       c: { played: true, pos: 0, inbox: false, file: '/c', fileBytes: 10 * 1024 ** 3, playedAt: now - 1000 },
       d: { played: false, pos: 0, inbox: false, file: '/d', fileBytes: 10 * 1024 ** 3 },
     };
-    const base = { eps, cur: null, storageLimitGb: 100, usedBytes: 40 * 1024 ** 3 };
+    const base = { eps, cur: null, storageLimitGb: 100 };
     expect(cleanupKeys({ ...base, sv: { ...st().sv, del: '1 week' } }, now)).toEqual(['a']);
     expect(cleanupKeys({ ...base, sv: { ...st().sv, del: '1 day' } }, now)).toEqual(['a', 'b']);
     expect(cleanupKeys({ ...base, storageLimitGb: 25, sv: { ...st().sv, del: 'Never' } }, now)).toEqual(['a', 'b']);

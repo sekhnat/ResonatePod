@@ -417,6 +417,10 @@ try {
   await step('preferences and discover render', async () => {
     await page.locator('nav button', { hasText: 'Preferences' }).click();
     await page.getByText('Sync server').waitFor();
+    // The folder is walked once at start-up and on demand, for the figure shown here; the limit uses tracked sizes.
+    await page.getByText('Folder size', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Recalculate' }).click();
+    await page.waitForFunction(() => !document.body.innerText.includes('Not measured yet'));
     // The header shows the version from package.json.
     await page.getByText(`Resonate ${JSON.parse(readFileSync('package.json', 'utf8')).version}`, { exact: true }).waitFor();
     await shot('07-settings');

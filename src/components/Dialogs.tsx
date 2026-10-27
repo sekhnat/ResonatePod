@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { art, mono } from '../data';
-import { useStore, type Override } from '../store';
+import { trackedBytes, useStore, type Override } from '../store';
 import { APP_VERSION } from '../version';
 import { Seg } from './ui';
 
@@ -122,7 +122,7 @@ const SHORTCUTS: [string, string][] = [
 export function Dialogs() {
   const s = useStore(useShallow((s) => ({
     cleanupStorage: s.cleanupStorage, dialog: s.dialog, eps: s.eps, folder: s.folder, moveDownloads: s.moveDownloads, pendingMove: s.pendingMove, set: s.set,
-    setPrefs: s.setPrefs, showId: s.showId, shows: s.shows, storageLimitGb: s.storageLimitGb, toast: s.toast, unsubscribe: s.unsubscribe, usedBytes: s.usedBytes,
+    setPrefs: s.setPrefs, showId: s.showId, shows: s.shows, storageLimitGb: s.storageLimitGb, toast: s.toast, unsubscribe: s.unsubscribe,
   })));
   const close = () => s.set({ dialog: null });
   const sh = s.shows.find((x) => x.id === s.showId);
@@ -150,7 +150,7 @@ export function Dialogs() {
         onSave={(folder) => { s.setPrefs({ folder }); s.toast(`Downloads will be saved to ${folder}`); }} />;
     case 'storage':
       return <FieldDialog title="Storage limit" body="When downloads pass this size, the oldest played files are removed first." label="Limit" suffix="GB" initial={String(s.storageLimitGb)}
-        validate={(v) => (/^\d+$/.test(v) && +v >= 1 ? (+v * 1024 ** 3 < s.usedBytes ? `Already using ${(s.usedBytes / 1024 ** 3).toFixed(1)} GB — pick a larger limit` : null) : 'Enter a whole number of gigabytes')}
+        validate={(v) => (/^\d+$/.test(v) && +v >= 1 ? (+v * 1024 ** 3 < trackedBytes(s.eps) ? `Already using ${(trackedBytes(s.eps) / 1024 ** 3).toFixed(1)} GB — pick a larger limit` : null) : 'Enter a whole number of gigabytes')}
         onSave={(v) => { s.setPrefs({ storageLimitGb: +v }); void s.cleanupStorage(); }} />;
     case 'sync':
       return <SyncDialog />;
@@ -201,7 +201,7 @@ export function Dialogs() {
             <i className="ph-fill ph-waveform" style={{ fontSize: 44, color: 'var(--color-accent)' }} />
             <span className="dialog-title">Resonate</span>
             <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)' }}>Version {APP_VERSION} · A podcast downloader and player for the Linux desktop.</span>
-            <span style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>{s.shows.length} subscriptions · {(s.usedBytes / 1024 ** 3).toFixed(1)} GB in {s.folder}</span>
+            <span style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>{s.shows.length} subscriptions · {(trackedBytes(s.eps) / 1024 ** 3).toFixed(1)} GB in {s.folder}</span>
           </div>
           <div className="dialog-actions" style={{ margin: 0, justifyContent: 'center' }}><button className="btn btn-primary" style={{ fontSize: 12 }} onClick={close}>Close</button></div>
         </Modal>
