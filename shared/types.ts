@@ -68,6 +68,8 @@ export interface DownloadJob {
   title: string;
   pubDate: number;
   mime: string;
+  /** Set when another episode would get the same file name, so neither overwrites the other. */
+  suffix?: string;
 }
 
 export type DownloadEvent =

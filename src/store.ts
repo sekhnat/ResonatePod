@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { cadence, parseFeed } from '../shared/feed';
+import { fileStem, safeName, shortHash } from '../shared/filename';
 import { parseJsonChapters, parseTranscript } from '../shared/meta';
 import { GpodderClient, syncOnce, type EpisodeAction } from '../shared/gpodder';
 import type { DownloadEvent } from '../shared/types';
@@ -274,6 +275,25 @@ export const downloadsBlocked = (s: Pick<Data, 'dlPaused' | 'tg'> & Pick<Ui, 'me
 
 const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'feed';
 const isoNow = () => new Date().toISOString().slice(0, 19);
+
+// How many of a show's episodes would be saved under each file name, kept until the show's episode list changes.
+const stemCounts = new WeakMap<Episode[], Map<string, number>>();
+const stemsOf = (show: Show) => {
+  let counts = stemCounts.get(show.eps);
+  if (!counts) {
+    counts = new Map();
+    for (const e of show.eps) { const k = fileStem(e.pubDate, e.title); counts.set(k, (counts.get(k) ?? 0) + 1); }
+    stemCounts.set(show.eps, counts);
+  }
+  return counts;
+};
+
+/** Whether another episode would land on this one's file name: same show folder, day and title. */
+const sharesFileName = (s: Pick<Data, 'shows'>, info: EpisodeInfo) => {
+  const folder = safeName(info.show.title);
+  const stem = fileStem(info.ep.pubDate, info.title);
+  return s.shows.some((sh) => safeName(sh.title) === folder && (stemsOf(sh).get(stem) ?? 0) > (sh.id === info.show.id ? 1 : 0));
+};
 
 /** Which episodes a show's auto-download rule wants on disk but aren't there yet. */
 export function autoDownloadKeys(s: Pick<Data, 'shows' | 'eps' | 'ovr' | 'tg' | 'sv'> & Pick<Ui, 'dl'>, showId: string): string[] {
@@ -611,7 +631,7 @@ export const useStore = create<State>()(
             dl: existing ? s.dl.map((d) => (d.key === key ? { ...d, error: undefined, retryAt: undefined, active: false } : d)) : [...s.dl, { key, received: 0, total: info.ep.sizeBytes, speed: 0 }],
             dlPending: s.dlPending.includes(key) ? s.dlPending : [...s.dlPending, key],
           });
-          platform.download.start({ key, url: info.ep.enclosureUrl, folder: s.folder, showTitle: info.show.title, title: info.title, pubDate: info.ep.pubDate, mime: info.ep.enclosureType });
+          platform.download.start({ key, url: info.ep.enclosureUrl, folder: s.folder, showTitle: info.show.title, title: info.title, pubDate: info.ep.pubDate, mime: info.ep.enclosureType, suffix: sharesFileName(s, info) ? shortHash(key) : undefined });
         },
         cancelDownload: (key) => {
           platform.download.cancel(key);
