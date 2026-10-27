@@ -191,7 +191,8 @@ let page;
 async function launch(userData = path.join(home, 'config')) {
   app = await electron.launch({
     executablePath: packaged ? path.resolve(packaged) : electronPath,
-    args: packaged ? ['--no-sandbox'] : ['.', '--no-sandbox'],
+    // E2E_PASSWORD_STORE=basic makes Chromium behave as on a machine with no keyring, to see the plain-text notice.
+    args: [...(packaged ? [] : ['.']), '--no-sandbox', ...(process.env.E2E_PASSWORD_STORE ? [`--password-store=${process.env.E2E_PASSWORD_STORE}`] : [])],
     env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: userData, XDG_CURRENT_DESKTOP: 'KDE', RESONATE_HTTP_TIMEOUT_MS: '2000',
       RESONATE_URL_REWRITE: JSON.stringify({ 'https://itunes.apple.com': `${base}/apple`, 'https://gpodder.net': `${base}/gpodder`, 'https://api.fyyd.de': `${base}/fyyd` }) },
   });
@@ -345,6 +346,13 @@ try {
     await page.getByText('This feed needs a login').waitFor();
     await page.getByLabel('Username').fill('ana');
     await page.getByLabel('Password').fill('wrong');
+    // Without a desktop keyring (a CI runner has none) the dialog says the password would be plain text and waits for a yes.
+    const unencrypted = page.getByLabel('Save it anyway');
+    if (await unencrypted.count()) {
+      await page.getByText('plain text in ~/.config/Resonate/secrets.json').waitFor();
+      assert.ok(await page.getByRole('button', { name: 'Sign in' }).isDisabled(), 'saving waits for a yes');
+      await unencrypted.check();
+    }
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.getByText('The server didn’t accept that username and password.').waitFor();
     await page.getByLabel('Password').fill('pw');

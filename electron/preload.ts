@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
+import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
 import type { LibraryPatch, LibrarySnapshot } from '../shared/library';
 
 const env = ipcRenderer.sendSync('env') as { desktop: 'KDE' | 'GNOME'; hostname: string };
@@ -38,6 +38,7 @@ const api = {
   openOpml: (): Promise<{ name: string; text: string } | null> => ipcRenderer.invoke('dialog:openOpml'),
   saveOpml: (name: string, text: string): Promise<string | null> => ipcRenderer.invoke('dialog:saveOpml', name, text),
   isMetered: (): Promise<boolean | null> => ipcRenderer.invoke('net:metered'),
+  secretStatus: (): Promise<SecretStatus> => ipcRenderer.invoke('secret:status'),
   getSecret: (key: string): Promise<string | null> => ipcRenderer.invoke('secret:get', key),
   setSecret: (key: string, value: string | null): Promise<void> => ipcRenderer.invoke('secret:set', key, value),
   updateTray: (s: TrayState) => ipcRenderer.send('tray:update', s),

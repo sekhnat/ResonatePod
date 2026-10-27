@@ -1,5 +1,5 @@
 import type { LibraryPatch, LibrarySnapshot } from '../shared/library';
-import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
+import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
 import type { ResonateApi } from '../electron/preload';
 import { downloadText } from './lib/opml';
 import { MemoryLibrary, type MemoryDump } from './lib/memory-library';
@@ -52,6 +52,8 @@ export interface Platform {
   openOpml(): Promise<{ name: string; text: string } | null>;
   saveOpml(name: string, text: string): Promise<string | null>;
   isMetered(): Promise<boolean | null>;
+  /** Whether a password saved now would be protected. */
+  secretStatus(): Promise<SecretStatus>;
   getSecret(key: string): Promise<string | null>;
   setSecret(key: string, value: string | null): Promise<void>;
   updateTray(s: TrayState): void;
@@ -110,6 +112,7 @@ function electronPlatform(api: ResonateApi): Platform {
     openOpml: api.openOpml,
     saveOpml: api.saveOpml,
     isMetered: api.isMetered,
+    secretStatus: api.secretStatus,
     getSecret: api.getSecret,
     setSecret: api.setSecret,
     updateTray: api.updateTray,
@@ -168,6 +171,7 @@ function browserPlatform(): Platform {
     }),
     saveOpml: async (name, text) => { downloadText(name, text); return name; },
     isMetered: async () => null,
+    secretStatus: async () => ({ secure: false, backend: 'browser' }), // localStorage, in the clear
     getSecret: async (k) => LS.get(`resonate-secret-${k}`),
     setSecret: async (k, v) => LS.set(`resonate-secret-${k}`, v),
     updateTray() {},

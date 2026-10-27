@@ -4,6 +4,7 @@ import { art, mono } from '../data';
 import { trackedBytes, useStore, type Override } from '../store';
 import { APP_VERSION } from '../version';
 import { Seg } from './ui';
+import { useSecretConsent } from './SecretNotice';
 
 function Modal({ onClose, width = 480, children, label }: { onClose: () => void; width?: number; children: ReactNode; label: string }) {
   return (
@@ -217,10 +218,11 @@ function SyncDialog() {
   const [user, setUser] = useState(s.sync.user);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const consent = useSecretConsent();
   const close = () => s.set({ dialog: null });
   const connected = !!s.sync.server;
   const save = async () => {
-    if (!server.trim() || !user.trim() || !password) return;
+    if (consent.blocked || !server.trim() || !user.trim() || !password) return;
     setBusy(true);
     const ok = await s.configureSync(server.trim(), user.trim(), password);
     setBusy(false);
@@ -245,12 +247,13 @@ function SyncDialog() {
         {field('sync-server', 'Server', server, setServer, 'text', 'gpodder.net')}
         {field('sync-user', 'Username', user, setUser)}
         {field('sync-pass', connected ? 'Password (re-enter to change)' : 'Password', password, setPassword, 'password')}
+        {consent.notice}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {connected ? <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => { s.disconnectSync(); close(); }}>Disconnect</button> : <span />}
         <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
           {connected && <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={s.syncing} onClick={() => void s.runSync()}>{s.syncing ? 'Syncing…' : 'Sync now'}</button>}
-          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || !server.trim() || !user.trim() || !password} onClick={() => void save()}>
+          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || consent.blocked || !server.trim() || !user.trim() || !password} onClick={() => void save()}>
             {busy ? <i className="ph ph-circle-notch spin" /> : null}{connected ? 'Save' : 'Connect'}
           </button>
         </div>
@@ -266,11 +269,12 @@ function FeedAuthDialog() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const consent = useSecretConsent();
   if (!target) return null;
   const host = (() => { try { return new URL(target.url).host; } catch { return target.url; } })();
   const close = () => s.set({ dialog: null, authFor: null });
   const save = async () => {
-    if (!user.trim() || busy) return;
+    if (!user.trim() || busy || consent.blocked) return;
     setBusy(true);
     setErr(null);
     const r = await s.signInFeed(target.url, user.trim(), password, target.showId);
@@ -291,17 +295,18 @@ function FeedAuthDialog() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span className="dialog-title">This feed needs a login</span>
         <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
-          {host} asks for a username and password. Resonate stores them encrypted with your system keyring and only sends them to {host}.
+          {host} asks for a username and password. {consent.secure ? 'Resonate stores them encrypted with your system keyring and' : 'Resonate'} only sends them to {host}.
         </span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {field('feed-user', 'Username', user, setUser)}
         {field('feed-pass', 'Password', password, setPassword, 'password')}
+        {consent.notice}
         {err && <div style={{ fontSize: 12, color: 'var(--color-accent-300)' }}>{err}</div>}
       </div>
       <div className="dialog-actions" style={{ margin: 0, gap: 'var(--space-3)' }}>
         <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={close}>Cancel</button>
-        <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || !user.trim()} onClick={() => void save()}>
+        <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || consent.blocked || !user.trim()} onClick={() => void save()}>
           {busy ? <i className="ph ph-circle-notch spin" /> : null}Sign in
         </button>
       </div>
@@ -313,8 +318,9 @@ function PodcastIndexDialog() {
   const s = useStore(useShallow((s) => ({ directory: s.directory, set: s.set, setPodcastIndexKey: s.setPodcastIndexKey, toast: s.toast })));
   const [key, setKey] = useState('');
   const [secret, setSecret] = useState('');
+  const consent = useSecretConsent();
   const close = () => s.set({ dialog: null });
-  const ok = key.trim() && secret.trim();
+  const ok = key.trim() && secret.trim() && !consent.blocked;
   const save = async () => {
     if (!ok) return;
     await s.setPodcastIndexKey({ key: key.trim(), secret: secret.trim() });
@@ -336,12 +342,13 @@ function PodcastIndexDialog() {
         <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
           The open Podcast Index lists over four million shows. Its API needs a key: sign up for free at
           {' '}<a href="https://api.podcastindex.org/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-accent)' }}>api.podcastindex.org</a>, then paste the key and secret here.
-          They’re stored encrypted with your system keyring.
+          {consent.secure ? ' They’re stored encrypted with your system keyring.' : ''}
         </span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {field('pi-key', 'API key', key, setKey)}
         {field('pi-secret', 'API secret', secret, setSecret, 'password')}
+        {consent.notice}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {s.directory.podcastIndex
