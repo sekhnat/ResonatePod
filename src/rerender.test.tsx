@@ -92,8 +92,15 @@ describe('the command palette', () => {
     view = mount(<CommandPalette />);
     for (let t = 1; t <= 10; t++) move(t);
     expect(view.commits()).toBe(0);
-    change({ query: 'episode 3' });
-    expect(view.container.textContent).toContain('Episode 3');
+    vi.useFakeTimers();
+    try {
+      change({ query: 'episode 3' });
+      expect(view.container.textContent).not.toContain('Episode 3'); // the search waits for a pause in typing
+      act(() => { vi.advanceTimersByTime(100); });
+      expect(view.container.textContent).toContain('Episode 3');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

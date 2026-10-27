@@ -4,6 +4,7 @@ import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSav
 import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
+import { paletteItems, searchIndex, selectPalette } from './components/CommandPalette';
 
 const FEED_URL = 'https://kernelpanic.example/feed.xml';
 const feed = readFileSync('test/fixtures/feed.xml', 'utf8');
@@ -420,6 +421,42 @@ describe('download lifecycle', () => {
     expect(getEp(st(), K42).file).toBe('/new/KP/a.mp3');
     expect(getEp(st(), K41).file).toBe('/other/b.mp3');
     move.mockRestore();
+  });
+});
+
+describe('command palette search', () => {
+  const find = (q: string) => paletteItems(selectPalette(st()), q);
+
+  it('offers the main commands for an empty query', () => {
+    expect(find('').map((i) => i.label)).toContain('Refresh all feeds');
+    expect(find('')).toHaveLength(7);
+  });
+
+  it('lists commands, then shows, then episodes, matching a show’s episodes by its name', () => {
+    expect(find('go to').map((i) => i.label)).toEqual(expect.arrayContaining(['Go to Downloads', 'Go to Queue']));
+    expect(find('wayland').map((i) => i.label)).toEqual(['Wayland, five years on']);
+    expect(find('kernel').map((i) => `${i.label} | ${i.hint}`)).toEqual([
+      'Kernel Panic Hour | Show',
+      'Wayland, five years on | Kernel Panic Hour',
+      'Rolling releases vs. the rest of us | Kernel Panic Hour',
+      expect.stringContaining('| Kernel Panic Hour'),
+    ]);
+    expect(find('nothing matches this')).toEqual([]);
+  });
+
+  it('stops at nine results and acts on what it found', () => {
+    const show = st().shows[0];
+    useStore.setState({ shows: [{ ...show, eps: Array.from({ length: 50 }, (_, i) => ({ ...show.eps[0], guid: `bulk-${i}`, title: `Bulk ${i}` })) }] });
+    expect(find('bulk')).toHaveLength(9);
+    find('bulk 7')[0].run();
+    expect(st().cur).toBe('kernel-panic-hour:bulk-7');
+  });
+
+  it('builds its index once per list of shows', () => {
+    const index = searchIndex(st().shows);
+    expect(searchIndex(st().shows)).toBe(index);
+    useStore.setState({ shows: [...st().shows] });
+    expect(searchIndex(st().shows)).not.toBe(index);
   });
 });
 

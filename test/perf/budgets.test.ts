@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parseFeed } from '../../shared/feed';
 import { inboxKeys, rowsFor, totalUnplayed } from '../../src/model';
 import { epKey } from '../../src/data';
+import { paletteItems, searchIndex, selectPalette } from '../../src/components/CommandPalette';
 import { setPlayhead } from '../../src/playhead';
 import { ShowScreen } from '../../src/screens/ShowScreen';
 import { useStore } from '../../src/store';
@@ -20,6 +21,8 @@ const BUDGET_MS = {
   totalUnplayed: 50, // when recomputed; the sidebar asks on every render and now almost always hits the cache
   stringify: 400, // the whole library; Phase 3 stops doing this on every save
   parseFeed: 120, // 2,000 episodes, ~4.6 MB
+  paletteIndex: 25, // building the search index over 40,000 episodes, once for each list of shows (3 ms here)
+  paletteSearch: 10, // (1 ms here) a keystroke's search over all of it, for a query that matches nothing (the worst case)
   showPageUpdate: 30, // the 2,000-episode show page re-sorting and redrawing after an episode's state changes; the goal is a frame (16), 9 here, and 21 before the order was built from light records
   showPageTick: 4, // the same page for one playback tick plus one download progress event
 };
@@ -77,6 +80,12 @@ describe.skipIf(!process.env.PERF)('performance budgets', () => {
         useStore.setState({ dl: [{ key: K, received: n * 100, total: 1e6, speed: 100 }] });
       }), 20);
     });
+  });
+
+  it('indexes every episode for the command palette', () => within('paletteIndex', () => searchIndex(lib.shows.slice()), 3));
+  it('searches the palette index', () => {
+    searchIndex(lib.shows);
+    within('paletteSearch', () => paletteItems(selectPalette(s), 'zzzz'));
   });
 
   it('prints the numbers', () => {
