@@ -10,6 +10,7 @@ import { readEmbeddedChapters } from '../shared/embedded';
 import { DownloadManager, diskUsage, expandHome, moveFiles } from './downloads';
 import { DownloadRoots, rootsFromLibrary } from './paths';
 import { hopHeaders, originOf } from './hops';
+import { checkRequest } from './bridge';
 import { LibraryDb, openLibrary } from './db/library';
 import { importLegacyLibrary } from './db/legacy';
 
@@ -408,7 +409,8 @@ function registerIpc() {
   ipcMain.on('env', (e) => { e.returnValue = { desktop: desktop(), hostname: hostname() }; });
 
   ipcMain.handle('http', async (_e, url: string, req: HttpRequest = {}): Promise<HttpResponse> => {
-    const res = await request(url, req);
+    checkRequest(url, req);
+    const res = await request(url, req ?? {}); // a null from the page is as good as nothing
     return {
       status: res.status, text: res.status === 304 ? '' : res.text,
       etag: res.header('etag'), lastModified: res.header('last-modified'),
