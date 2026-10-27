@@ -3,7 +3,9 @@
 import { Profiler, act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CommandPalette } from './components/CommandPalette';
 import { HeaderBar } from './components/HeaderBar';
+import { NowPlayingPanel } from './components/NowPlaying';
 import { PlayerBar } from './components/PlayerBar';
 import { Sidebar } from './components/Sidebar';
 import { useStore } from './store';
@@ -51,6 +53,32 @@ describe('the player bar', () => {
     expect(view.container.textContent).toContain('1:40');
     change({ playing: true });
     expect(ghost.renders).toBeGreaterThan(0);
+  });
+});
+
+describe('the now playing panel', () => {
+  it('redraws its header and artwork for episode changes, and its chapters when the chapter changes', () => {
+    change({ meta: { [K]: { chapters: [{ t: 'Opening', at: 0 }, { t: 'Second half', at: 50 }] } } });
+    view = mount(<NowPlayingPanel />);
+    expect(view.container.textContent).toContain('1 of 2');
+    ghost.renders = 0;
+    for (let t = 1; t <= 10; t++) change({ pos: t * 4 }); // up to 40 s, still in the first chapter
+    expect(ghost.renders).toBe(0);
+    expect(view.commits()).toBe(0);
+    change({ pos: 60 });
+    expect(view.container.textContent).toContain('2 of 2');
+    expect(ghost.renders).toBe(0); // the chapter list redrew, the panel header did not
+  });
+});
+
+describe('the command palette', () => {
+  it('stays put while playback advances, and follows the query', () => {
+    change({ palette: true, query: '' });
+    view = mount(<CommandPalette />);
+    for (let t = 1; t <= 10; t++) change({ pos: t });
+    expect(view.commits()).toBe(0);
+    change({ query: 'episode 3' });
+    expect(view.container.textContent).toContain('Episode 3');
   });
 });
 
