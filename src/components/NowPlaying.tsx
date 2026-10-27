@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { art, fmt, mono, type EpisodeInfo } from '../data';
+import { art, fmt, lastAtOrBefore, mono, type EpisodeInfo } from '../data';
 import { currentChapter, epInfo, sleepLabel, trimOn, useStore } from '../store';
 import { useChapters, useCurrent } from '../current';
 import { usePlayhead } from '../playhead';
@@ -13,7 +13,7 @@ function useTranscript(cur: EpisodeInfo | null) {
   const tr = meta?.transcript ?? null;
   const timed = meta?.transcriptTimed !== false;
   // The line playback is at: a number that changes every few seconds, so this redraws then rather than on every update.
-  const ti = usePlayhead((p) => (tr && timed ? Math.max(0, tr.reduce((a, l, i) => (l.at <= p ? i : a), 0)) : 0));
+  const ti = usePlayhead((p) => (tr && timed ? lastAtOrBefore(tr, p, (l) => l.at) : 0));
   const loading = !!cur?.ep.transcriptUrl && meta?.transcript === undefined;
   let lines: { who: string; text: string; at: number; current: boolean }[] = [];
   if (tr && !timed) {
