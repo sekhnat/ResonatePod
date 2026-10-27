@@ -64,6 +64,18 @@ describe('parseFeed', () => {
     expect(() => parseFeed(xml.slice(0, -3))).toThrow('not valid XML');
   });
 
+  it('parses a feed whose DOCTYPE defines nested entities quickly, with nothing inflated', () => {
+    // Ten levels of ten: a parser that expanded &lol9; would produce ten billion characters. (Both the old and the new
+    // fast-xml-parser leave this form alone, so this is a smoke test, not proof of the advisories' fixes.)
+    const levels = Array.from({ length: 9 }, (_, i) => `<!ENTITY lol${i + 1} "${`&lol${i || ''};`.repeat(10)}">`).join('');
+    const bomb = `<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol">${levels}]><rss version="2.0"><channel><title>&lol9;</title><description>x</description></channel></rss>`;
+    const started = performance.now();
+    let title: string | undefined;
+    try { title = parseFeed(bomb).title; } catch { /* refusing it is fine too */ }
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect((title ?? '').length).toBeLessThan(1_000_000);
+  });
+
   it('accepts whitespace and comments after the closing tag', () => {
     expect(parseFeed(`${xml}\n\n<!-- cached by the CDN -->\n`).episodes).toHaveLength(f.episodes.length);
   });
