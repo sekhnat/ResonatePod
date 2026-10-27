@@ -21,6 +21,7 @@
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
     "@phosphor-icons/web": "^2.1.1",
+    "@tanstack/react-virtual": "^3.14.13",
     "fast-xml-parser": "^4.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
