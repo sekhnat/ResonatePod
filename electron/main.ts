@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { execFile } from 'node:child_process';
-import { createReadStream, promises as fs, readFileSync, writeFileSync } from 'node:fs';
+import { createReadStream, promises as fs, readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -12,6 +12,7 @@ import { DownloadRoots, rootsFromLibrary } from './paths';
 import { hopHeaders, originOf } from './hops';
 import { checkRequest } from './bridge';
 import { secretStatus } from './secrets';
+import { readJsonFile, updateJsonFile, writeFileAtomicSync } from './files';
 import { LibraryDb, openLibrary } from './db/library';
 import { importLegacyLibrary } from './db/legacy';
 
@@ -132,7 +133,7 @@ function saveWinState() {
   if (!win || win.isDestroyed()) return;
   const b = win.getNormalBounds();
   const st: WinState = { ...b, maximized: win.isMaximized() };
-  try { writeFileSync(dataFile('window.json'), JSON.stringify(st)); } catch { /* not fatal */ }
+  try { writeFileAtomicSync(dataFile('window.json'), JSON.stringify(st)); } catch { /* not fatal */ }
 }
 
 function createWindow() {
@@ -267,14 +268,17 @@ function createTray() {
 // ---------- IPC ----------
 
 function readSecrets(): Promise<Record<string, string>> {
-  return fs.readFile(dataFile('secrets.json'), 'utf8').then(JSON.parse, () => ({}));
+  return readJsonFile<Record<string, string>>(dataFile('secrets.json'), {});
 }
 const decrypt = (v: string) => (v.startsWith('enc:') ? safeStorage.decryptString(Buffer.from(v.slice(4), 'base64')) : v.slice(6));
-async function writeSecret(key: string, value: string | null) {
-  const all = await readSecrets();
-  if (value == null) delete all[key];
-  else all[key] = safeStorage.isEncryptionAvailable() ? 'enc:' + safeStorage.encryptString(value).toString('base64') : 'plain:' + value;
-  await fs.writeFile(dataFile('secrets.json'), JSON.stringify(all), { mode: 0o600 });
+/** One change at a time, whole-file, so two logins saved together can't lose one of them. */
+function writeSecret(key: string, value: string | null) {
+  return updateJsonFile<Record<string, string>>(dataFile('secrets.json'), {}, (all) => {
+    const next = { ...all };
+    if (value == null) delete next[key];
+    else next[key] = safeStorage.isEncryptionAvailable() ? 'enc:' + safeStorage.encryptString(value).toString('base64') : 'plain:' + value;
+    return next;
+  }, 0o600);
 }
 async function loadCredentials() {
   for (const [k, v] of Object.entries(await readSecrets())) {
