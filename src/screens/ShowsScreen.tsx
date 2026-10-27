@@ -23,7 +23,7 @@ export function ShowsScreen() {
           const n = unplayedFor(s, x.id);
           return (
             <button key={x.id} className="show-tile" onClick={() => s.openShow(x.id)}>
-              <Art bg={art(x.hue)} mono={mono(x.title)} img={x.imageUrl} size="100%" font={36} weight={500} radius="var(--radius-md)" className="tile-art" style={{ height: 'auto' }}>
+              <Art bg={art(x.hue)} mono={mono(x.title)} img={x.imageUrl} size="100%" font={36} weight={500} radius="var(--radius-md)" className="tile-art">
                 <span className="h-ring tile-ring" />
                 {n > 0 && <span className="tag tag-accent tile-new">{n} new</span>}
               </Art>

@@ -110,7 +110,7 @@ export function NowPlayingPanel() {
       </div>
       {s.video && !s.npFull ? <VideoView /> : (
         <button className="np-cover-btn" onClick={() => s.openShow(cur.show.id)} title={`Open ${cur.show.title}`}>
-          <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={72} weight={500} radius="var(--radius-lg)" className="np-cover" style={{ height: 'auto' }} />
+          <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={72} weight={500} radius="var(--radius-lg)" className="np-cover" />
         </button>
       )}
       <div className="np-meta">
@@ -142,7 +142,7 @@ export function NowPlayingFull() {
           </button>
         </div>
         {s.video ? <VideoView glow /> : (
-          <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={120} weight={500} radius="var(--radius-lg)" className="np-cover big" style={{ height: 'auto' }} />
+          <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={img} size="100%" font={120} weight={500} radius="var(--radius-lg)" className="np-cover big" />
         )}
         <div className="np-full-meta">
           <span className="np-full-title">{cur.title}</span>

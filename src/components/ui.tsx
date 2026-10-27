@@ -12,14 +12,14 @@ export function SortSelect({ value, onPick }: { value: Sort; onPick: (v: Sort) =
   );
 }
 
-/** Artwork tile: the feed's image, or a monogram placeholder when there is none (or it fails to load). */
+/** Artwork tile: the feed's image, or a monogram placeholder when there is none (or it fails to load). A size of "100%" fills its container's width, and the shape is up to the caller's class (an aspect ratio). */
 export function Art({ bg, mono, img, size, font, radius = 6, weight = 600, className, style, children }: {
   bg: string; mono: string; img?: string; size: number | string; font: number; radius?: number | string; weight?: number; className?: string; style?: CSSProperties; children?: ReactNode;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   const showImg = img && failed !== img;
   return (
-    <span className={className ? `art ${className}` : 'art'} style={{ width: size, height: size, borderRadius: radius, background: bg, fontSize: font, fontWeight: weight, ...style }}>
+    <span className={className ? `art ${className}` : 'art'} style={{ width: size, height: size === '100%' ? 'auto' : size, borderRadius: radius, background: bg, fontSize: font, fontWeight: weight, ...style }}>
       {showImg ? <img className="art-img" src={img} alt="" loading="lazy" onError={() => setFailed(img)} /> : mono}
       {children}
     </span>
