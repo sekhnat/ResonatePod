@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, safeStorage, screen, shell, Tray } from 'electron';
+import { app, BrowserWindow, crashReporter, dialog, ipcMain, Menu, nativeImage, net, protocol, safeStorage, screen, shell, Tray } from 'electron';
 import { execFile } from 'node:child_process';
 import { createReadStream, promises as fs, readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
@@ -13,6 +13,7 @@ import { hopHeaders, originOf } from './hops';
 import { checkRequest } from './bridge';
 import { secretStatus } from './secrets';
 import { readJsonFile, updateJsonFile, writeFileAtomicSync } from './files';
+import { createLogger, type Logger } from './log';
 import { LibraryDb, openLibrary } from './db/library';
 import { importLegacyLibrary } from './db/legacy';
 
@@ -20,6 +21,21 @@ const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 const USER_DATA = process.env.RESONATE_USER_DATA;
 if (USER_DATA) app.setPath('userData', USER_DATA);
 app.setName('Resonate');
+
+// What goes wrong is written to <config>/logs/main.log (rotated) as well as to the console, so a bug report can include it.
+let log: Logger | null = null;
+function startLogging() {
+  log = createLogger(app.getPath('logs'));
+  for (const level of ['log', 'info', 'warn', 'error'] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => { original(...args); (level === 'log' || level === 'info' ? log!.info : level === 'warn' ? log!.warn : log!.error)(...args); };
+  }
+  process.on('uncaughtException', (err) => { log!.error('uncaught exception', err); });
+  process.on('unhandledRejection', (reason) => { log!.error('unhandled rejection', reason); });
+  // Crash dumps stay on this computer: nothing is ever sent anywhere.
+  crashReporter.start({ uploadToServer: false, compress: true });
+  log.info(`Resonate ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform} ${process.arch})`);
+}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'resonate-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true, bypassCSP: true } },
@@ -514,6 +530,11 @@ function registerIpc() {
     });
   }));
 
+  // Errors the page didn't handle, for the log; a flood from a loop is cut off by the file's rotation.
+  ipcMain.on('log:renderer', (_e, message: unknown, detail: unknown) => {
+    log?.error('renderer:', String(message).slice(0, 2000), detail ? String(detail).slice(0, 4000) : '');
+  });
+  ipcMain.handle('log:open', () => shell.openPath(app.getPath('logs')));
   ipcMain.handle('secret:status', () => secretStatus(safeStorage));
   ipcMain.handle('secret:get', async (_e, key: string) => {
     const v = (await readSecrets())[key];
@@ -536,6 +557,7 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', showWindow);
   app.whenReady().then(async () => {
+    startLogging();
     await loadCredentials();
     await roots.load(() => fs.readFile(dataFile('library.json'), 'utf8').then(rootsFromLibrary, () => []));
     const opened = openLibrary(dataFile('library.db'));

@@ -129,6 +129,7 @@ Everything lives in `~/.config/Resonate/`:
 | `window.json` | Window size and position |
 | `secrets.json` | Encrypted sync password, feed logins and Podcast Index key |
 | `main-settings.json` | The download folders Resonate may read and write |
+| `logs/main.log` | What went wrong, if anything (rotated, three files of up to 1 MB); About → Open logs folder. Crash dumps stay on this computer |
 | `library.json.bak` | Only if you used an earlier version: your library as it was before it moved into `library.db` |
 
 Only what changes is written to the library, a moment after it changes. The playback position is

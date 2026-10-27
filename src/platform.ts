@@ -52,6 +52,10 @@ export interface Platform {
   openOpml(): Promise<{ name: string; text: string } | null>;
   saveOpml(name: string, text: string): Promise<string | null>;
   isMetered(): Promise<boolean | null>;
+  /** Records an error the page didn't handle, in the log file (the console in the browser build). */
+  logError(message: string, detail?: string): void;
+  /** Opens the folder the log files are in. */
+  openLogs(): void;
   /** Whether a password saved now would be protected. */
   secretStatus(): Promise<SecretStatus>;
   getSecret(key: string): Promise<string | null>;
@@ -112,6 +116,8 @@ function electronPlatform(api: ResonateApi): Platform {
     openOpml: api.openOpml,
     saveOpml: api.saveOpml,
     isMetered: api.isMetered,
+    logError: api.logError,
+    openLogs: () => { void api.openLogs(); },
     secretStatus: api.secretStatus,
     getSecret: api.getSecret,
     setSecret: api.setSecret,
@@ -171,6 +177,8 @@ function browserPlatform(): Platform {
     }),
     saveOpml: async (name, text) => { downloadText(name, text); return name; },
     isMetered: async () => null,
+    logError: (message, detail) => console.error(message, detail ?? ''),
+    openLogs() {},
     secretStatus: async () => ({ secure: false, backend: 'browser' }), // localStorage, in the clear
     getSecret: async (k) => LS.get(`resonate-secret-${k}`),
     setSecret: async (k, v) => LS.set(`resonate-secret-${k}`, v),

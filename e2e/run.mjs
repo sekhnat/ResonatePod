@@ -606,6 +606,22 @@ try {
     await page.getByText(/Couldn’t add that feed:.*response too large/).waitFor({ timeout: 15000 });
   });
 
+  await step('what goes wrong is written to the log file, and the About box points to it', async () => {
+    const logFile = path.join(home, 'config', 'logs', 'main.log');
+    const logged = () => readFileSync(logFile, 'utf8');
+    assert.match(logged(), /Resonate \d+\.\d+\.\d+ started \(Electron/);
+    await page.evaluate(() => {
+      setTimeout(() => { throw new Error('e2e uncaught error'); });
+      Promise.reject(new Error('e2e unhandled rejection'));
+    });
+    await waitFor('the page’s errors to reach the log', () => /renderer: .*e2e uncaught error/.test(logged()) && /renderer: unhandled rejection: e2e unhandled rejection/.test(logged()), 5000);
+    errors.splice(0, errors.length, ...errors.filter((e) => !/e2e (uncaught error|unhandled rejection)/.test(e)));
+    await page.getByTitle('Main menu').click();
+    await page.getByText('About Resonate', { exact: true }).click();
+    await page.getByRole('button', { name: 'Open logs folder' }).waitFor();
+    await page.keyboard.press('Escape');
+  });
+
   await step('the page refuses script it did not ship with', async () => {
     // (page.evaluate itself is exempt from the policy, so eval isn't a fair probe; loading code the page didn't ship is.)
     const outcome = await page.evaluate(async () => {
