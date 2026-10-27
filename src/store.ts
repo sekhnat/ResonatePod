@@ -224,12 +224,43 @@ const GB = 1024 ** 3;
 
 export const findShow = (s: Pick<Data, 'shows'>, id: string) => s.shows.find((x) => x.id === id);
 
+// Lookups by key are indexed, and each index lives as long as the array it was built from, so it is rebuilt
+// only when that array is replaced (state is never mutated in place).
+const showsById = new WeakMap<Show[], Map<string, Show>>();
+const epsByGuid = new WeakMap<Episode[], Map<string, Episode>>();
+// An episode's info is built once; the date label ("Today", "Yesterday") is the only part that ages, so it is keyed by the day.
+const infoCache = new WeakMap<Episode, { show: Show; day: string; info: EpisodeInfo }>();
+let dayStamp = '';
+let dayChecked = 0;
+const today = () => {
+  const now = Date.now();
+  if (Math.abs(now - dayChecked) > 30_000) { dayChecked = now; dayStamp = new Date(now).toDateString(); } // either way: the clock can be set back
+  return dayStamp;
+};
+/** A map from `key(item)` to the first item with it, like `find` would give. */
+const indexBy = <T,>(items: T[], key: (x: T) => string) => {
+  const m = new Map<string, T>();
+  for (const x of items) { const k = key(x); if (!m.has(k)) m.set(k, x); }
+  return m;
+};
+
 export const epInfo = (s: Pick<Data, 'shows'>, key: string | null): EpisodeInfo | null => {
   if (!key) return null;
   const [id, guid] = parseKey(key);
-  const show = findShow(s, id);
-  const ep = show?.eps.find((e) => e.guid === guid);
-  return show && ep ? episodeInfo(show, ep) : null;
+  let shows = showsById.get(s.shows);
+  if (!shows) showsById.set(s.shows, (shows = indexBy(s.shows, (x) => x.id)));
+  const show = shows.get(id);
+  if (!show) return null;
+  let byGuid = epsByGuid.get(show.eps);
+  if (!byGuid) epsByGuid.set(show.eps, (byGuid = indexBy(show.eps, (e) => e.guid)));
+  const ep = byGuid.get(guid);
+  if (!ep) return null;
+  const day = today();
+  const hit = infoCache.get(ep);
+  if (hit && hit.show === show && hit.day === day) return hit.info;
+  const info = episodeInfo(show, ep);
+  infoCache.set(ep, { show, day, info });
+  return info;
 };
 
 export const getEp = (s: Pick<Data, 'eps'>, key: string): EpState => s.eps[key] ?? { played: false, pos: 0, inbox: false };

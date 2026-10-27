@@ -394,6 +394,46 @@ describe('download lifecycle', () => {
   });
 });
 
+describe('epInfo', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('finds episodes by key, and builds each one’s info only once', () => {
+    const a = epInfo(st(), K42)!;
+    expect(a).toMatchObject({ key: K42, title: 'Wayland, five years on' });
+    expect(epInfo(st(), K42)).toBe(a);
+    expect(epInfo(st(), 'kernel-panic-hour:nope')).toBeNull();
+    expect(epInfo(st(), 'nope:kp:ep:42')).toBeNull();
+    expect(epInfo(st(), null)).toBeNull();
+  });
+
+  it('follows replaced episodes and shows rather than serving old ones', () => {
+    const before = epInfo(st(), K42)!;
+    // Same episode objects under a new show object: the info must point at the new show.
+    useStore.setState({ shows: st().shows.map((s) => ({ ...s, title: 'Renamed' })) });
+    expect(epInfo(st(), K42)!.show.title).toBe('Renamed');
+    expect(epInfo(st(), K42)!.ep).toBe(before.ep);
+    // A replaced episode object (the player measured a new duration).
+    useStore.setState({ shows: st().shows.map((s) => ({ ...s, eps: s.eps.map((e) => (e.guid === 'kp:ep:42' ? { ...e, duration: 999 } : e)) })) });
+    expect(epInfo(st(), K42)!.dur).toBe(999);
+  });
+
+  it('returns the first episode when a feed repeats a guid, as find did', () => {
+    const show = st().shows[0];
+    useStore.setState({ shows: [{ ...show, eps: [{ ...show.eps[0], title: 'first' }, { ...show.eps[0], title: 'second' }] }] });
+    expect(epInfo(st(), K42)!.title).toBe('first');
+  });
+
+  it('moves "Today" on when the day changes', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 26, 12));
+    const ep = st().shows[0].eps[0];
+    useStore.setState({ shows: [{ ...st().shows[0], eps: [{ ...ep, pubDate: Date.now() }] }] });
+    expect(epInfo(st(), K42)!.date).toBe('Today');
+    vi.setSystemTime(new Date(2026, 9, 27, 12));
+    expect(epInfo(st(), K42)!.date).toBe('Yesterday');
+  });
+});
+
 describe('persistence', () => {
   it('skips writes when only playback position, progress or UI state change', async () => {
     await flushSave();

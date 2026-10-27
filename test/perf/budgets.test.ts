@@ -8,7 +8,7 @@ import { makeFeedXml, makeLibrary, measure, stateWith } from './fixture';
 
 // Set at about three times what each took when they were added (58, 7, 15, 125 and 31 ms on a laptop).
 const BUDGET_MS = {
-  rowsFor: 200, // one 2,000-episode show; the goal is 16 (a frame)
+  rowsFor: 16, // one 2,000-episode show: a frame; it took 58 ms before epInfo was indexed
   inboxKeys: 25, // goal 5
   totalUnplayed: 50, // the sidebar runs this on every render
   stringify: 400, // the whole library; Phase 3 stops doing this on every save
