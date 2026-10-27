@@ -1,0 +1,17 @@
+# Weekly update PRs, so a vulnerable or outdated dependency shows up as a change to review instead of staying unnoticed
+# (Electron in particular: each major brings Chromium security fixes). Minor and patch updates arrive together.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions:
+        patterns: ['*']
