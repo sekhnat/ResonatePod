@@ -1,34 +1,36 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
-import { art, fmt, mono } from '../data';
-import { chaptersOf, currentChapter, epInfo, sleepLabel, trimOn, useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
+import { art, fmt, mono, type EpisodeInfo } from '../data';
+import { currentChapter, epInfo, sleepLabel, trimOn, useStore } from '../store';
+import { useChapters, useCurrent } from '../current';
+import { usePlayhead } from '../playhead';
 import { attachVideo, detachVideo } from '../audio/engine';
 import { Art, GhostIcon, sectionLabel } from './ui';
 
-function useNowPlaying() {
-  const s = useStore();
-  const cur = epInfo(s, s.cur);
-  if (!cur) return null;
-  const ch = chaptersOf(s, cur);
-  const ci = currentChapter(ch, s.pos);
-  const meta = s.meta[cur.key];
+/** What the transcript shows for the playing episode: three lines around the current one, or all of an untimed one. */
+function useTranscript(cur: EpisodeInfo | null) {
+  const meta = useStore((s) => (cur ? s.meta[cur.key] : undefined));
   const tr = meta?.transcript ?? null;
   const timed = meta?.transcriptTimed !== false;
-  const loading = !!cur.ep.transcriptUrl && meta?.transcript === undefined;
+  // The line playback is at: a number that changes every few seconds, so this redraws then rather than on every update.
+  const ti = usePlayhead((p) => (tr && timed ? Math.max(0, tr.reduce((a, l, i) => (l.at <= p ? i : a), 0)) : 0));
+  const loading = !!cur?.ep.transcriptUrl && meta?.transcript === undefined;
   let lines: { who: string; text: string; at: number; current: boolean }[] = [];
   if (tr && !timed) {
     lines = tr.map((l) => ({ ...l, current: true }));
   } else if (tr) {
-    const ti = Math.max(0, tr.reduce((a, l, i) => (l.at <= s.pos ? i : a), 0));
     const from = Math.max(0, Math.min(ti - 1, tr.length - 3));
     lines = tr.slice(from, from + 3).map((l) => ({ ...l, current: l === tr[ti] }));
   }
-  return { s, cur, ch, ci, lines, timed, hasTranscript: !!tr, loading, img: cur.ep.imageUrl ?? cur.show.imageUrl };
+  return { lines, timed, hasTranscript: !!tr, loading };
 }
 
 function Chapters({ big }: { big?: boolean }) {
-  const np = useNowPlaying();
-  if (!np) return null;
-  const { s, ch, ci } = np;
+  const cur = useCurrent();
+  const ch = useChapters();
+  const ci = usePlayhead((p) => currentChapter(ch, p)); // the chapter number, so the list redraws when the chapter changes
+  const seek = useStore((s) => s.seek);
+  if (!cur) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: big ? 8 : 6 }}>
@@ -36,7 +38,7 @@ function Chapters({ big }: { big?: boolean }) {
         <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{ci + 1} of {ch.length}</span>
       </div>
       {ch.map((c, i) => (
-        <button key={`${c.at}-${c.t}`} className="h-n900" onClick={() => s.seek(c.at + 0.01)}
+        <button key={`${c.at}-${c.t}`} className="h-n900" onClick={() => seek(c.at + 0.01)}
           style={{ display: 'flex', gap: big ? 14 : 10, alignItems: 'center', padding: big ? '9px 10px' : '6px 8px', margin: big ? '0 -10px' : '0 -8px', border: 'none', borderRadius: big ? 'var(--radius-md)' : 6, background: i === ci ? 'color-mix(in srgb,var(--color-accent-800) 60%,transparent)' : 'transparent', color: i === ci ? 'var(--color-accent-100)' : i < ci ? 'var(--color-neutral-500)' : 'var(--color-neutral-200)', fontSize: big ? 14 : 12.5, textAlign: 'left', cursor: 'pointer' }}>
           <span style={{ width: big ? 52 : 40, fontVariantNumeric: 'tabular-nums', color: 'var(--color-neutral-500)', fontSize: big ? 12.5 : 11.5 }}>{fmt(c.at)}</span>
           <span style={{ flex: 1 }}>{c.t}</span>
@@ -48,12 +50,13 @@ function Chapters({ big }: { big?: boolean }) {
 }
 
 function Transcript({ big }: { big?: boolean }) {
-  const np = useNowPlaying();
-  if (!np) return null;
-  const { s, hasTranscript, loading, timed } = np;
+  const cur = useCurrent();
+  const { lines: all, hasTranscript, loading, timed } = useTranscript(cur);
+  const { seek, set } = useStore(useShallow((s) => ({ seek: s.seek, set: s.set })));
+  if (!cur) return null;
   // Untimed (HTML or plain-text) transcripts can't follow playback: the panel shows
   // the opening paragraphs, the full view all of them.
-  const lines = timed ? np.lines : big ? np.lines : np.lines.slice(0, 3);
+  const lines = timed ? all : big ? all : all.slice(0, 3);
   const label = hasTranscript ? (timed ? (big ? 'From feed · follows playback' : 'From feed') : 'From feed · not synced to playback') : loading ? 'Loading…' : 'Not available';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: big ? 12 : 8, maxWidth: big ? 620 : undefined }}>
@@ -62,13 +65,13 @@ function Transcript({ big }: { big?: boolean }) {
         <span style={{ fontSize: 11, color: 'var(--color-neutral-500)', textAlign: 'right' }}>{label}</span>
       </div>
       {lines.map((l, i) => (
-        <p key={`${l.at}-${i}`} onClick={timed ? () => s.seek(l.at) : undefined} title={timed ? `Jump to ${fmt(l.at)}` : undefined}
+        <p key={`${l.at}-${i}`} onClick={timed ? () => seek(l.at) : undefined} title={timed ? `Jump to ${fmt(l.at)}` : undefined}
           style={{ margin: 0, fontSize: big ? 17 : 13, lineHeight: big ? 1.55 : 1.5, color: l.current ? 'var(--color-text)' : 'var(--color-neutral-500)', textWrap: 'pretty', cursor: timed ? 'pointer' : 'auto', transition: 'color .3s' } as CSSProperties}>
           {l.who && <span style={{ fontSize: big ? 12 : 11, color: 'var(--color-neutral-500)', marginRight: big ? 8 : 6 }}>{l.who}</span>}{l.text}
         </p>
       ))}
-      {!timed && !big && np.lines.length > 3 && (
-        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 12, padding: '2px 0' }} onClick={() => s.set({ npFull: true })}>Read the full transcript</button>
+      {!timed && !big && all.length > 3 && (
+        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 12, padding: '2px 0' }} onClick={() => set({ npFull: true })}>Read the full transcript</button>
       )}
       {!hasTranscript && !loading && <p style={{ margin: 0, fontSize: big ? 14 : 12.5, color: 'var(--color-neutral-500)' }}>This episode’s feed doesn’t include a transcript.</p>}
     </div>
@@ -95,9 +98,10 @@ function VideoView({ style }: { style?: CSSProperties }) {
 }
 
 export function NowPlayingPanel() {
-  const np = useNowPlaying();
-  if (!np) return null;
-  const { s, cur, img } = np;
+  const cur = useCurrent();
+  const s = useStore(useShallow((s) => ({ video: s.video, npFull: s.npFull, set: s.set, openShow: s.openShow })));
+  if (!cur) return null;
+  const img = cur.ep.imageUrl ?? cur.show.imageUrl;
   return (
     <aside aria-label="Now playing" style={{ width: 340, flex: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', padding: 'var(--space-6)', overflow: 'auto', background: 'linear-gradient(180deg,color-mix(in srgb,var(--color-accent-900) 70%,var(--color-bg)),var(--color-bg) 60%)', boxShadow: '-1px 0 0 var(--color-neutral-900)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -123,10 +127,14 @@ export function NowPlayingPanel() {
 }
 
 export function NowPlayingFull() {
-  const np = useNowPlaying();
-  if (!np) return null;
-  const { s, cur, img } = np;
-  const trim = trimOn(s, cur.show.id);
+  const cur = useCurrent();
+  const s = useStore(useShallow((s) => {
+    const info = epInfo(s, s.cur);
+    return { video: s.video, speed: s.speed, saved: s.trimSaved + s.trimPending, sleep: s.sleep, trim: !!info && trimOn(s, info.show.id), set: s.set };
+  }));
+  if (!cur) return null;
+  const img = cur.ep.imageUrl ?? cur.show.imageUrl;
+  const { trim } = s;
   return (
     <div role="dialog" aria-label="Now playing" style={{ position: 'absolute', inset: 0, zIndex: 5, display: 'grid', gridTemplateColumns: 'minmax(0,420px) minmax(0,1fr)', gap: 56, padding: '44px 56px', overflow: 'auto', background: 'radial-gradient(120% 90% at 15% 20%,color-mix(in srgb,var(--color-accent-900) 85%,var(--color-bg)),var(--color-bg) 70%)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -145,7 +153,7 @@ export function NowPlayingFull() {
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <span className="tag tag-accent">{s.speed}× speed</span>
-          <span className="tag tag-neutral">{trim ? `Silence trim on · saved ${fmt(s.trimSaved + s.trimPending)}` : 'Silence trim off'}</span>
+          <span className="tag tag-neutral">{trim ? `Silence trim on · saved ${fmt(s.saved)}` : 'Silence trim off'}</span>
           <span className="tag tag-neutral">Sleep: {sleepLabel(s.sleep).toLowerCase()}</span>
         </div>
       </div>

@@ -1,10 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore, type State } from '../store';
 import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
 
 export interface PalItem { label: string; hint: string; icon: string; run: () => void }
 
-export function paletteItems(s: State): PalItem[] {
+/** What the palette reads from the store (and nothing it doesn't, so playback ticks don't redraw it). */
+const palette = (s: State) => ({
+  query: s.query, playing: s.playing, shows: s.shows, dlPaused: s.dlPaused, syncServer: s.sync.server,
+  set: s.set, go: s.go, togglePlay: s.togglePlay, refresh: s.refresh, setSpeed: s.setSpeed, setSleep: s.setSleep,
+  toggleDlPause: s.toggleDlPause, openShow: s.openShow, play: s.play, runSync: s.runSync,
+});
+export type PaletteState = ReturnType<typeof palette>;
+
+export function paletteItems(s: PaletteState): PalItem[] {
   const q = s.query.trim().toLowerCase();
   const cmds: PalItem[] = [
     { label: s.playing ? 'Pause' : 'Play', hint: 'Space', icon: 'ph ph-play-pause', run: () => { s.set({ palette: false }); s.togglePlay(); } },
@@ -29,12 +38,12 @@ export function paletteItems(s: State): PalItem[] {
   const shows = s.shows.map((x) => ({ label: x.title, hint: 'Show', icon: 'ph ph-microphone', run: () => s.openShow(x.id) }));
   const eps: PalItem[] = [];
   s.shows.forEach((x) => x.eps.forEach((e) => eps.push({ label: e.title, hint: x.title, icon: 'ph ph-play-circle', run: () => s.play(`${x.id}:${e.guid}`) })));
-  if (s.sync.server) extra.push({ label: 'Sync now', hint: '', icon: 'ph ph-arrows-left-right', run: () => { s.set({ palette: false }); void s.runSync(); } });
+  if (s.syncServer) extra.push({ label: 'Sync now', hint: '', icon: 'ph ph-arrows-left-right', run: () => { s.set({ palette: false }); void s.runSync(); } });
   return [...cmds, ...extra, ...shows, ...eps].filter((x) => x.label.toLowerCase().includes(q) || x.hint.toLowerCase().includes(q)).slice(0, 9);
 }
 
 export function CommandPalette() {
-  const s = useStore();
+  const s = useStore(useShallow(palette));
   const ref = useRef<HTMLInputElement>(null);
   const [sel, setSel] = useState(0);
   const items = paletteItems(s);

@@ -1,7 +1,8 @@
 import { useRef, type CSSProperties } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { art, fmt, mono, type Chapter } from '../data';
-import { chaptersOf, currentChapter, epInfo, skipAmounts, useStore, type Sleep } from '../store';
+import { currentChapter, skipAmounts, useStore, type Sleep } from '../store';
+import { useChapters, useCurrent } from '../current';
 import { usePlayhead } from '../playhead';
 import { MenuItem } from './HeaderBar';
 import { Art, GhostIcon, useOutside } from './ui';
@@ -23,14 +24,6 @@ export function useScrub(onFrac: (f: number) => void) {
   };
   return { ref, onPointerDown };
 }
-
-const NO_CHAPTERS: Chapter[] = [];
-
-/** The episode playing now. The same object until that episode or its show changes, so it is cheap to select. */
-export const useCurrent = () => useStore((s) => epInfo(s, s.cur));
-
-/** Its chapters: the same array until they load or the episode changes. */
-export const useChapters = () => useStore((s) => { const cur = epInfo(s, s.cur); return cur ? chaptersOf(s, cur) : NO_CHAPTERS; });
 
 export function SeekBar({ height = 14, thumb = true, ticks = true, glow = true, style }: { height?: number; thumb?: boolean; ticks?: boolean; glow?: boolean; style?: CSSProperties }) {
   const cur = useCurrent();
