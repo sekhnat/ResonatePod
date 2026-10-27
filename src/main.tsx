@@ -9,7 +9,9 @@ import './styles/nocturne.css';
 import './styles/app.css';
 import App from './App';
 import { hydrate } from './persistence';
+import { reportUncaughtErrors } from './error-reporting';
 
+reportUncaughtErrors();
 void hydrate();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
