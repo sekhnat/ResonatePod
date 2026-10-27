@@ -1,6 +1,6 @@
 import { shallow } from 'zustand/shallow';
 import { downloadsBlocked, epInfo, getEp, sleepLabel, useStore, type State } from './store';
-import { flushSave } from './persistence';
+import { flushEpisodeState, flushSave } from './persistence';
 import { dlSummary } from './model';
 import { platform } from './platform';
 import { startEngine } from './audio/engine';
@@ -78,7 +78,8 @@ export function startServices() {
 
   // Playback position reaches disk every 30 s while playing, and on quit.
   setInterval(() => { if (st().playing) st().checkpoint(); }, 30000);
-  platform.onFlush(async () => { st().checkpoint(); await flushSave(); });
+  // At quit: the position first, as a save of its own, then everything else.
+  platform.onFlush(async () => { st().checkpoint(); await flushEpisodeState(); await flushSave(); });
 
   // Downloads that were queued, running or failed when Resonate last quit resume from their .part files.
   if (platform.isDesktop) {

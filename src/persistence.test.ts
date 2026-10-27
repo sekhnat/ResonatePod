@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { makeShow } from '../test/perf/fixture';
 import { platform, type Platform } from './platform';
-import { diffLibrary, flushSave, hydrate, startPersistence } from './persistence';
+import { diffLibrary, flushEpisodeState, flushSave, hydrate, startPersistence } from './persistence';
 import { heldNotes, holdNotes, resetNotes } from './notes';
 import { getPlayhead, setPlayhead } from './playhead';
 import { useStore } from './store';
@@ -95,6 +95,36 @@ describe('saving as the store changes', () => {
     await flushSave();
     expect(sent()).toEqual([{ kv: { speed: 1.5 } }, { kv: { speed: 1.5, volume: 0.5 } }]);
     expect(err).toHaveBeenCalledOnce();
+  });
+});
+
+describe('saving at quit', () => {
+  it('writes where you were first, on its own, ahead of a big change waiting behind it', async () => {
+    st().play(K);
+    await flushSave();
+    libPatch.mockClear();
+    useStore.setState({ shows: [...st().shows, bare(makeShow(1, 2000, 200))] }); // just subscribed: thousands of episodes to write
+    for (let t = 1; t < 30; t++) st().onTime(t);
+    st().checkpoint();
+    await flushEpisodeState();
+    expect(sent()).toHaveLength(1);
+    expect(sent()[0]).toEqual({ epState: { upsert: { [K]: expect.objectContaining({ pos: 29 }) }, delete: [] } });
+    await flushSave();
+    expect(sent()).toHaveLength(2);
+    expect(Object.keys(sent()[1])).toEqual(['shows', 'episodes']); // the rest, without the position again
+    expect(sent()[1].episodes!.upsert).toHaveLength(2000);
+  });
+
+  it('does nothing when no episode changed, and tries again if the write fails', async () => {
+    await flushEpisodeState();
+    expect(libPatch).not.toHaveBeenCalled();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    st().markPlayed(K, true);
+    libPatch.mockRejectedValueOnce(new Error('disk full'));
+    await flushEpisodeState();
+    await flushSave();
+    expect(sent()).toHaveLength(2);
+    expect(sent()[1]).toEqual(sent()[0]); // the same change, sent again
   });
 });
 

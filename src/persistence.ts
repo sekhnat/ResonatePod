@@ -112,6 +112,29 @@ async function save() {
   }
 }
 
+/**
+ * Writes just the episode state (where each episode was left), ahead of the rest. At quit there is only a moment to
+ * save, and a big change waiting behind the position (a newly added show with thousands of episodes) must not be able
+ * to use that moment up first.
+ */
+export function flushEpisodeState(): Promise<void> {
+  chain = chain.then(saveEpisodeState, saveEpisodeState);
+  return chain;
+}
+
+async function saveEpisodeState() {
+  if (!saved) return;
+  const eps = useStore.getState().eps;
+  const patch = diffLibrary(saved, { ...saved, eps });
+  if (!patch) return;
+  try {
+    await platform.libPatch(patch);
+    saved = { ...saved, eps };
+  } catch (err) {
+    console.error('Saving where you were failed', err);
+  }
+}
+
 /** Writes whatever has changed since the last save, now, after any save already under way. */
 export function flushSave(): Promise<void> {
   if (timer) { clearTimeout(timer); timer = null; }
