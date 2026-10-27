@@ -10,8 +10,8 @@ import { useSecretConsent } from './SecretNotice';
 
 function Modal({ onClose, width = 480, children, label }: { onClose: () => void; width?: number; children: ReactNode; label: string }) {
   return (
-    <div onClick={onClose} style={{ position: 'absolute', inset: 0, zIndex: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb,var(--color-bg) 60%,transparent)', backdropFilter: 'blur(2px)' }}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()} style={{ width, display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="dialog modal" role="dialog" aria-modal="true" aria-label={label} onClick={(e) => e.stopPropagation()} style={{ width }}>
         {children}
       </div>
     </div>
@@ -26,42 +26,42 @@ export function ShowSettingsDialog() {
   const ovr = s.ovr[sh.id] ?? {};
   // One row of choices for one of the show's overrides; undefined is "follow the global setting".
   const row = <K extends keyof Override>(k: K, label: string, hint: string, options: (Override[K] | undefined)[], format: (v: Override[K] | undefined) => string) => (
-    <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 13 }}>{label}</span>
-        <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{hint}</span>
+    <div key={k} className="cfg-row">
+      <div className="cfg-row-head">
+        <span className="cfg-label">{label}</span>
+        <span className="cfg-hint">{hint}</span>
       </div>
       <Seg options={options} value={ovr[k]} format={format} onPick={(v) => {
         s.setOverride(sh.id, k, v);
         // Speed and trim apply live when this show is playing.
         if (k === 'speed' && s.cur?.startsWith(`${sh.id}:`)) s.setSpeed((v as Override['speed']) ?? s.sv.speed);
-      }} style={{ alignSelf: 'flex-start' }} />
+      }} />
     </div>
   );
   return (
     <Modal onClose={close} label={`${sh.title} settings`}>
-      <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center' }}>
-        <span style={{ width: 44, height: 44, flex: 'none', borderRadius: 6, background: art(sh.hue), display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 600, color: 'var(--color-neutral-100)' }}>{mono(sh.title)}</span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="dialog-title" style={{ margin: 0 }}>{sh.title}</span>
-          <span style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>Overrides for this show · Global uses Preferences</span>
+      <div className="cfg-head">
+        <span className="cfg-art" style={{ background: art(sh.hue) }}>{mono(sh.title)}</span>
+        <div className="cfg-meta">
+          <span className="dialog-title cfg-title">{sh.title}</span>
+          <span className="cfg-sub">Overrides for this show · Global uses Preferences</span>
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className="modal-fields">
         {row('dl', 'Auto-download', s.tg.auto ? `Global: latest ${keepLabel(s.sv.keep)}` : 'Global: off', [undefined, 1, 3, 'all', 'off'], orGlobal(dlRuleLabel))}
         {row('speed', 'Playback speed', `Global: ${speedLabel(s.sv.speed)}`, [undefined, 1, 1.2, 1.5, 2], orGlobal(speedLabel))}
         {row('trim', 'Trim silence', s.tg.silence ? 'Global: on' : 'Global: off', [undefined, true, false], orGlobal(onOff))}
         {row('intro', 'Skip intro', 'Skips from start on every episode', [undefined, 30, 60, 90], introLabel)}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => s.set({ cfgOpen: false, dialog: 'unsubscribe' })}>Unsubscribe…</button>
-          <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} title="For private feeds that ask for a username and password"
+      <div className="modal-foot">
+        <div className="modal-foot-left">
+          <button className="btn btn-ghost btn-12 quiet" onClick={() => s.set({ cfgOpen: false, dialog: 'unsubscribe' })}>Unsubscribe…</button>
+          <button className="btn btn-ghost btn-12 quiet" title="For private feeds that ask for a username and password"
             onClick={() => s.set({ cfgOpen: false, dialog: 'feedAuth', authFor: { url: sh.feedUrl, showId: sh.id } })}>Feed login…</button>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <button className="btn btn-secondary" onClick={() => s.resetOverride(sh.id)} style={{ fontSize: 12 }}>Reset to global</button>
-          <button className="btn btn-primary" onClick={close} style={{ fontSize: 12 }}>Done</button>
+        <div className="modal-foot-right">
+          <button className="btn btn-secondary btn-12" onClick={() => s.resetOverride(sh.id)}>Reset to global</button>
+          <button className="btn btn-primary btn-12" onClick={close}>Done</button>
         </div>
       </div>
     </Modal>
@@ -86,22 +86,22 @@ function FieldDialog({ title, body, label, initial, suffix, validate, onSave }: 
   };
   return (
     <Modal onClose={close} width={440} label={title}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="modal-head">
         <span className="dialog-title">{title}</span>
-        <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>{body}</span>
+        <span className="dialog-body modal-text">{body}</span>
       </div>
       <div className="field">
         <label htmlFor="field-dialog-input">{label}</label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input id="field-dialog-input" ref={ref} className="input" value={v} onChange={(e) => { setV(e.target.value); setErr(null); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') save(); }} style={{ fontFamily: 'ui-monospace,monospace', fontSize: 13 }} />
-          {suffix && <span style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>{suffix}</span>}
+        <div className="field-row">
+          <input id="field-dialog-input" ref={ref} className="input mono" value={v} onChange={(e) => { setV(e.target.value); setErr(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+          {suffix && <span className="field-suffix">{suffix}</span>}
         </div>
-        {err && <div style={{ fontSize: 12, color: 'var(--color-accent-300)', marginTop: 6 }}>{err}</div>}
+        {err && <div className="form-error spaced">{err}</div>}
       </div>
-      <div className="dialog-actions" style={{ margin: 0, gap: 'var(--space-3)' }}>
-        <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={close}>Cancel</button>
-        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={save}>Save</button>
+      <div className="dialog-actions flush roomy">
+        <button className="btn btn-secondary btn-12" onClick={close}>Cancel</button>
+        <button className="btn btn-primary btn-12" onClick={save}>Save</button>
       </div>
     </Modal>
   );
@@ -134,15 +134,15 @@ export function Dialogs() {
       if (!sh) return null;
       return (
         <Modal onClose={close} width={420} label="Unsubscribe">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="modal-head loose">
             <span className="dialog-title">Unsubscribe from {sh.title}?</span>
-            <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+            <span className="dialog-body modal-text">
               Resonate stops checking this feed and removes its episodes from your queue. Downloaded files stay in {s.folder} until you delete them.
             </span>
           </div>
-          <div className="dialog-actions" style={{ margin: 0, gap: 'var(--space-3)' }}>
-            <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={close}>Cancel</button>
-            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => s.unsubscribe(sh.id)}>Unsubscribe</button>
+          <div className="dialog-actions flush roomy">
+            <button className="btn btn-secondary btn-12" onClick={close}>Cancel</button>
+            <button className="btn btn-primary btn-12" onClick={() => s.unsubscribe(sh.id)}>Unsubscribe</button>
           </div>
         </Modal>
       );
@@ -168,15 +168,15 @@ export function Dialogs() {
       const leave = () => { s.set({ dialog: null, pendingMove: null }); s.toast(`New downloads will be saved to ${mv.to}`); };
       return (
         <Modal onClose={leave} width={440} label="Move downloads">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="modal-head loose">
             <span className="dialog-title">Move downloaded episodes?</span>
-            <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+            <span className="dialog-body modal-text">
               New downloads go to {mv.to}. Move the {files.length} episode{files.length === 1 ? '' : 's'} already in {mv.from} ({gb < 0.1 ? `${Math.max(1, Math.round(gb * 1024))} MB` : `${gb.toFixed(1)} GB`}) there too?
             </span>
           </div>
-          <div className="dialog-actions" style={{ margin: 0, gap: 'var(--space-3)' }}>
-            <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={leave}>Leave them</button>
-            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => void s.moveDownloads(mv.from, mv.to)}>Move</button>
+          <div className="dialog-actions flush roomy">
+            <button className="btn btn-secondary btn-12" onClick={leave}>Leave them</button>
+            <button className="btn btn-primary btn-12" onClick={() => void s.moveDownloads(mv.from, mv.to)}>Move</button>
           </div>
         </Modal>
       );
@@ -185,29 +185,29 @@ export function Dialogs() {
       return (
         <Modal onClose={close} width={460} label="Keyboard shortcuts">
           <span className="dialog-title">Keyboard shortcuts</span>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {SHORTCUTS.map(([k, d], i) => (
-              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', boxShadow: i ? '0 -1px 0 var(--color-neutral-800)' : undefined }}>
-                <span style={{ width: 96, fontSize: 11, color: 'var(--color-neutral-300)' }}><span style={{ padding: '2px 6px', borderRadius: 4, background: 'var(--color-neutral-900)' }}>{k}</span></span>
-                <span style={{ fontSize: 13 }}>{d}</span>
+          <div className="sc-list">
+            {SHORTCUTS.map(([k, d]) => (
+              <div key={k} className="sc-row">
+                <span className="sc-keys"><span className="sc-key">{k}</span></span>
+                <span className="sc-desc">{d}</span>
               </div>
             ))}
           </div>
-          <div className="dialog-actions" style={{ margin: 0 }}><button className="btn btn-primary" style={{ fontSize: 12 }} onClick={close}>Done</button></div>
+          <div className="dialog-actions flush"><button className="btn btn-primary btn-12" onClick={close}>Done</button></div>
         </Modal>
       );
     case 'about':
       return (
         <Modal onClose={close} width={380} label="About Resonate">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center' }}>
-            <i className="ph-fill ph-waveform" style={{ fontSize: 44, color: 'var(--color-accent)' }} />
+          <div className="about">
+            <i className="ph-fill ph-waveform about-icon" />
             <span className="dialog-title">Resonate</span>
-            <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)' }}>Version {APP_VERSION} · A podcast downloader and player for the Linux desktop.</span>
-            <span style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>{s.shows.length} subscriptions · {(trackedBytes(s.eps) / 1024 ** 3).toFixed(1)} GB in {s.folder}</span>
+            <span className="about-sub">Version {APP_VERSION} · A podcast downloader and player for the Linux desktop.</span>
+            <span className="about-stat">{s.shows.length} subscriptions · {(trackedBytes(s.eps) / 1024 ** 3).toFixed(1)} GB in {s.folder}</span>
           </div>
-          <div className="dialog-actions" style={{ margin: 0, justifyContent: 'center', gap: 'var(--space-3)' }}>
-            {platform.isDesktop && <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => platform.openLogs()}>Open logs folder</button>}
-            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={close}>Close</button>
+          <div className="dialog-actions flush roomy center">
+            {platform.isDesktop && <button className="btn btn-secondary btn-12" onClick={() => platform.openLogs()}>Open logs folder</button>}
+            <button className="btn btn-primary btn-12" onClick={close}>Close</button>
           </div>
         </Modal>
       );
@@ -241,23 +241,23 @@ function SyncDialog() {
   );
   return (
     <Modal onClose={close} width={440} label="Sync server">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="modal-head">
         <span className="dialog-title">Sync server</span>
-        <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+        <span className="dialog-body modal-text">
           Keep subscriptions and play positions in step with other apps through gpodder.net or a compatible server (oPodSync, Nextcloud gPodder Sync).
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className="modal-fields">
         {field('sync-server', 'Server', server, setServer, 'text', 'gpodder.net')}
         {field('sync-user', 'Username', user, setUser)}
         {field('sync-pass', connected ? 'Password (re-enter to change)' : 'Password', password, setPassword, 'password')}
         {consent.notice}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        {connected ? <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => { s.disconnectSync(); close(); }}>Disconnect</button> : <span />}
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          {connected && <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={s.syncing} onClick={() => void s.runSync()}>{s.syncing ? 'Syncing…' : 'Sync now'}</button>}
-          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || consent.blocked || !server.trim() || !user.trim() || !password} onClick={() => void save()}>
+      <div className="modal-foot">
+        {connected ? <button className="btn btn-ghost btn-12 quiet" onClick={() => { s.disconnectSync(); close(); }}>Disconnect</button> : <span />}
+        <div className="modal-foot-right">
+          {connected && <button className="btn btn-secondary btn-12" disabled={s.syncing} onClick={() => void s.runSync()}>{s.syncing ? 'Syncing…' : 'Sync now'}</button>}
+          <button className="btn btn-primary btn-12" disabled={busy || consent.blocked || !server.trim() || !user.trim() || !password} onClick={() => void save()}>
             {busy ? <i className="ph ph-circle-notch spin" /> : null}{connected ? 'Save' : 'Connect'}
           </button>
         </div>
@@ -296,21 +296,21 @@ function FeedAuthDialog() {
   );
   return (
     <Modal onClose={close} width={440} label="Feed login">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="modal-head">
         <span className="dialog-title">This feed needs a login</span>
-        <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+        <span className="dialog-body modal-text">
           {host} asks for a username and password. {consent.secure ? 'Resonate stores them encrypted with your system keyring and' : 'Resonate'} only sends them to {host}.
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className="modal-fields">
         {field('feed-user', 'Username', user, setUser)}
         {field('feed-pass', 'Password', password, setPassword, 'password')}
         {consent.notice}
-        {err && <div style={{ fontSize: 12, color: 'var(--color-accent-300)' }}>{err}</div>}
+        {err && <div className="form-error">{err}</div>}
       </div>
-      <div className="dialog-actions" style={{ margin: 0, gap: 'var(--space-3)' }}>
-        <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={close}>Cancel</button>
-        <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy || consent.blocked || !user.trim()} onClick={() => void save()}>
+      <div className="dialog-actions flush roomy">
+        <button className="btn btn-secondary btn-12" onClick={close}>Cancel</button>
+        <button className="btn btn-primary btn-12" disabled={busy || consent.blocked || !user.trim()} onClick={() => void save()}>
           {busy ? <i className="ph ph-circle-notch spin" /> : null}Sign in
         </button>
       </div>
@@ -334,33 +334,32 @@ function PodcastIndexDialog() {
   const field = (id: string, label: string, value: string, set: (v: string) => void, type = 'text') => (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input id={id} className="input" type={type} value={value} autoComplete="off" spellCheck={false} autoFocus={id === 'pi-key'}
-        style={{ fontFamily: 'ui-monospace,monospace', fontSize: 13 }}
+      <input id={id} className="input mono" type={type} value={value} autoComplete="off" spellCheck={false} autoFocus={id === 'pi-key'}
         onChange={(e) => set(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
     </div>
   );
   return (
     <Modal onClose={close} width={460} label="Podcast Index">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="modal-head">
         <span className="dialog-title">Podcast Index</span>
-        <span className="dialog-body" style={{ fontSize: 13, color: 'var(--color-neutral-400)' }}>
+        <span className="dialog-body modal-text">
           The open Podcast Index lists over four million shows. Its API needs a key: sign up for free at
-          {' '}<a href="https://api.podcastindex.org/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-accent)' }}>api.podcastindex.org</a>, then paste the key and secret here.
+          {' '}<a className="pi-link" href="https://api.podcastindex.org/" target="_blank" rel="noreferrer">api.podcastindex.org</a>, then paste the key and secret here.
           {consent.secure ? ' They’re stored encrypted with your system keyring.' : ''}
         </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className="modal-fields">
         {field('pi-key', 'API key', key, setKey)}
         {field('pi-secret', 'API secret', secret, setSecret, 'password')}
         {consent.notice}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="modal-foot">
         {s.directory.podcastIndex
-          ? <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--color-neutral-400)' }} onClick={() => { void s.setPodcastIndexKey(null); s.toast('Podcast Index removed'); close(); }}>Remove key</button>
+          ? <button className="btn btn-ghost btn-12 quiet" onClick={() => { void s.setPodcastIndexKey(null); s.toast('Podcast Index removed'); close(); }}>Remove key</button>
           : <span />}
-        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-          <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={close}>Cancel</button>
-          <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={!ok} onClick={() => void save()}>Save</button>
+        <div className="modal-foot-right">
+          <button className="btn btn-secondary btn-12" onClick={close}>Cancel</button>
+          <button className="btn btn-primary btn-12" disabled={!ok} onClick={() => void save()}>Save</button>
         </div>
       </div>
     </Modal>
