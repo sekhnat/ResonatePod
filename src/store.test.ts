@@ -256,6 +256,47 @@ describe('sync', () => {
     st().togglePlay();
     expect(st().sync.pending).toEqual([expect.objectContaining({ podcast: FEED_URL, episode: 'https://cdn.example/kp42.mp3', action: 'play', started: 0, position: 120, total: 4323 })]);
   });
+
+  it('keeps one pending play per episode, and never drops a different episode', () => {
+    useStore.setState({ sync: { ...st().sync, server: 'gpodder.example', user: 'ines', device: 'd' } });
+    st().play(K42);
+    st().onTime(100);
+    st().togglePlay();
+    st().togglePlay();
+    st().onTime(300);
+    st().togglePlay();
+    expect(st().sync.pending).toEqual([expect.objectContaining({ episode: 'https://cdn.example/kp42.mp3', started: 100, position: 300 })]);
+    const others = Array.from({ length: 600 }, (_, i) => ({ podcast: FEED_URL, episode: `https://cdn.example/other-${i}.mp3`, action: 'play' as const, timestamp: '2026-10-26T00:00:00' }));
+    useStore.setState({ sync: { ...st().sync, pending: others } });
+    st().togglePlay();
+    st().onTime(310);
+    st().togglePlay();
+    expect(st().sync.pending).toHaveLength(601);
+    expect(st().sync.pending[0].episode).toBe('https://cdn.example/other-0.mp3');
+  });
+
+  it('keeps a play recorded while a sync is in flight', async () => {
+    useStore.setState({ sync: { ...st().sync, server: 'gpodder.example', user: 'ines', device: 'd' } });
+    st().play(K42);
+    st().onTime(120);
+    st().togglePlay();
+    let replayed = false;
+    http.mockImplementation(async (url, req) => {
+      if (url.includes('/subscriptions/') && req?.method !== 'POST' && !replayed) {
+        // Same episode again, after the sync took its snapshot of what to send.
+        replayed = true;
+        st().togglePlay();
+        st().onTime(500);
+        st().togglePlay();
+      }
+      if (url.includes('/subscriptions/')) return { status: 200, text: JSON.stringify(req?.method === 'POST' ? { timestamp: 2 } : { add: [], remove: [], timestamp: 1 }) };
+      if (url.includes('/episodes/') && req?.method !== 'POST') return { status: 200, text: JSON.stringify({ timestamp: 3, actions: [] }) };
+      return { status: 200, text: '{}' };
+    });
+    await st().runSync();
+    expect(replayed).toBe(true);
+    expect(st().sync.pending).toEqual([expect.objectContaining({ position: 500 })]);
+  });
 });
 
 describe('moved and private feeds', () => {
