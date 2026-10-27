@@ -2,9 +2,9 @@ import { memo, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { INBOX_SORT, epInfo, getEp, sortFor, useStore } from '../store';
 import { agoLabel, applyFilter, applySort, episodeRow, inboxKeys, orderable } from '../model';
-import { Art, GhostIcon, PageHeader, RowMeta, RowPlay, Seg, SortSelect } from '../components/ui';
+import { Art, GhostIcon, PageHeader, RowMeta, RowPlay, Seg, SortSelect, StatusIcon } from '../components/ui';
 import { VirtualList } from '../components/VirtualList';
-import { Empty, titleColor } from './ShowScreen';
+import { Empty, titleClass } from './ShowScreen';
 
 const FILTERS = ['All', 'Unplayed', 'Downloaded'] as const;
 
@@ -23,13 +23,13 @@ export function InboxScreen() {
   const sub = s.refreshing ? 'Checking feeds…' : s.lastChecked ? `Feeds checked ${agoLabel(s.lastChecked)} · next check in ${nextMin} min` : 'Feeds not checked yet';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div className="page">
       <PageHeader title="New episodes" sub={sub}>
         <SortSelect value={s.sort} onPick={(v) => s.setSort(INBOX_SORT, v)} />
         <Seg options={FILTERS} value={s.filter} onPick={(filter) => s.set({ filter })} />
-        <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => { s.markAllPlayed(); s.toast('Marked all new episodes as played'); }}>Mark all played</button>
+        <button className="btn btn-secondary btn-12" onClick={() => { s.markAllPlayed(); s.toast('Marked all new episodes as played'); }}>Mark all played</button>
       </PageHeader>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="list">
         <VirtualList count={keys.length} estimate={59} itemKey={(i) => keys[i]}>
           {(i) => <InboxRow id={keys[i]} />}
         </VirtualList>
@@ -46,16 +46,15 @@ const InboxRow = memo(function InboxRow({ id }: { id: string }) {
   const a = useStore(useShallow((s) => ({ play: s.play, openShow: s.openShow, addToQueue: s.addToQueue })));
   if (!e) return null;
   return (
-    <div className="h-row" onDoubleClick={() => a.play(e.key)}
-      style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '9px 10px', margin: '0 -10px', borderRadius: 'var(--radius-md)', background: e.isCur ? 'color-mix(in srgb,var(--color-accent-900) 70%,transparent)' : 'transparent' }}>
-      <button onClick={() => a.openShow(e.showId)} title={`Open ${e.showTitle}`} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
+    <div className={`h-row ep-row bleed${e.isCur ? ' cur' : ''}`} onDoubleClick={() => a.play(e.key)}>
+      <button className="ep-art-btn" onClick={() => a.openShow(e.showId)} title={`Open ${e.showTitle}`}>
         <Art bg={e.art} mono={e.mono} img={e.imageUrl} size={40} font={12} />
       </button>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: 14, fontWeight: 500, color: titleColor(e), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title}</span>
-        <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}><RowMeta e={e} prefix={`${e.showTitle} · `} /></span>
+      <div className="ep-body">
+        <span className={`ep-title clip ${titleClass(e)}`}>{e.title}</span>
+        <span className="ep-meta"><RowMeta e={e} prefix={`${e.showTitle} · `} /></span>
       </div>
-      <i className={e.status === 'downloading' ? `${e.stIcon} spin` : e.stIcon} title={e.stLabel} style={{ fontSize: 16, color: e.stColor }} />
+      <StatusIcon e={e} />
       <GhostIcon icon={inQueue ? 'ph-fill ph-queue' : 'ph ph-queue'} title={inQueue ? 'In queue' : 'Add to queue'} onClick={() => a.addToQueue(e.key)} />
       <RowPlay isCur={e.isCur} isPlaying={e.isPlaying} onClick={() => a.play(e.key)} />
     </div>

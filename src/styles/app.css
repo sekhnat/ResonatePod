@@ -31,7 +31,7 @@ button { font: inherit; }
 .seg-opt { user-select: none; }
 .seg-opt:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 
-.row-actions { opacity: 0; transition: opacity .12s; }
+.row-actions { display: flex; opacity: 0; transition: opacity .12s; }
 .h-row:hover .row-actions, .row-actions:focus-within { opacity: 1; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -301,3 +301,66 @@ button { font: inherit; }
 .btn.transcript-more { align-self: flex-start; font-size: 12px; padding: 2px 0; }
 .transcript-none { margin: 0; font-size: 12.5px; color: var(--color-neutral-500); }
 .transcript.big .transcript-none { font-size: 14px; }
+
+/* ---------- Screens: shared ---------- */
+
+.ico-13 { font-size: 13px; } .ico-14 { font-size: 14px; } .ico-15 { font-size: 15px; } .ico-16 { font-size: 16px; } .ico-17 { font-size: 17px; } .ico-18 { font-size: 18px; }
+.btn.btn-12 { font-size: 12px; }
+.page { display: flex; flex-direction: column; gap: var(--space-6); }
+.list { display: flex; flex-direction: column; }
+.list.tight { gap: 2px; }
+.empty { display: flex; align-items: center; gap: 10px; padding: 18px 0; font-size: 13px; color: var(--color-neutral-500); }
+
+/* An episode row (New episodes, Queue and a show's list). `bleed` pulls it out into the page's padding, so the hover reaches the edges. */
+.ep-row { display: flex; align-items: center; gap: var(--space-4); padding: 9px 10px; border-radius: var(--radius-md); background: transparent; }
+.ep-row.bleed { margin: 0 -10px; }
+.ep-row.tall { padding: 10px; }
+.ep-row.cur { background: color-mix(in srgb, var(--color-accent-900) 70%, transparent); }
+.ep-art-btn { padding: 0; border: none; background: none; cursor: pointer; }
+.ep-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ep-title { font-size: 14px; font-weight: 500; color: var(--color-text); }
+.ep-title.played { color: var(--color-neutral-500); }
+.ep-title.cur { color: var(--color-accent-200); }
+.ep-title.clip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ep-title.clip.open { white-space: normal; }
+.ep-title.link { cursor: pointer; }
+.ep-meta { font-size: 11.5px; color: var(--color-neutral-500); }
+.ep-status { font-size: 16px; }
+.ep-status.wide { font-size: 18px; width: 20px; }
+.st-cloud { color: var(--color-neutral-600); }
+.st-downloaded { color: var(--color-neutral-400); }
+.st-played { color: var(--color-neutral-700); }
+.st-downloading { color: var(--color-accent); }
+.ep-title-line { display: flex; align-items: center; gap: 7px; }
+.ep-new-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-accent); flex: none; }
+.ep-notes { margin: 6px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--color-neutral-300); white-space: pre-line; max-height: 260px; overflow: auto; }
+
+/* Queue */
+.q-handle { font-size: 16px; color: var(--color-neutral-600); cursor: grab; }
+.q-index { width: 18px; font-size: 12px; color: var(--color-neutral-500); font-variant-numeric: tabular-nums; }
+
+/* Shows */
+.shows-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-8) var(--space-6); }
+.show-tile { display: flex; flex-direction: column; gap: 8px; padding: 0; border: none; background: none; color: inherit; text-align: left; cursor: pointer; }
+.tile-art { aspect-ratio: 1; }
+.tile-ring { position: absolute; inset: 0; border-radius: inherit; }
+.tag.tile-new { position: absolute; top: 8px; right: 8px; font-size: 10px; padding: 2px 7px; }
+.tile-text { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+.tile-title { font-size: 13px; font-weight: 500; }
+.tile-author { font-size: 11.5px; color: var(--color-neutral-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* A show */
+.show-page { display: flex; flex-direction: column; gap: var(--space-8); }
+.show-hero { display: flex; gap: var(--space-8); align-items: flex-end; }
+.show-cover { letter-spacing: -0.02em; box-shadow: var(--shadow-md); }
+.show-info { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.show-title { margin: 0; font-size: 30px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; }
+.show-author { font-size: 13px; color: var(--color-neutral-400); }
+a.show-link, a.show-link:hover { color: var(--color-neutral-400); }
+.show-actions { display: flex; gap: var(--space-3); align-items: center; margin-top: 4px; }
+.tag.show-rule { gap: 5px; white-space: nowrap; }
+.btn.show-cfg { width: 34px; height: 34px; }
+.show-desc { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--color-neutral-300); max-width: 620px; text-wrap: pretty; }
+.show-list-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: var(--space-3); }
+.show-count { font-size: 12px; color: var(--color-neutral-400); }
+.show-list-controls { display: flex; gap: var(--space-3); align-items: center; }
