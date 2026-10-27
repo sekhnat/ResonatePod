@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.sekhnat.resonate</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Resonate</name>
+  <summary>Podcast downloader and player</summary>
+  <description>
+    <p>Resonate subscribes to podcast feeds, downloads episodes and plays them, on the Linux desktop.</p>
+    <ul>
+      <li>Automatic downloads with per-show rules, a storage limit and removal of played episodes</li>
+      <li>Chapters, transcripts, a sleep timer, silence trimming and per-show speed</li>
+      <li>Search across Apple Podcasts, gpodder.net, fyyd and Podcast Index</li>
+      <li>Subscription and position sync with gpodder.net-compatible servers</li>
+    </ul>
+  </description>
+  <developer id="io.github.sekhnat"><name>sekhnat</name></developer>
+  <launchable type="desktop-id">io.github.sekhnat.resonate.desktop</launchable>
+  <url type="homepage">https://github.com/sekhnat/ResonatePod</url>
+  <url type="bugtracker">https://github.com/sekhnat/ResonatePod/issues</url>
+  <provides><binary>resonate-run</binary></provides>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="1.5.4" date="2026-10-27" />
+  </releases>
+</component>

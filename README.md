@@ -192,6 +192,16 @@ e2e/run.mjs      Playwright-driven Electron test against a local feed server (di
 test/fixtures/   Sample feed, chapters, transcript, and small media files (chaptered MP3/M4A, video)
 ```
 
+## Flatpak
+
+`flatpak/` holds a manifest that packages the same build as a Flatpak (`resonate.flatpak`, attached to each release by CI).
+To build and install it yourself: `npm run dist && flatpak-builder --user --install --force-clean build-dir flatpak/io.github.sekhnat.resonate.yml`.
+It is not on Flathub; submitting it there is a separate step. Inside the sandbox:
+
+- The download folder can be anywhere under your home folder (the app has `--filesystem=home`).
+- Metered-connection detection needs `nmcli`, which the sandbox doesn't have, so it reports "unknown".
+- "Start at login" writes its entry inside the sandbox's config, where the desktop doesn't look.
+
 ## Releasing
 
 1. Bump `version` in `package.json` (and `package-lock.json`): `npm version <x.y.z> --no-git-tag-version`.
