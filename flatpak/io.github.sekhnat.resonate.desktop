@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Resonate
+Comment=Download and listen to podcasts
+Keywords=podcast;rss;audio;
+Exec=resonate-run %U
+Icon=io.github.sekhnat.resonate
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=Resonate
