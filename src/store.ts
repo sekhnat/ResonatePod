@@ -9,7 +9,7 @@ import {
 } from './data';
 import type { OpmlFeed } from './lib/opml';
 import { defaultCountry, gpodderResult, resolveFeedUrl, type DirectoryResult, type SourceChoice } from './lib/directory';
-import { platform } from './platform';
+import { SMALL_BODY_BYTES, platform } from './platform';
 
 export type Screen = 'inbox' | 'shows' | 'show' | 'queue' | 'downloads' | 'discover' | 'settings';
 export type Filter = 'All' | 'Unplayed' | 'Downloaded';
@@ -333,7 +333,7 @@ function splitCredentials(url: string): { url: string; user: string; password: s
 async function loadChapters(info: EpisodeInfo, file: string | undefined) {
   const { chaptersUrl, inlineChapters, enclosureUrl } = info.ep;
   if (chaptersUrl) {
-    const r = await platform.http(chaptersUrl).catch(() => null);
+    const r = await platform.http(chaptersUrl, { maxBytes: SMALL_BODY_BYTES }).catch(() => null);
     const ch = r?.status === 200 ? (() => { try { return parseJsonChapters(r.text); } catch { return []; } })() : [];
     if (ch.length) return ch;
   }
@@ -589,7 +589,7 @@ export const useStore = create<State>()(
           const { transcriptUrl, transcriptType } = info.ep;
           await Promise.all([
             loadChapters(info, getEp(s, key).file).then((ch) => { meta.chapters = ch; }),
-            transcriptUrl && platform.http(transcriptUrl).then((r) => {
+            transcriptUrl && platform.http(transcriptUrl, { maxBytes: SMALL_BODY_BYTES }).then((r) => {
               const t = r.status === 200 ? parseTranscript(r.text, transcriptType) : null;
               meta.transcript = t?.lines ?? null;
               meta.transcriptTimed = t?.timed;

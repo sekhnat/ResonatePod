@@ -116,6 +116,18 @@ const server = createServer((req, res) => {
   if (listed) return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(directoryFeed(listed[1]));
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
   if (url === '/long.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(longFeed());
+  if (url === '/huge.xml') {
+    // 60 MB with no Content-Length, so only counting the bytes can stop it.
+    res.writeHead(200, { 'Content-Type': 'application/rss+xml' });
+    const chunk = Buffer.alloc(1 << 20, 32);
+    let sent = 0;
+    const pump = () => {
+      while (sent < 60 && !res.destroyed) { sent++; if (!res.write(chunk)) return void res.once('drain', pump); }
+      res.end();
+    };
+    res.on('error', () => {});
+    return pump();
+  }
   // Answers once so it can be subscribed to, then never again.
   if (url === '/flip.xml') return hit === 1 ? res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(flipFeed()) : undefined;
   if ((url === '/private.xml' || url.startsWith('/p/')) && req.headers.authorization !== AUTH) {
@@ -476,6 +488,13 @@ try {
       await refresh.locator('.ph-arrows-clockwise').waitFor({ timeout: 10000 });
     }
     await page.getByText(/Feeds refreshed.*failed/).first().waitFor();
+  });
+
+  await step('a runaway response is cut off instead of buffered', async () => {
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/huge.xml`);
+    await page.keyboard.press('Enter');
+    await page.getByText(/Couldn’t add that feed:.*response too large/).waitFor({ timeout: 15000 });
   });
 
   assert.deepEqual(errors.filter((e) => !/itunes\.apple\.com|ERR_NAME|ERR_TUNNEL|ERR_PROXY/.test(e)), [], 'console errors');

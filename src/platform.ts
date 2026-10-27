@@ -154,4 +154,7 @@ function browserPlatform(): Platform {
   };
 }
 
+/** Ceiling for the small side files (chapters, transcripts, directory JSON); feeds get the bridge's own larger one. */
+export const SMALL_BODY_BYTES = 5 * 1024 * 1024;
+
 export const platform: Platform = typeof window !== 'undefined' && window.resonate ? electronPlatform(window.resonate) : browserPlatform();

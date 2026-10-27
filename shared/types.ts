@@ -56,6 +56,8 @@ export interface HttpRequest {
   method?: 'GET' | 'POST';
   headers?: Record<string, string>;
   body?: string;
+  /** Give up on a response bigger than this. The bridge enforces its own ceiling whatever is asked. */
+  maxBytes?: number;
 }
 
 export interface DownloadJob {
