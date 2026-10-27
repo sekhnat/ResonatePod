@@ -275,6 +275,21 @@ export const epInfo = (s: Pick<Data, 'shows'>, key: string | null): EpisodeInfo 
 
 export const getEp = (s: Pick<Data, 'eps'>, key: string): EpState => s.eps[key] ?? { played: false, pos: 0, inbox: false };
 
+const isDefaultEp = (st: EpState) =>
+  !st.played && !st.pos && !st.inbox && !st.file && st.fileBytes == null && st.playedAt == null && st.lastPlayed == null;
+
+/**
+ * `eps` with `key` set to `st`, or without it when `st` says nothing the default doesn't. State is kept sparse: an
+ * episode nobody has touched has no record (getEp supplies the default), so a library of thousands of episodes only
+ * stores what has happened to a few of them.
+ */
+export const withEp = (eps: Data['eps'], key: string, st: EpState): Data['eps'] => {
+  const next = { ...eps };
+  if (isDefaultEp(st)) delete next[key];
+  else next[key] = st;
+  return next;
+};
+
 export const ruleFor = (s: Pick<Data, 'ovr' | 'tg' | 'sv'>, showId: string) => {
   const o = s.ovr[showId]?.dl ?? 'Global';
   if (o !== 'Global') return { value: o, global: false };
@@ -736,7 +751,7 @@ export const useStore = create<State>()(
           if (!st.file) return;
           await platform.deleteFile(st.file).catch(() => {});
           const now = get();
-          set({ eps: { ...now.eps, [key]: { ...getEp(now, key), file: undefined, fileBytes: undefined } } });
+          set({ eps: withEp(now.eps, key, { ...getEp(now, key), file: undefined, fileBytes: undefined }) });
           if (!quiet) s.toast(`Deleted “${epInfo(s, key)?.title ?? 'episode'}” from disk`);
         },
         toggleDlPause: () => set((s) => ({ dlPaused: !s.dlPaused })),
@@ -802,7 +817,7 @@ export const useStore = create<State>()(
         clearQueue: () => set((s) => ({ queue: s.queue.filter((k) => k === s.cur) })),
 
         markPlayed: (key, played) =>
-          set((s) => ({ eps: { ...s.eps, [key]: { ...getEp(s, key), played, pos: 0, playedAt: played ? Date.now() : undefined } } })),
+          set((s) => ({ eps: withEp(s.eps, key, { ...getEp(s, key), played, pos: 0, playedAt: played ? Date.now() : undefined }) })),
         markAllPlayed: () =>
           set((s) => {
             const eps = { ...s.eps };
@@ -917,7 +932,8 @@ export const useStore = create<State>()(
             while (findShow(get(), id)) id += '-';
             const show = { ...parsed, id };
             const eps = { ...get().eps };
-            show.eps.forEach((e, i) => { eps[epKey(id, e.guid)] = { played: false, pos: 0, inbox: i === 0 }; });
+            // Only the newest episode is new; the others have nothing to record yet (see withEp).
+            if (show.eps.length) eps[epKey(id, show.eps[0].guid)] = { played: false, pos: 0, inbox: true };
             set((x) => ({ shows: [...x.shows, show], eps }));
             if (platform.isDesktop) autoDownloadKeys(get(), id).forEach((k) => get().startDownload(k));
             if (!opts.quiet) s.toast(`Subscribed to ${show.title}`);

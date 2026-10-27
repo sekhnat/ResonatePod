@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, trackedBytes, useStore } from './store';
+import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, trackedBytes, useStore, withEp } from './store';
 import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
@@ -509,6 +509,41 @@ describe('episode rows', () => {
     useStore.setState({ eps: { ...st().eps, [K41]: { ...getEp(st(), K41), pos: 600 } } });
     expect(row(K41).meta).toContain('54:00 left'); // 3840 s - 600 s
     expect(row(K40).meta).not.toContain('left');
+  });
+});
+
+describe('sparse episode state', () => {
+  it('records only what has happened: a new show has one record, for its newest episode', () => {
+    expect(Object.keys(st().eps)).toEqual([K42]);
+    expect(getEp(st(), K41)).toEqual({ played: false, pos: 0, inbox: false });
+    expect(inboxKeys(st())).toEqual([K42]);
+    expect(totalUnplayed(st())).toBe(1);
+  });
+
+  it('adds records for episodes a refresh finds, and for nothing else', async () => {
+    feedBody = feed.replace('<item>', `${NEW_ITEM}<item>`);
+    await st().refresh();
+    expect(Object.keys(st().eps).sort()).toEqual([K42, 'kernel-panic-hour:kp:ep:43'].sort());
+  });
+
+  it('drops a record that goes back to the default', async () => {
+    st().markPlayed(K41, true);
+    expect(st().eps[K41]).toMatchObject({ played: true });
+    st().markPlayed(K41, false);
+    expect(K41 in st().eps).toBe(false);
+    // A downloaded file is state too; deleting it leaves nothing to record for an untouched episode.
+    st().onDownloadEvent({ type: 'done', key: K40, path: '/p/40.mp3', bytes: 10 });
+    expect(st().eps[K40]).toMatchObject({ file: '/p/40.mp3' });
+    const del = vi.spyOn(platform, 'deleteFile').mockResolvedValue();
+    await st().deleteFile(K40, true);
+    expect(K40 in st().eps).toBe(false);
+    del.mockRestore();
+  });
+
+  it('keeps a record that still has something in it', () => {
+    const eps = withEp({}, K41, { played: false, pos: 0, inbox: false, lastPlayed: 5 });
+    expect(eps[K41]).toBeDefined();
+    expect(withEp(eps, K41, { played: false, pos: 0, inbox: false })).toEqual({});
   });
 });
 
