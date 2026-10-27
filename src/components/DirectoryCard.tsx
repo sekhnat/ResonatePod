@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { art, dateLabel, hueFor, mono } from '../data';
 import { useStore } from '../store';
 import {
@@ -16,7 +17,7 @@ export function useSubscribedId() {
 }
 
 export function DirectoryCard({ r, showSources }: { r: DirectoryResult; showSources?: boolean }) {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ addFeed: s.addFeed, openShow: s.openShow, unsubscribe: s.unsubscribe })));
   const subscribedId = useSubscribedId()(r.feedUrl);
   const [busy, setBusy] = useState(false);
   const meta = [r.genre !== 'Podcast' && r.genre !== 'Episode' ? r.genre : '', r.subscribers ? `${n(r.subscribers)} subscribers` : r.episodeCount ? `${n(r.episodeCount)} episodes` : '']

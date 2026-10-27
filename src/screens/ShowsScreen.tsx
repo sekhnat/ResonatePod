@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { art, mono } from '../data';
 import { useStore } from '../store';
 import { unplayedFor } from '../model';
@@ -5,7 +6,7 @@ import { Art, PageHeader } from '../components/ui';
 import { importOpmlFile } from '../lib/library-io';
 
 export function ShowsScreen() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ shows: s.shows, eps: s.eps, go: s.go, openShow: s.openShow })));
   const onDisk = Object.values(s.eps).filter((e) => e.file).length;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { CATS } from '../data';
 import { useStore } from '../store';
 import { isFeedUrl } from '../lib/opml';
@@ -12,7 +13,7 @@ const compact = { minHeight: 29, fontSize: 12, padding: '3px 6px', borderRadius:
 type Load<T> = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ok'; data: T };
 
 export function DiscoverScreen() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ addFeed: s.addFeed, cat: s.cat, directory: s.directory, discoverQuery: s.discoverQuery, openShow: s.openShow, set: s.set, toast: s.toast })));
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const q = s.discoverQuery.trim();
@@ -111,7 +112,7 @@ function SuggestedRow({ sug }: { sug: ReturnType<typeof useSuggestions> }) {
 
 /** The chart for the region (or gpodder.net's top list), minus shows already suggested above it. */
 function BrowseGrid({ skip }: { skip: DirectoryResult[] }) {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ cat: s.cat, directory: s.directory })));
   const { country, source } = s.directory;
   const [load, setLoad] = useState<Load<DirectoryResult[]>>({ state: 'loading' });
   const [retry, setRetry] = useState(0);
@@ -143,7 +144,7 @@ function BrowseGrid({ skip }: { skip: DirectoryResult[] }) {
 }
 
 function SearchResults({ q }: { q: string }) {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ cat: s.cat, directory: s.directory })));
   const { country, source } = s.directory;
   const [load, setLoad] = useState<Load<SearchOutcome>>({ state: 'loading' });
   const [retry, setRetry] = useState(0);

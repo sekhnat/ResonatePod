@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore, type SegValues, type Toggles } from '../store';
 import { Seg, Toggle, h1Style } from '../components/ui';
 import { platform } from '../platform';
@@ -14,7 +15,10 @@ type Row = { label: string; hint?: string } & (
 );
 
 export function SettingsScreen() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({
+    directory: s.directory, eps: s.eps, folder: s.folder, set: s.set, setPrefs: s.setPrefs, setSeg: s.setSeg, setToggle: s.setToggle,
+    shows: s.shows, storageLimitGb: s.storageLimitGb, sv: s.sv, sync: s.sync, syncing: s.syncing, tg: s.tg, toast: s.toast, usedBytes: s.usedBytes,
+  })));
   const changeFolder = async () => {
     if (!platform.isDesktop) { s.set({ dialog: 'folder' }); return; }
     const folder = await platform.pickFolder(s.folder);
