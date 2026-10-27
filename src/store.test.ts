@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, useStore } from './store';
-import { applySort, inboxKeys, rowsFor, totalUnplayed, unplayedFor } from './model';
+import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
+import { getPlayhead, setPlayhead } from './playhead';
 
 const FEED_URL = 'https://kernelpanic.example/feed.xml';
 const feed = readFileSync('test/fixtures/feed.xml', 'utf8');
@@ -21,6 +22,7 @@ const http = vi.spyOn(platform, 'http');
 
 beforeEach(async () => {
   useStore.setState({ ...initial, hydrated: true }, true);
+  setPlayhead(0);
   feedBody = feed;
   http.mockReset();
   http.mockImplementation(async (url, req) => {
@@ -154,11 +156,11 @@ describe('playback', () => {
   it('resumes from the saved position and saves it when switching', () => {
     useStore.setState({ eps: { ...st().eps, [K41]: { ...getEp(st(), K41), pos: 600 } } });
     st().play(K41);
-    expect(st().pos).toBe(600);
+    expect(getPlayhead()).toBe(600);
     st().onTime(700);
     st().play(K42);
     expect(getEp(st(), K41).pos).toBe(700);
-    expect(st().pos).toBe(0);
+    expect(getPlayhead()).toBe(0);
     expect(st().speed).toBe(1.2);
   });
 
@@ -166,7 +168,7 @@ describe('playback', () => {
     st().setOverride('kernel-panic-hour', 'intro', '30 s');
     st().setOverride('kernel-panic-hour', 'speed', '1.5×');
     st().play(K40);
-    expect(st().pos).toBe(30);
+    expect(getPlayhead()).toBe(30);
     expect(st().speed).toBe(1.5);
   });
 
@@ -418,6 +420,29 @@ describe('download lifecycle', () => {
     expect(getEp(st(), K42).file).toBe('/new/KP/a.mp3');
     expect(getEp(st(), K41).file).toBe('/other/b.mp3');
     move.mockRestore();
+  });
+});
+
+describe('episode rows', () => {
+  const row = (key: string) => rowsFor(st(), [key])[0];
+
+  it('are built without the live position; liveMeta carries the playing episode’s time left', () => {
+    st().play(K42);
+    setPlayhead(0);
+    const before = row(K42);
+    setPlayhead(1200);
+    expect(row(K42)).toEqual(before);
+    expect(before).toMatchObject({ isCur: true, isPlaying: true });
+    expect(before.meta).toMatch(/ · 72 min · 1:12:03 left · 66 MB$/);
+    expect(liveMeta(before, 1200)).toBe(`${before.head} · 52:03 left · ${before.tail}`);
+    expect(before.head).toMatch(/ · 72 min$/);
+    expect(before.tail).toBe('66 MB');
+  });
+
+  it('show the saved time left on a partly played episode that is not playing', () => {
+    useStore.setState({ eps: { ...st().eps, [K41]: { ...getEp(st(), K41), pos: 600 } } });
+    expect(row(K41).meta).toContain('54:00 left'); // 3840 s - 600 s
+    expect(row(K40).meta).not.toContain('left');
   });
 });
 

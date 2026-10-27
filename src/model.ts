@@ -18,7 +18,11 @@ export interface EpisodeRow {
   art: string;
   mono: string;
   imageUrl?: string;
+  /** The detail line ("Today · 72 min · 12:03 left · 66 MB"), with the saved position for any time left. */
   meta: string;
+  /** What comes before and after the time left in `meta`, for liveMeta. */
+  head: string;
+  tail: string;
   durMin: number;
   /** Publication time, ms since epoch; 0 when undated. */
   pubDate: number;
@@ -38,7 +42,12 @@ export interface EpisodeRow {
   file?: string;
 }
 
-export function episodeRow(s: State, key: string): EpisodeRow | null {
+/**
+ * The row for an episode. It doesn't read the live playback position (that changes four times a second, and
+ * rows are built for whole lists): the playing episode shows its saved position until RowMeta/RowProgress,
+ * which read the playhead, take over.
+ */
+export function episodeRow(s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'playing'>, key: string): EpisodeRow | null {
   const e = epInfo(s, key);
   if (!e) return null;
   const st = getEp(s, key);
@@ -47,15 +56,15 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
   const played = st.played && !isCur;
   const status: EpStatus = dlItem && !dlItem.error ? 'downloading' : played ? 'played' : st.file ? 'downloaded' : 'cloud';
   const [stIcon, stColor, stLabel] = STATUS[status];
-  const pos = isCur ? s.pos : st.pos;
-  const parts = [e.date];
-  if (e.durMin) parts.push(`${e.durMin} min`);
-  if (isCur && e.dur) parts.push(`${fmt(e.dur - s.pos)} left`);
-  else if (!played && pos > 30 && e.dur) parts.push(`${fmt(e.dur - pos)} left`);
-  if (e.sizeMb) parts.push(`${e.sizeMb} MB`);
-  if (e.ep.enclosureType.startsWith('video/')) parts.push('Video');
-  if (dlItem?.error) parts.push('Download failed');
-  else if (dlItem && dlItem.total) parts.push(`${Math.round((dlItem.received / dlItem.total) * 100)}%`);
+  const pos = st.pos;
+  const head = [e.date];
+  if (e.durMin) head.push(`${e.durMin} min`);
+  const tail: string[] = [];
+  if (e.sizeMb) tail.push(`${e.sizeMb} MB`);
+  if (e.ep.enclosureType.startsWith('video/')) tail.push('Video');
+  if (dlItem?.error) tail.push('Download failed');
+  else if (dlItem && dlItem.total) tail.push(`${Math.round((dlItem.received / dlItem.total) * 100)}%`);
+  const left = (isCur || (!played && pos > 30)) && e.dur ? [`${fmt(e.dur - pos)} left`] : [];
   return {
     key,
     title: e.title,
@@ -64,7 +73,9 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
     art: art(e.show.hue),
     mono: mono(e.show.title),
     imageUrl: e.ep.imageUrl ?? e.show.imageUrl,
-    meta: parts.join(' · '),
+    meta: [...head, ...left, ...tail].join(' · '),
+    head: head.join(' · '),
+    tail: tail.join(' · '),
     durMin: e.durMin,
     pubDate: e.ep.pubDate,
     dur: e.dur,
@@ -80,7 +91,11 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
   };
 }
 
-export const rowsFor = (s: State, keys: string[]) => keys.map((k) => episodeRow(s, k)).filter((r): r is EpisodeRow => !!r);
+/** The detail line of the playing episode's row at a live position. */
+export const liveMeta = (e: Pick<EpisodeRow, 'head' | 'tail' | 'dur'>, pos: number) =>
+  [e.head, `${fmt(e.dur - pos)} left`, e.tail].filter(Boolean).join(' · ');
+
+export const rowsFor = (s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'playing'>, keys: string[]) => keys.map((k) => episodeRow(s, k)).filter((r): r is EpisodeRow => !!r);
 
 export const applyFilter = (rows: EpisodeRow[], f: Filter) =>
   rows.filter((r) => f === 'All' || (f === 'Unplayed' && !r.played) || (f === 'Downloaded' && r.downloaded));

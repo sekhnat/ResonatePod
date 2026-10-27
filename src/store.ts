@@ -11,6 +11,7 @@ import {
 import type { OpmlFeed } from './lib/opml';
 import { defaultCountry, gpodderResult, resolveFeedUrl, type DirectoryResult, type SourceChoice } from './lib/directory';
 import { SMALL_BODY_BYTES, platform } from './platform';
+import { getPlayhead, setPlayhead } from './playhead';
 
 export type Screen = 'inbox' | 'shows' | 'show' | 'queue' | 'downloads' | 'discover' | 'settings';
 export type Filter = 'All' | 'Unplayed' | 'Downloaded';
@@ -74,7 +75,6 @@ interface Data {
   shows: Show[];
   eps: Record<string, EpState>;
   cur: string | null;
-  pos: number;
   speed: number;
   volume: number;
   muted: boolean;
@@ -410,7 +410,6 @@ const initialData: Data = {
   shows: [],
   eps: {},
   cur: null,
-  pos: 0,
   speed: 1.2,
   volume: 0.8,
   muted: false,
@@ -512,7 +511,7 @@ export const useStore = create<State>()(
         if (!info || !s.sync.server || started === null) return;
         const action: EpisodeAction = {
           podcast: info.show.feedUrl, episode: info.ep.enclosureUrl, action: 'play', timestamp: isoNow(),
-          started: Math.floor(started), position: Math.floor(s.pos), total: Math.floor(info.dur || s.pos),
+          started: Math.floor(started), position: Math.floor(getPlayhead()), total: Math.floor(info.dur || getPlayhead()),
         };
         // A newer session of an episode replaces the older one, so a long offline spell stays small;
         // the cap is only a backstop for someone who plays thousands of different episodes without syncing.
@@ -523,7 +522,7 @@ export const useStore = create<State>()(
       const saveCurPos = (): Record<string, EpState> => {
         const s = get();
         if (!s.cur) return s.eps;
-        return { ...s.eps, [s.cur]: { ...getEp(s, s.cur), pos: s.pos, lastPlayed: Date.now() } };
+        return { ...s.eps, [s.cur]: { ...getEp(s, s.cur), pos: getPlayhead(), lastPlayed: Date.now() } };
       };
 
       return {
@@ -559,39 +558,41 @@ export const useStore = create<State>()(
           if (pos === 0) pos = introFor(s, next.show.id);
           lastChapterIdx = -1;
           playStartedAt = pos;
-          set({ eps, cur: key, pos, playing: true, palette: false, speed: speedFor(s, next.show.id) });
+          setPlayhead(pos); // before `cur` changes, so the engine loads the episode at this position
+          set({ eps, cur: key, playing: true, palette: false, speed: speedFor(s, next.show.id) });
           void get().loadMeta(key);
         },
         togglePlay: () => {
           const s = get();
           if (!s.cur) return;
           if (s.playing) { recordPlay(); set({ playing: false, eps: saveCurPos() }); }
-          else { playStartedAt = s.pos; set({ playing: true }); }
+          else { playStartedAt = getPlayhead(); set({ playing: true }); }
         },
         seek: (pos) => {
           const s = get();
           const cur = epInfo(s, s.cur);
           if (!cur) return;
           const p = Math.max(0, cur.dur ? Math.min(cur.dur, pos) : pos);
-          set({ pos: p });
+          setPlayhead(p);
           player?.seek(p);
         },
-        skipBack: () => get().seek(get().pos - skipAmounts(get().sv.skip)[0]),
-        skipFwd: () => get().seek(get().pos + skipAmounts(get().sv.skip)[1]),
+        skipBack: () => get().seek(getPlayhead() - skipAmounts(get().sv.skip)[0]),
+        skipFwd: () => get().seek(getPlayhead() + skipAmounts(get().sv.skip)[1]),
         prevChapter: () => {
           const s = get();
           const cur = epInfo(s, s.cur);
           if (!cur) return;
           const ch = chaptersOf(s, cur);
-          const ci = currentChapter(ch, s.pos);
-          get().seek(ch[Math.max(0, s.pos - ch[ci].at > 3 ? ci : ci - 1)].at);
+          const pos = getPlayhead();
+          const ci = currentChapter(ch, pos);
+          get().seek(ch[Math.max(0, pos - ch[ci].at > 3 ? ci : ci - 1)].at);
         },
         nextChapter: () => {
           const s = get();
           const cur = epInfo(s, s.cur);
           if (!cur) return;
           const ch = chaptersOf(s, cur);
-          const ci = currentChapter(ch, s.pos);
+          const ci = currentChapter(ch, getPlayhead());
           if (ci < ch.length - 1) get().seek(ch[ci + 1].at);
         },
         // The next faster preset from wherever the speed is now (a show can set one that isn't a preset), wrapping to the slowest.
@@ -613,7 +614,7 @@ export const useStore = create<State>()(
         },
         onTime: (pos) => {
           const s = get();
-          set({ pos });
+          setPlayhead(pos);
           const cur = epInfo(s, s.cur);
           if (!cur) return;
           const ci = currentChapter(chaptersOf(s, cur), pos);
@@ -687,7 +688,7 @@ export const useStore = create<State>()(
         checkpoint: () => {
           const s = get();
           if (s.trimPending > 0) set({ trimSaved: s.trimSaved + s.trimPending, trimPending: 0 });
-          if (s.cur && Math.abs(getEp(s, s.cur).pos - s.pos) >= 1) set({ eps: saveCurPos() });
+          if (s.cur && Math.abs(getEp(s, s.cur).pos - getPlayhead()) >= 1) set({ eps: saveCurPos() });
         },
         moveDownloads: async (from, to) => {
           const files = Object.values(get().eps).map((e) => e.file).filter((f): f is string => !!f);
@@ -943,7 +944,7 @@ export const useStore = create<State>()(
             cfgOpen: false,
             dialog: null,
           };
-          if (s.cur?.startsWith(prefix)) Object.assign(patch, { cur: null, pos: 0, playing: false });
+          if (s.cur?.startsWith(prefix)) { Object.assign(patch, { cur: null, playing: false }); setPlayhead(0); }
           if (s.showId === id) Object.assign(patch, { showId: shows[0]?.id ?? '', screen: s.screen === 'show' ? 'shows' : s.screen });
           set(patch);
           if (!quiet) s.toast(`Unsubscribed from ${show.title}`);
@@ -1043,16 +1044,16 @@ export const useStore = create<State>()(
       name: 'resonate-library',
       version: 2,
       storage: libraryStorage,
-      // The live position changes several times a second; it's saved through
+      // The live position isn't part of the store (see playhead.ts); it's saved through
       // eps[cur].pos (on pause, switch, a 30 s checkpoint and quit) instead.
       partialize: (s) => {
         const data: Partial<Data> = {};
-        for (const k of Object.keys(initialData) as (keyof Data)[]) if (k !== 'pos') (data as Record<string, unknown>)[k] = s[k];
+        for (const k of Object.keys(initialData) as (keyof Data)[]) (data as Record<string, unknown>)[k] = s[k];
         return data;
       },
       onRehydrateStorage: () => (state) => {
-        const pos = state?.cur ? getEp(state, state.cur).pos || state.pos : 0;
-        useStore.setState({ hydrated: true, showId: state?.shows[0]?.id ?? '', pos });
+        setPlayhead(state?.cur ? getEp(state, state.cur).pos : 0);
+        useStore.setState({ hydrated: true, showId: state?.shows[0]?.id ?? '' });
       },
     },
   ),

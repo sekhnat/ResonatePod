@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { SORTS, type Sort } from '../store';
+import { liveMeta, type EpisodeRow } from '../model';
+import { usePlayhead } from '../playhead';
 
 export const selectStyle: CSSProperties = { width: 'auto', fontSize: 12.5, minHeight: 36, paddingRight: 6, cursor: 'pointer' };
 
@@ -73,6 +75,20 @@ export function PageHeader({ title, sub, children }: { title: string; sub?: Reac
 }
 
 /** Round play/pause button used on every episode row. */
+/**
+ * A row's detail line. The playing episode's shows its live time left, redrawn once a second; every other row
+ * is static, so a list doesn't redraw as playback advances.
+ */
+export function RowMeta({ e, prefix = '' }: { e: EpisodeRow; prefix?: string }) {
+  const sec = usePlayhead((p) => (e.isCur && e.dur ? Math.floor(p) : -1));
+  return <>{prefix}{sec >= 0 ? liveMeta(e, sec) : e.meta}</>;
+}
+
+/** How far through an episode is (0–1), live for the playing one and in steps of half a percent. */
+export function useRowProgress(e: EpisodeRow) {
+  return usePlayhead((p) => (e.isCur && e.dur ? Math.round((p / e.dur) * 200) / 200 : e.progress));
+}
+
 export function RowPlay({ isCur, isPlaying, onClick }: { isCur: boolean; isPlaying: boolean; onClick: () => void }) {
   return (
     <button className="btn btn-icon btn-secondary" onClick={onClick} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}
