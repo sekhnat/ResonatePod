@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { expandHome } from './downloads';
+import { readJsonFile, writeFileAtomic, serialised } from './files';
 
 /** `p` with symlinks resolved as far as it exists; a path that isn't there yet keeps its remaining tail. */
 async function realPath(p: string): Promise<string> {
@@ -53,10 +54,8 @@ export class DownloadRoots {
 
   /** Reads the saved list; without one, starts from the default folder plus whatever `adopt` finds. */
   async load(adopt: () => Promise<string[]>) {
-    try {
-      const saved = JSON.parse(await fs.readFile(this.file, 'utf8')).downloadRoots;
-      if (Array.isArray(saved) && saved.every((r) => typeof r === 'string')) { this.roots = saved; return; }
-    } catch { /* first run, or unreadable: fall through */ }
+    const saved = (await readJsonFile<{ downloadRoots?: unknown }>(this.file, {})).downloadRoots; // an unreadable file is kept aside
+    if (Array.isArray(saved) && saved.every((r) => typeof r === 'string')) { this.roots = saved; return; }
     this.roots = [...new Set([path.resolve(expandHome(this.fallback)), ...(await adopt())])];
     await this.save();
   }
@@ -78,6 +77,7 @@ export class DownloadRoots {
 
   private async save() {
     await fs.mkdir(path.dirname(this.file), { recursive: true });
-    await fs.writeFile(this.file, JSON.stringify({ downloadRoots: this.roots }));
+    const text = JSON.stringify({ downloadRoots: this.roots });
+    await serialised(this.file, () => writeFileAtomic(this.file, text));
   }
 }
