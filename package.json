@@ -10,24 +10,28 @@
     "build": "tsc -b && vite build && node scripts/build-electron.mjs",
     "start": "electron .",
     "dist": "npm run build && electron-builder --linux AppImage deb",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:db",
+    "test:db": "ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs run --config vitest.db.config.ts",
     "test:e2e": "npm run build && node e2e/run.mjs",
     "typecheck": "tsc -b",
     "bench": "vitest bench --run",
     "test:perf": "PERF=1 vitest run test/perf",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "postinstall": "electron-builder install-app-deps"
   },
   "license": "MIT",
   "dependencies": {
     "@fontsource/inter": "^5.1.0",
     "@phosphor-icons/web": "^2.1.1",
     "@tanstack/react-virtual": "^3.14.13",
+    "better-sqlite3": "^12.11.1",
     "fast-xml-parser": "^4.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -58,7 +62,11 @@
       "dist/**",
       "dist-electron/**",
       "assets/**",
-      "package.json"
+      "package.json",
+      "!node_modules/better-sqlite3/{deps,src}/**"
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**"
     ],
     "directories": {
       "output": "release"
@@ -83,5 +91,10 @@
         "libsecret-1-0"
       ]
     }
+  },
+  "allowScripts": {
+    "electron": true,
+    "esbuild": true,
+    "better-sqlite3": true
   }
 }
