@@ -90,7 +90,6 @@ interface Data {
   sv: SegValues;
   folder: string;
   storageLimitGb: number;
-  usedBytes: number;
   sync: SyncState;
   lastChecked: number;
   trimSaved: number;
@@ -109,6 +108,8 @@ interface Ui {
   /** Feed that needs a username and password (the show, when already subscribed). */
   authFor: { url: string; showId?: string } | null;
   metered: boolean | null;
+  /** Size of everything in the download folder, from the last scan (null before one). Information only: the limit counts tracked files. */
+  folderBytes: number | null;
   /** Silence-trim time saved since the last checkpoint; kept out of the persisted data so it doesn't trigger a save every second. */
   trimPending: number;
   screen: Screen;
@@ -347,15 +348,32 @@ export function autoDownloadKeys(s: Pick<Data, 'shows' | 'eps' | 'ovr' | 'tg' | 
   });
 }
 
+let trackedFor: Data['eps'] | undefined;
+let trackedSum = 0;
+
+/**
+ * What the downloaded episodes Resonate knows about take up: the sizes recorded when each finished downloading.
+ * This is what the storage limit counts. Walking the folder would also count partial files, other programs'
+ * files and the files of shows that were unsubscribed from, none of which cleanup can delete.
+ */
+export function trackedBytes(eps: Data['eps']): number {
+  if (eps !== trackedFor) {
+    trackedSum = 0;
+    for (const e of Object.values(eps)) if (e.file) trackedSum += e.fileBytes ?? 0;
+    trackedFor = eps;
+  }
+  return trackedSum;
+}
+
 /** Files to delete under the "delete played" and storage-limit preferences, oldest played first. */
-export function cleanupKeys(s: Pick<Data, 'eps' | 'sv' | 'usedBytes' | 'storageLimitGb' | 'cur'>, now = Date.now()): string[] {
+export function cleanupKeys(s: Pick<Data, 'eps' | 'sv' | 'storageLimitGb' | 'cur'>, now = Date.now()): string[] {
   const played = Object.entries(s.eps)
     .filter(([k, e]) => e.file && e.played && k !== s.cur)
     .sort((a, b) => (a[1].playedAt ?? 0) - (b[1].playedAt ?? 0));
   const out = new Set<string>();
   const maxAge = s.sv.del === '1 day' ? DAY : s.sv.del === '1 week' ? 7 * DAY : 0;
   if (maxAge) for (const [k, e] of played) if (now - (e.playedAt ?? now) > maxAge) out.add(k);
-  let used = s.usedBytes - [...out].reduce((a, k) => a + (s.eps[k].fileBytes ?? 0), 0);
+  let used = trackedBytes(s.eps) - [...out].reduce((a, k) => a + (s.eps[k].fileBytes ?? 0), 0);
   const limit = s.storageLimitGb * GB;
   for (const [k, e] of played) {
     if (used <= limit) break;
@@ -421,7 +439,6 @@ const initialData: Data = {
   sv: { keep: '3', par: '2', speed: '1.2×', del: '1 week', skip: '15 / 30 s' },
   folder: '~/Podcasts',
   storageLimitGb: 40,
-  usedBytes: 0,
   sync: { server: '', user: '', device: '', subsSince: 0, actionsSince: 0, known: [], pending: [], lastSynced: 0 },
   lastChecked: 0,
   trimSaved: 0,
@@ -437,6 +454,7 @@ const initialUi: Ui = {
   pendingMove: null,
   authFor: null,
   metered: null,
+  folderBytes: null,
   trimPending: 0,
   screen: 'inbox',
   history: [],
@@ -718,7 +736,7 @@ export const useStore = create<State>()(
           if (!st.file) return;
           await platform.deleteFile(st.file).catch(() => {});
           const now = get();
-          set({ eps: { ...now.eps, [key]: { ...getEp(now, key), file: undefined, fileBytes: undefined } }, usedBytes: Math.max(0, now.usedBytes - (st.fileBytes ?? 0)) });
+          set({ eps: { ...now.eps, [key]: { ...getEp(now, key), file: undefined, fileBytes: undefined } } });
           if (!quiet) s.toast(`Deleted “${epInfo(s, key)?.title ?? 'episode'}” from disk`);
         },
         toggleDlPause: () => set((s) => ({ dlPaused: !s.dlPaused })),
@@ -738,7 +756,6 @@ export const useStore = create<State>()(
               dlPending: s.dlPending.filter((k) => k !== e.key),
               eps: { ...s.eps, [e.key]: { ...getEp(s, e.key), file: e.path, fileBytes: e.bytes } },
               dlDone: [{ key: e.key, when: Date.now() }, ...s.dlDone.filter((d) => d.key !== e.key)].slice(0, 50),
-              usedBytes: s.usedBytes + e.bytes,
             });
             // Streaming may not have allowed reading chapters from the file; try the local copy.
             if (e.key === s.cur && !s.meta[e.key]?.chapters?.length) {
@@ -756,14 +773,14 @@ export const useStore = create<State>()(
         updateUsage: async () => {
           if (!platform.isDesktop) return;
           const bytes = await platform.diskUsage(get().folder).catch(() => null);
-          if (bytes != null) set({ usedBytes: bytes });
+          if (bytes != null) set({ folderBytes: bytes });
         },
         cleanupStorage: async (opts = {}) => {
           const s = get();
           const keys = cleanupKeys({ ...s, sv: s.tg.deletePlayed ? s.sv : { ...s.sv, del: 'Never' } });
           for (const k of keys) await get().deleteFile(k, true);
           if (keys.length) s.toast(`Freed space: removed ${keys.length} played episode${keys.length > 1 ? 's' : ''}`);
-          if (!opts.quiet && get().usedBytes > s.storageLimitGb * GB) s.toast('Storage limit reached — delete episodes or raise the limit in Preferences');
+          if (!opts.quiet && trackedBytes(get().eps) > s.storageLimitGb * GB) s.toast('Storage limit reached — delete episodes or raise the limit in Preferences');
         },
 
         addToQueue: (key) => {

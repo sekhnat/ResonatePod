@@ -88,7 +88,10 @@ export function startServices() {
   }
 
   // "Delete played episodes" and the storage limit apply on a timer, not only after refreshes and downloads.
-  const cleanup = () => { void st().updateUsage().then(() => st().cleanupStorage({ quiet: true })); };
+  // They go by the sizes recorded for each download, so this needs no walk of the folder; that is done once now
+  // (for the figure in Preferences) and again when the folder changes or the user asks.
+  const cleanup = () => { void st().cleanupStorage({ quiet: true }); };
+  void st().updateUsage();
   cleanup();
   setInterval(cleanup, HOUR);
 
