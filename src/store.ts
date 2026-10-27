@@ -244,6 +244,15 @@ const indexBy = <T,>(items: T[], key: (x: T) => string) => {
   return m;
 };
 
+// The active-download list is replaced on every progress event, so it is indexed once per array
+// instead of being scanned for each row (or each episode a download rule looks at).
+const dlIndex = new WeakMap<ActiveDl[], Map<string, ActiveDl>>();
+export const dlByKey = (dl: ActiveDl[]) => {
+  let m = dlIndex.get(dl);
+  if (!m) dlIndex.set(dl, (m = indexBy(dl, (d) => d.key)));
+  return m;
+};
+
 export const epInfo = (s: Pick<Data, 'shows'>, key: string | null): EpisodeInfo | null => {
   if (!key) return null;
   const [id, guid] = parseKey(key);
@@ -333,9 +342,10 @@ export function autoDownloadKeys(s: Pick<Data, 'shows' | 'eps' | 'ovr' | 'tg' | 
   const rule = ruleFor(s, showId).value;
   if (rule === 'Off') return [];
   const n = rule === 'All' ? show.eps.length : parseInt(rule.replace('Latest ', ''), 10);
+  const downloading = dlByKey(s.dl);
   return show.eps.slice(0, n).map((e) => epKey(showId, e.guid)).filter((k) => {
     const st = getEp(s, k);
-    return !st.file && !st.played && !s.dl.some((d) => d.key === k);
+    return !st.file && !st.played && !downloading.has(k);
   });
 }
 
