@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DownloadManager, moveFiles, targetPath } from './downloads';
+import { DownloadManager, failureMessage, moveFiles, retryable, targetPath } from './downloads';
 import type { DownloadEvent, DownloadJob } from '../shared/types';
 
 const BODY = Buffer.alloc(300_000, 7);
@@ -65,6 +65,33 @@ describe('DownloadManager', () => {
     await new Promise((ok) => setTimeout(ok, 50));
     expect(events.map((e) => e.type)).toEqual(['error']);
     expect(() => m.cancel('kp:1')).not.toThrow();
+  });
+
+  it('reports a failed write once instead of crashing or retrying', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
+    const j = job(dir);
+    // A directory where the part file belongs: opening it for writing fails with EISDIR.
+    mkdirSync(`${targetPath(j)}.part`, { recursive: true });
+    const m = new DownloadManager(async () => new Response('x'.repeat(1000)), { retryDelays: [10, 10] });
+    const events: DownloadEvent[] = [];
+    m.on('event', (e: DownloadEvent) => events.push(e));
+    const failed = until(m, (e) => e.type === 'error');
+    m.start(j);
+    expect((await failed).type).toBe('error');
+    await new Promise((ok) => setTimeout(ok, 60));
+    expect(events.filter((e) => e.type === 'retry')).toEqual([]);
+    expect(events.map((e) => e.type)).not.toContain('done');
+    expect(existsSync(targetPath(j))).toBe(false);
+  });
+
+  it('knows which failures are worth retrying, and how to word the disk ones', () => {
+    const disk = (code: string) => Object.assign(new Error(`${code}: boom`), { code });
+    expect(retryable(new TypeError('fetch failed'))).toBe(true);
+    expect(retryable(new Error('the connection closed early'))).toBe(true);
+    for (const code of ['ENOSPC', 'EACCES', 'EROFS', 'EISDIR']) expect(retryable(disk(code))).toBe(false);
+    expect(failureMessage(disk('ENOSPC'))).toBe('there’s no space left for the download');
+    expect(failureMessage(disk('EACCES'))).toBe('the download folder can’t be written to');
+    expect(failureMessage(disk('EISDIR'))).toBe('EISDIR: boom');
   });
 
   it('gives two episodes that share a day and title different files', () => {
