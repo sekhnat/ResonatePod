@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import type { Episode, Show } from '../data';
 import { useStore, type State } from '../store';
 import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
 
@@ -12,9 +13,31 @@ const palette = (s: State) => ({
   toggleDlPause: s.toggleDlPause, openShow: s.openShow, play: s.play, runSync: s.runSync,
 });
 export type PaletteState = ReturnType<typeof palette>;
+export const selectPalette = palette;
 
-export function paletteItems(s: PaletteState): PalItem[] {
-  const q = s.query.trim().toLowerCase();
+/** A show or episode to search, with its text already lower-cased (one hint string is shared by all of a show's episodes). */
+interface Entry { lower: string; hintLower: string; show: Show; ep?: Episode }
+
+const indexes = new WeakMap<Show[], Entry[]>();
+
+/** Every show, then every episode, in the order results are shown. Built once per list of shows, when first searched. */
+export function searchIndex(shows: Show[]): Entry[] {
+  let index = indexes.get(shows);
+  if (!index) {
+    index = shows.map((show) => ({ lower: show.title.toLowerCase(), hintLower: 'show', show }));
+    for (const show of shows) {
+      const hintLower = show.title.toLowerCase();
+      for (const ep of show.eps) index.push({ lower: ep.title.toLowerCase(), hintLower, show, ep });
+    }
+    indexes.set(shows, index);
+  }
+  return index;
+}
+
+const MAX_RESULTS = 9;
+
+export function paletteItems(s: PaletteState, query = s.query): PalItem[] {
+  const q = query.trim().toLowerCase();
   const cmds: PalItem[] = [
     { label: s.playing ? 'Pause' : 'Play', hint: 'Space', icon: 'ph ph-play-pause', run: () => { s.set({ palette: false }); s.togglePlay(); } },
     { label: 'Refresh all feeds', hint: 'Ctrl R', icon: 'ph ph-arrows-clockwise', run: () => { s.set({ palette: false }); void s.refresh(); } },
@@ -35,18 +58,37 @@ export function paletteItems(s: PaletteState): PalItem[] {
     { label: 'Sleep timer: off', hint: '', icon: 'ph ph-moon', run: () => s.setSleep({ mode: 'off' }) },
     { label: 'Keyboard shortcuts', hint: 'Ctrl /', icon: 'ph ph-keyboard', run: () => s.set({ palette: false, dialog: 'shortcuts' }) },
   ];
-  const shows = s.shows.map((x) => ({ label: x.title, hint: 'Show', icon: 'ph ph-microphone', run: () => s.openShow(x.id) }));
-  const eps: PalItem[] = [];
-  s.shows.forEach((x) => x.eps.forEach((e) => eps.push({ label: e.title, hint: x.title, icon: 'ph ph-play-circle', run: () => s.play(`${x.id}:${e.guid}`) })));
   if (s.syncServer) extra.push({ label: 'Sync now', hint: '', icon: 'ph ph-arrows-left-right', run: () => { s.set({ palette: false }); void s.runSync(); } });
-  return [...cmds, ...extra, ...shows, ...eps].filter((x) => x.label.toLowerCase().includes(q) || x.hint.toLowerCase().includes(q)).slice(0, 9);
+  const out = [...cmds, ...extra].filter((x) => x.label.toLowerCase().includes(q) || x.hint.toLowerCase().includes(q)).slice(0, MAX_RESULTS);
+  // Shows and episodes: stop at the ninth hit, and only make a result (and its handler) for a hit.
+  for (const e of out.length < MAX_RESULTS ? searchIndex(s.shows) : []) {
+    if (!e.lower.includes(q) && !e.hintLower.includes(q)) continue;
+    const { show, ep } = e;
+    out.push(ep
+      ? { label: ep.title, hint: show.title, icon: 'ph ph-play-circle', run: () => s.play(`${show.id}:${ep.guid}`) }
+      : { label: show.title, hint: 'Show', icon: 'ph ph-microphone', run: () => s.openShow(show.id) });
+    if (out.length >= MAX_RESULTS) break;
+  }
+  return out;
+}
+
+/** `value`, once it has stopped changing for `ms`; an empty string shows at once. */
+function useDebounced(value: string, ms: number) {
+  const [later, setLater] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setLater(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return value.trim() ? later : value;
 }
 
 export function CommandPalette() {
   const s = useStore(useShallow(palette));
   const ref = useRef<HTMLInputElement>(null);
   const [sel, setSel] = useState(0);
-  const items = paletteItems(s);
+  // Typing stays instant; the search over every episode waits for a pause (and Enter always acts on the current text).
+  const q = useDebounced(s.query, 100);
+  const items = paletteItems(s, q);
   useEffect(() => { ref.current?.focus(); }, []);
   useEffect(() => { setSel(0); }, [s.query]);
   const close = () => s.set({ palette: false });
@@ -56,7 +98,8 @@ export function CommandPalette() {
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((i) => Math.max(0, i - 1)); }
     else if (e.key === 'Enter') {
       e.preventDefault();
-      if (items[sel]) items[sel].run();
+      const now = q === s.query ? items : paletteItems(s);
+      if (now[sel]) now[sel].run();
       else { s.go('discover', { discoverQuery: s.query }); }
     } else if (e.key === 'Escape') { e.preventDefault(); close(); }
   };
