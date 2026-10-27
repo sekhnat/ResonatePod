@@ -35,7 +35,7 @@ export function HeaderBar() {
     <div className="titlebar" onDoubleClick={(e) => { if (e.target === e.currentTarget) platform.toggleMaximize(); }}>
       {chrome === 'KDE' && <i className="ph-fill ph-waveform titlebar-brand" />}
       <div className="titlebar-nav">
-        <GhostIcon icon="ph ph-caret-left" title="Back" onClick={s.goBack} color="var(--color-text)" style={{ opacity: s.canGoBack ? 1 : 0.45 }} />
+        <GhostIcon icon="ph ph-caret-left" title="Back" onClick={s.goBack} color="var(--color-text)" className={s.canGoBack ? undefined : 'dim'} />
         <GhostIcon icon={s.refreshing ? 'ph ph-circle-notch spin' : 'ph ph-arrows-clockwise'} title="Refresh all feeds (Ctrl+R)" onClick={() => void s.refresh()} color="var(--color-text)" />
       </div>
       <div className="titlebar-title">

@@ -115,6 +115,7 @@ button { font: inherit; }
 .btn.row-play.cur { color: var(--color-accent); border-color: var(--color-accent); }
 .row-play i { font-size: 13px; }
 .btn.ghost-icon { border: none; }
+.btn.dim { opacity: 0.45; }
 
 .vlist { position: relative; }
 .vlist-item { position: absolute; top: 0; left: 0; width: 100%; }
