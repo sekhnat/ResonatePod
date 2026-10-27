@@ -9,8 +9,8 @@ import { makeFeedXml, makeLibrary, measure, stateWith } from './fixture';
 // Set at about three times what each took when they were added (58, 7, 15, 125 and 31 ms on a laptop).
 const BUDGET_MS = {
   rowsFor: 16, // one 2,000-episode show: a frame; it took 58 ms before epInfo was indexed
-  inboxKeys: 25, // goal 5
-  totalUnplayed: 50, // the sidebar runs this on every render
+  inboxKeys: 40, // when recomputed (about 12 ms) (the result is cached per library state); goal 5, which needs Phase 3's sparse inbox
+  totalUnplayed: 50, // when recomputed; the sidebar asks on every render and now almost always hits the cache
   stringify: 400, // the whole library; Phase 3 stops doing this on every save
   parseFeed: 120, // 2,000 episodes, ~4.6 MB
 };
@@ -20,6 +20,10 @@ describe.skipIf(!process.env.PERF)('performance budgets', () => {
   const s = stateWith(lib);
   const keys = lib.shows[0].eps.map((e) => epKey(lib.shows[0].id, e.guid));
   const feed = makeFeedXml(2000);
+  // inboxKeys and the unread counts are cached per library state, so they are timed on states they haven't seen.
+  const fresh = Array.from({ length: 8 }, () => stateWith({ shows: lib.shows, eps: { ...lib.eps } }));
+  let next = 0;
+  const unseen = () => fresh[next++ % fresh.length];
   const timings: Record<string, number> = {};
   const within = (name: keyof typeof BUDGET_MS, fn: () => unknown, runs?: number) => {
     timings[name] = measure(fn, runs);
@@ -27,8 +31,8 @@ describe.skipIf(!process.env.PERF)('performance budgets', () => {
   };
 
   it('builds the rows for a 2,000-episode show', () => within('rowsFor', () => rowsFor(s, keys)));
-  it('lists the inbox', () => within('inboxKeys', () => inboxKeys(s)));
-  it('counts unread for the sidebar', () => within('totalUnplayed', () => totalUnplayed(s)));
+  it('lists the inbox', () => within('inboxKeys', () => inboxKeys(unseen())));
+  it('counts unread for the sidebar', () => within('totalUnplayed', () => totalUnplayed(unseen())));
   it('serialises the library', () => within('stringify', () => JSON.stringify({ state: lib, version: 2 }), 3));
   it('parses a 2,000-episode feed', () => within('parseFeed', () => parseFeed(feed)));
   it('prints the numbers', () => {

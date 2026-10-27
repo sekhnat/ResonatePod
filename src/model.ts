@@ -1,5 +1,5 @@
 import { art, epKey, fmt, mono } from './data';
-import { downloadsBlocked, epInfo, getEp, ruleFor, type Filter, type Sort, type State } from './store';
+import { dlByKey, downloadsBlocked, epInfo, getEp, ruleFor, type Filter, type Sort, type State } from './store';
 
 export type EpStatus = 'cloud' | 'downloaded' | 'played' | 'downloading';
 
@@ -43,7 +43,7 @@ export function episodeRow(s: State, key: string): EpisodeRow | null {
   if (!e) return null;
   const st = getEp(s, key);
   const isCur = s.cur === key;
-  const dlItem = s.dl.find((d) => d.key === key);
+  const dlItem = dlByKey(s.dl).get(key);
   const played = st.played && !isCur;
   const status: EpStatus = dlItem && !dlItem.error ? 'downloading' : played ? 'played' : st.file ? 'downloaded' : 'cloud';
   const [stIcon, stColor, stLabel] = STATUS[status];
@@ -108,19 +108,44 @@ export function applySort(rows: EpisodeRow[], sort: Sort): EpisodeRow[] {
   return [...rows].sort((a, b) => primary[sort](a, b) || newest(a, b));
 }
 
+type Library = Pick<State, 'shows' | 'eps'>;
+
+/**
+ * Remembers the last answer for the last library it was asked about. `shows` and `eps` are replaced, never edited,
+ * so the same two objects mean the same answer; the sidebar and header ask on every render. Callers get the shared
+ * result and must not modify it.
+ */
+function perLibrary<R>(compute: (s: Library) => R): (s: Library) => R {
+  let shows: Library['shows'] | undefined;
+  let eps: Library['eps'] | undefined;
+  let value: R;
+  return (s) => {
+    if (s.shows !== shows || s.eps !== eps) { value = compute(s); shows = s.shows; eps = s.eps; }
+    return value;
+  };
+}
+
 /** Episodes flagged as new, newest first across shows. */
-export function inboxKeys(s: State) {
+export const inboxKeys = perLibrary((s) => {
   const out: { key: string; at: number }[] = [];
   for (const sh of s.shows) for (const e of sh.eps) { const key = epKey(sh.id, e.guid); if (s.eps[key]?.inbox) out.push({ key, at: e.pubDate }); }
   return out.sort((a, b) => b.at - a.at).map((x) => x.key);
-}
+});
 
-export const unplayedFor = (s: State, showId: string) => {
-  const sh = s.shows.find((x) => x.id === showId);
-  return sh ? sh.eps.filter((e) => { const st = s.eps[epKey(showId, e.guid)]; return st?.inbox && !st.played; }).length : 0;
-};
+const unplayedCounts = perLibrary((s) => {
+  const counts = new Map<string, number>();
+  for (const sh of s.shows) {
+    if (counts.has(sh.id)) continue;
+    let n = 0;
+    for (const e of sh.eps) { const st = s.eps[epKey(sh.id, e.guid)]; if (st?.inbox && !st.played) n++; }
+    counts.set(sh.id, n);
+  }
+  return counts;
+});
 
-export const totalUnplayed = (s: State) => s.shows.reduce((a, sh) => a + unplayedFor(s, sh.id), 0);
+export const unplayedFor = (s: Library, showId: string) => unplayedCounts(s).get(showId) ?? 0;
+
+export const totalUnplayed = (s: Library) => s.shows.reduce((a, sh) => a + unplayedFor(s, sh.id), 0);
 
 export function ruleLabel(s: State, showId: string) {
   const r = ruleFor(s, showId);

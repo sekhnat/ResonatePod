@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, useStore } from './store';
-import { applySort, inboxKeys, rowsFor, totalUnplayed } from './model';
+import { applySort, inboxKeys, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 
 const FEED_URL = 'https://kernelpanic.example/feed.xml';
@@ -391,6 +391,22 @@ describe('download lifecycle', () => {
     expect(getEp(st(), K42).file).toBe('/new/KP/a.mp3');
     expect(getEp(st(), K41).file).toBe('/other/b.mp3');
     move.mockRestore();
+  });
+});
+
+describe('inbox and unread counts', () => {
+  it('are shared while the library is unchanged, and follow it when it changes', () => {
+    const keys = inboxKeys(st());
+    expect(inboxKeys(st())).toBe(keys);
+    expect(totalUnplayed(st())).toBe(1);
+    expect(unplayedFor(st(), 'kernel-panic-hour')).toBe(1);
+    expect(unplayedFor(st(), 'no-such-show')).toBe(0);
+    st().markAllPlayed();
+    expect(totalUnplayed(st())).toBe(0);
+    expect(unplayedFor(st(), 'kernel-panic-hour')).toBe(0);
+    useStore.setState({ eps: { ...st().eps, [K41]: { played: false, pos: 0, inbox: true } } });
+    expect(unplayedFor(st(), 'kernel-panic-hour')).toBe(1);
+    expect(inboxKeys(st())).toContain(K41);
   });
 });
 
