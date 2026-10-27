@@ -49,6 +49,13 @@ describe('DownloadManager', () => {
     expect(targetPath(job('/tmp/pods'))).toBe('/tmp/pods/Kernel Panic Hour/2026-10-19 - Wayland.mp3');
   });
 
+  it('keeps a dots-only show title inside the download folder', () => {
+    for (const showTitle of ['..', '.', '...', ' .. ']) {
+      expect(targetPath({ ...job('/tmp/pods'), showTitle })).toBe('/tmp/pods/untitled/2026-10-19 - Wayland.mp3');
+    }
+    expect(targetPath({ ...job('/tmp/pods'), showTitle: '.hidden..show' })).toBe('/tmp/pods/.hidden..show/2026-10-19 - Wayland.mp3');
+  });
+
   it('downloads to disk with progress events', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'res-'));
     const m = new DownloadManager();

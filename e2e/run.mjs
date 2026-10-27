@@ -2,7 +2,7 @@
 // Run with `npm run test:e2e` (needs a display; use `xvfb-run -a` on headless Linux).
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -388,6 +388,23 @@ try {
     const before = await time();
     await page.keyboard.press('Space');
     await page.waitForFunction((t) => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) > t, before, { timeout: 8000 });
+  });
+
+  await step('the file bridge only touches the download folders', async () => {
+    const outside = path.join(home, 'not-a-podcast.txt');
+    writeFileSync(outside, 'keep me');
+    const inside = path.join(home, 'Media', 'Pods', 'Fixture FM', readdirSync(path.join(home, 'Media', 'Pods', 'Fixture FM'))[0]);
+    const status = (file) => page.evaluate(async (f) => (await fetch(`resonate-media://file/${encodeURIComponent(f)}`, { headers: { Range: 'bytes=0-9' } })).status, file);
+    assert.equal(await status(inside), 206, 'a downloaded file is served');
+    assert.equal(await status(outside), 403, 'a file elsewhere is refused');
+    assert.equal(await status(path.join(home, 'Media', 'Pods', '..', 'not-a-podcast.txt')), 403, '.. does not get around it');
+    // Chromium logs each refusal as a console error; these two are the ones this step asked for.
+    const refused = (e) => /status of 403/.test(e);
+    await waitFor('both refusals to be logged', () => errors.filter(refused).length >= 2);
+    errors.splice(0, errors.length, ...errors.filter((e) => !refused(e)));
+    await page.evaluate((f) => window.resonate.deleteFile(f), outside);
+    assert.equal(readFileSync(outside, 'utf8'), 'keep me', 'delete leaves it alone');
+    assert.deepEqual(await page.evaluate((f) => window.resonate.moveFiles(f.from, f.to, [f.file]), { from: path.join(home, 'Media', 'Pods'), to: path.join(home, 'elsewhere'), file: inside }), [], 'moving into a folder that was never chosen is refused');
   });
 
   await step('preferences and discover render', async () => {

@@ -4,9 +4,10 @@ import { createReadStream, promises as fs, readFileSync, writeFileSync } from 'n
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import type { DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
+import type { DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
 import { readEmbeddedChapters } from '../shared/embedded';
 import { DownloadManager, diskUsage, expandHome, moveFiles } from './downloads';
+import { DownloadRoots, rootsFromLibrary } from './paths';
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 const USER_DATA = process.env.RESONATE_USER_DATA;
@@ -44,6 +45,9 @@ const downloads = new DownloadManager((url, init) =>
 
 const asset = (name: string) => path.join(__dirname, '..', 'assets', name);
 const dataFile = (name: string) => path.join(app.getPath('userData'), name);
+
+// Where the renderer is allowed to read, delete and download files (see paths.ts).
+const roots = new DownloadRoots(dataFile('main-settings.json'), '~/Podcasts');
 
 function desktop(): 'KDE' | 'GNOME' {
   const d = (process.env.XDG_CURRENT_DESKTOP ?? '').toUpperCase();
@@ -145,7 +149,10 @@ function registerMediaProtocol() {
     const target = decodeURIComponent(u.pathname.slice(1));
     const range = req.headers.get('range');
     try {
-      if (u.hostname === 'file') return await serveFile(target, range);
+      if (u.hostname === 'file') {
+        const file = await roots.resolve(target);
+        return file ? await serveFile(file, range) : new Response('Not one of your download folders', { status: 403, headers: { 'Access-Control-Allow-Origin': '*' } });
+      }
       if (u.hostname === 'remote' && /^https?:\/\//.test(target)) return await serveRemote(target, range);
       return new Response('Not found', { status: 404 });
     } catch (err) {
@@ -349,7 +356,11 @@ function registerIpc() {
     else credentials.delete(origin);
     await writeSecret(`auth:${origin}`, value);
   });
-  ipcMain.handle('media:chapters', (_e, file: string | null, url: string) => embeddedChapters(file, url).catch(() => null));
+  ipcMain.handle('media:chapters', async (_e, file: string | null, url: string) => {
+    const local = file ? await roots.resolve(file) : null;
+    if (file && !local) return null;
+    return embeddedChapters(local, url).catch(() => null);
+  });
   ipcMain.handle('autostart:set', (_e, on: boolean) => setAutostart(on));
 
   ipcMain.handle('library:load', () => fs.readFile(dataFile('library.json'), 'utf8').catch(() => null));
@@ -359,18 +370,41 @@ function registerIpc() {
     await fs.rename(tmp, dataFile('library.json'));
   });
 
-  ipcMain.handle('dl:start', (_e, job: DownloadJob) => downloads.start(job));
+  ipcMain.handle('dl:start', async (_e, job: DownloadJob) => {
+    const folder = await roots.resolve(job.folder);
+    if (!folder) {
+      win?.webContents.send('dl:event', { type: 'error', key: job.key, message: 'That isn’t one of your download folders' } satisfies DownloadEvent);
+      return;
+    }
+    downloads.start({ ...job, folder });
+  });
   ipcMain.handle('dl:cancel', (_e, key: string) => downloads.cancel(key));
   ipcMain.handle('dl:paused', (_e, paused: boolean) => downloads.setPaused(paused));
   ipcMain.handle('dl:concurrency', (_e, n: number) => downloads.setConcurrency(n));
   downloads.on('event', (ev) => win?.webContents.send('dl:event', ev));
 
-  ipcMain.handle('fs:delete', (_e, file: string) => fs.rm(file, { force: true }));
-  ipcMain.handle('fs:move', (_e, from: string, to: string, files: string[]) => moveFiles(from, to, files));
-  ipcMain.handle('fs:usage', (_e, folder: string) => diskUsage(folder));
-  ipcMain.handle('fs:showInFolder', (_e, file: string) => shell.showItemInFolder(file));
+  // Every path from the renderer goes through roots.resolve, and only what it returns is touched.
+  ipcMain.handle('fs:delete', async (_e, file: string) => {
+    const target = await roots.resolve(file);
+    if (target) await fs.rm(target, { force: true });
+  });
+  ipcMain.handle('fs:move', async (_e, from: string, to: string, files: string[]) => {
+    const [src, dst] = await Promise.all([roots.resolve(from), roots.resolve(to)]);
+    if (!src || !dst || !Array.isArray(files)) return [];
+    const allowed = (await Promise.all(files.map((f) => roots.resolve(f)))).filter((f): f is string => !!f);
+    return moveFiles(src, dst, allowed);
+  });
+  ipcMain.handle('fs:usage', async (_e, folder: string) => {
+    const dir = await roots.resolve(folder);
+    return dir ? diskUsage(dir) : 0;
+  });
+  ipcMain.handle('fs:showInFolder', async (_e, file: string) => {
+    const target = await roots.resolve(file);
+    if (target) shell.showItemInFolder(target);
+  });
   ipcMain.handle('fs:openFolder', async (_e, folder: string) => {
-    const dir = expandHome(folder);
+    const dir = await roots.resolve(folder);
+    if (!dir) return 'That isn’t one of your download folders';
     await fs.mkdir(dir, { recursive: true });
     return shell.openPath(dir);
   });
@@ -378,6 +412,7 @@ function registerIpc() {
   ipcMain.handle('dialog:folder', async (_e, current: string) => {
     const r = await dialog.showOpenDialog(win!, { title: 'Download folder', defaultPath: expandHome(current), properties: ['openDirectory', 'createDirectory'] });
     if (r.canceled || !r.filePaths[0]) return null;
+    await roots.add(r.filePaths[0]); // choosing it in the native dialog is what makes it a download folder
     const home = app.getPath('home');
     return r.filePaths[0].startsWith(home) ? '~' + r.filePaths[0].slice(home.length) : r.filePaths[0];
   });
@@ -423,6 +458,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showWindow);
   app.whenReady().then(async () => {
     await loadCredentials();
+    await roots.load(() => fs.readFile(dataFile('library.json'), 'utf8').then(rootsFromLibrary, () => []));
     registerMediaProtocol();
     registerIpc();
     createWindow();
