@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Screen } from './store';
 import { platform } from './platform';
 import { startServices } from './services';
@@ -28,13 +29,16 @@ const SCREENS: Record<Screen, () => JSX.Element | null> = {
 let started = false;
 
 export default function App() {
-  const s = useStore();
-  const empty = !s.shows.length && s.screen !== 'discover' && s.screen !== 'settings';
-  const Main = empty ? WelcomeScreen : SCREENS[s.screen];
+  const { hydrated, screen, noShows, hasCur, npOpen, npFull, cfgOpen, palette, toasts, dismissToast } = useStore(useShallow((s) => ({
+    hydrated: s.hydrated, screen: s.screen, noShows: !s.shows.length, hasCur: !!s.cur, npOpen: s.npOpen, npFull: s.npFull,
+    cfgOpen: s.cfgOpen, palette: s.palette, toasts: s.toasts, dismissToast: s.dismissToast,
+  })));
+  const empty = noShows && screen !== 'discover' && screen !== 'settings';
+  const Main = empty ? WelcomeScreen : SCREENS[screen];
 
   useEffect(() => {
-    if (s.hydrated && !started) { started = true; startServices(); }
-  }, [s.hydrated]);
+    if (hydrated && !started) { started = true; startServices(); }
+  }, [hydrated]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -61,7 +65,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (!s.hydrated) return <div style={{ height: '100vh', background: 'var(--color-bg)' }} />;
+  if (!hydrated) return <div style={{ height: '100vh', background: 'var(--color-bg)' }} />;
 
   return (
     <div className="window" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', overflow: 'hidden', position: 'relative' }}>
@@ -71,16 +75,16 @@ export default function App() {
         <main style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: 'var(--space-8)' }}>
           <Main />
         </main>
-        {s.npOpen && s.cur && <NowPlayingPanel />}
-        {s.npFull && s.cur && <NowPlayingFull />}
-        {s.cfgOpen && <ShowSettingsDialog />}
+        {npOpen && hasCur && <NowPlayingPanel />}
+        {npFull && hasCur && <NowPlayingFull />}
+        {cfgOpen && <ShowSettingsDialog />}
         <Dialogs />
       </div>
       <PlayerBar />
-      {s.palette && <CommandPalette />}
+      {palette && <CommandPalette />}
       <div className="toasts" aria-live="polite">
-        {s.toasts.map((t) => (
-          <div key={t.id} className="toast" onClick={() => s.dismissToast(t.id)}>
+        {toasts.map((t) => (
+          <div key={t.id} className="toast" onClick={() => dismissToast(t.id)}>
             <i className="ph ph-info" style={{ color: 'var(--color-accent)', fontSize: 15 }} />{t.text}
           </div>
         ))}
