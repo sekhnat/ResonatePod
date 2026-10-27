@@ -7,6 +7,7 @@ import { parseFeed } from '../../shared/feed';
 import { inboxKeys, rowsFor, totalUnplayed } from '../../src/model';
 import { epKey } from '../../src/data';
 import { paletteItems, searchIndex, selectPalette } from '../../src/components/CommandPalette';
+import { diffLibrary } from '../../src/persistence';
 import { setPlayhead } from '../../src/playhead';
 import { ShowScreen } from '../../src/screens/ShowScreen';
 import { useStore } from '../../src/store';
@@ -19,7 +20,8 @@ const BUDGET_MS = {
   rowsFor: 16, // one 2,000-episode show: a frame; it took 58 ms before epInfo was indexed
   inboxKeys: 40, // when recomputed (about 12 ms) (the result is cached per library state); goal 5, which needs Phase 3's sparse inbox
   totalUnplayed: 50, // when recomputed; the sidebar asks on every render and now almost always hits the cache
-  stringify: 400, // the whole library; Phase 3 stops doing this on every save
+  diffPlayed: 10, // finding what to save when an episode is marked played, in a library of 40,000 episodes
+  diffRefresh: 5, // ... and when a refresh adds an episode to a show of 2,000
   parseFeed: 120, // 2,000 episodes, ~4.6 MB
   paletteIndex: 25, // building the search index over 40,000 episodes, once for each list of shows (3 ms here)
   paletteSearch: 10, // (1 ms here) a keystroke's search over all of it, for a query that matches nothing (the worst case)
@@ -45,7 +47,22 @@ describe.skipIf(!process.env.PERF)('performance budgets', () => {
   it('builds the rows for a 2,000-episode show', () => within('rowsFor', () => rowsFor(s, keys)));
   it('lists the inbox', () => within('inboxKeys', () => inboxKeys(unseen())));
   it('counts unread for the sidebar', () => within('totalUnplayed', () => totalUnplayed(unseen())));
-  it('serialises the library', () => within('stringify', () => JSON.stringify({ state: lib, version: 2 }), 3));
+  describe('finding what to save', () => {
+    // What the store holds: shows without show notes, and a state record for a fifth of the episodes.
+    const shows = lib.shows.map((sh) => ({ ...sh, eps: sh.eps.map(({ description: _notes, ...e }) => e) }));
+    const eps = Object.fromEntries(Object.entries(lib.eps).filter((_, i) => i % 5 === 0));
+    const before = { shows, eps };
+    it('after an episode is marked played', () => {
+      const key = Object.keys(eps)[0];
+      let n = 0;
+      within('diffPlayed', () => { const patch = diffLibrary(before, { shows, eps: { ...eps, [key]: { played: true, pos: ++n, inbox: false } } }); expect(Object.keys(patch!)).toEqual(['epState']); });
+    });
+    it('after a refresh adds an episode to a long show', () => {
+      const [first, ...rest] = shows;
+      let n = 0;
+      within('diffRefresh', () => { const patch = diffLibrary(before, { shows: [{ ...first, eps: [{ ...first.eps[0], guid: `new-${++n}` }, ...first.eps] }, ...rest], eps }); expect(patch!.episodes!.upsert).toHaveLength(1); });
+    });
+  });
   it('parses a 2,000-episode feed', () => within('parseFeed', () => parseFeed(feed)));
   describe('the show page', () => {
     // jsdom does no layout: give the page and its rows a size so the virtual list mounts rows as it would on screen.
