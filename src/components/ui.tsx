@@ -96,11 +96,11 @@ export function RowPlay({ isCur, isPlaying, onClick }: { isCur: boolean; isPlayi
   );
 }
 
-export function GhostIcon({ icon, title, onClick, size = 32, iconSize = 16, color = 'var(--color-neutral-400)', style }: {
-  icon: string; title: string; onClick?: () => void; size?: number; iconSize?: number; color?: string; style?: CSSProperties;
+export function GhostIcon({ icon, title, onClick, size = 32, iconSize = 16, color = 'var(--color-neutral-400)', className, style }: {
+  icon: string; title: string; onClick?: () => void; size?: number; iconSize?: number; color?: string; className?: string; style?: CSSProperties;
 }) {
   return (
-    <button className="btn btn-icon ghost-icon" title={title} aria-label={title} onClick={onClick} style={{ width: size, height: size, color, ...style }}>
+    <button className={`btn btn-icon ghost-icon${className ? ` ${className}` : ''}`} title={title} aria-label={title} onClick={onClick} style={{ width: size, height: size, color, ...style }}>
       <i className={icon} style={{ fontSize: iconSize }} />
     </button>
   );

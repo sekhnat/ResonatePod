@@ -36,13 +36,13 @@ export function SeekBar({ height = 14, thumb = true, ticks = true, glow = true, 
   return (
     <div ref={scrub.ref} onPointerDown={scrub.onPointerDown} role="slider" aria-label="Seek" aria-valuemin={0} aria-valuemax={Math.round(cur.dur)} aria-valuenow={Math.round(pos)} aria-valuetext={fmt(pos)} tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.stopPropagation(); skipBack(); } if (e.key === 'ArrowRight') { e.stopPropagation(); skipFwd(); } }}
-      style={{ flex: 1, height, display: 'flex', alignItems: 'center', position: 'relative', cursor: 'pointer', touchAction: 'none', ...style }}>
-      <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, background: 'var(--color-neutral-800)' }} />
-      <div style={{ position: 'absolute', left: 0, width: pct, height: 4, borderRadius: 2, background: 'var(--color-accent)', boxShadow: glow ? '0 0 8px color-mix(in srgb,var(--color-accent) 60%,transparent)' : undefined }} />
+      className="seek" style={{ height, ...style }}>
+      <div className="seek-track" />
+      <div className={`seek-fill${glow ? ' glow' : ''}`} style={{ width: pct }} />
       {ticks && !!cur.dur && chapters.slice(1).map((c) => (
-        <span key={`${c.at}-${c.t}`} style={{ position: 'absolute', left: `${(c.at / cur.dur) * 100}%`, width: 2, height: 8, borderRadius: 1, background: 'var(--color-bg)' }} />
+        <span key={`${c.at}-${c.t}`} className="seek-tick" style={{ left: `${(c.at / cur.dur) * 100}%` }} />
       ))}
-      {thumb && <span style={{ position: 'absolute', left: pct, width: 10, height: 10, marginLeft: -5, borderRadius: '50%', background: 'var(--color-accent-200)' }} />}
+      {thumb && <span className="seek-thumb" style={{ left: pct }} />}
     </div>
   );
 }
@@ -64,13 +64,13 @@ export function SleepButton({ id, size = 32, iconSize = 16, placement }: { id: '
   const active = s.sleep.mode !== 'off';
   const isOn = (o: Sleep) => o.mode === s.sleep.mode && (o.mode !== 'timer' || (s.sleep.mode === 'timer' && s.sleep.minutes === o.minutes));
   return (
-    <div data-sleep={id} style={{ position: 'relative' }}>
+    <div data-sleep={id} className="sleep-wrap">
       <GhostIcon icon={active ? 'ph-fill ph-moon' : 'ph ph-moon'} title={active ? `Sleep timer: ${s.sleep.mode === 'timer' ? `${Math.ceil(s.sleep.remaining / 60)} min left` : s.sleep.mode === 'chapter' ? 'end of chapter' : 'end of episode'}` : 'Sleep timer'}
         size={size} iconSize={iconSize} color={active ? 'var(--color-accent)' : 'var(--color-neutral-300)'}
         onClick={() => s.set({ menu: open ? null : id })} />
       {open && (
-        <div ref={ref} className="menu" role="menu" style={{ minWidth: 190, ...placement }}>
-          <div style={{ padding: '4px 10px 6px', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-500)' }}>Sleep timer</div>
+        <div ref={ref} className="menu sleep-menu" role="menu" style={placement}>
+          <div className="menu-heading">Sleep timer</div>
           {SLEEP_OPTIONS.map(([label, o]) => <MenuItem key={label} icon={o.mode === 'off' ? 'ph ph-moon' : o.mode === 'timer' ? 'ph ph-timer' : 'ph ph-flag'} label={label} active={isOn(o)} run={() => s.setSleep(o)} />)}
         </div>
       )}
@@ -84,15 +84,14 @@ function Volume() {
   const v = s.muted ? 0 : s.volume;
   return (
     <>
-      <button title={s.muted ? 'Unmute' : 'Mute'} aria-label={s.muted ? 'Unmute' : 'Mute'} onClick={s.toggleMute} className="h-text"
-        style={{ border: 'none', background: 'none', padding: 0, marginLeft: 4, color: 'var(--color-neutral-300)', cursor: 'pointer', display: 'grid' }}>
-        <i className={s.muted || v === 0 ? 'ph ph-speaker-x' : v < 0.4 ? 'ph ph-speaker-low' : 'ph ph-speaker-high'} style={{ fontSize: 16 }} />
+      <button title={s.muted ? 'Unmute' : 'Mute'} aria-label={s.muted ? 'Unmute' : 'Mute'} onClick={s.toggleMute} className="h-text vol-btn">
+        <i className={`${s.muted || v === 0 ? 'ph ph-speaker-x' : v < 0.4 ? 'ph ph-speaker-low' : 'ph ph-speaker-high'} vol-icon`} />
       </button>
       <div ref={scrub.ref} onPointerDown={scrub.onPointerDown} role="slider" aria-label="Volume" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)} tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.stopPropagation(); s.setVolume(s.volume - 0.05); } if (e.key === 'ArrowRight') { e.stopPropagation(); s.setVolume(s.volume + 0.05); } }}
-        style={{ width: 64, height: 14, display: 'flex', alignItems: 'center', cursor: 'pointer', touchAction: 'none' }}>
-        <div style={{ width: '100%', height: 4, borderRadius: 2, background: 'var(--color-neutral-800)' }}>
-          <div style={{ width: `${v * 100}%`, height: '100%', borderRadius: 2, background: 'var(--color-neutral-400)' }} />
+        className="vol-slider">
+        <div className="vol-track">
+          <div className="vol-fill" style={{ width: `${v * 100}%` }} />
         </div>
       </div>
     </>
@@ -123,38 +122,37 @@ export function PlayerBar() {
   const ch = useChapters();
   const { back, fwd } = s.skip;
   if (!cur) return <IdleBar />;
-  const btn: CSSProperties = { color: 'var(--color-neutral-300)' };
+  const btn = 'var(--color-neutral-300)';
 
   return (
-    <div style={{ height: 78, flex: 'none', display: 'flex', alignItems: 'center', gap: 'var(--space-8)', padding: '0 var(--space-6)', background: 'var(--color-surface)', boxShadow: '0 -1px 0 var(--color-neutral-900)', position: 'relative', zIndex: 7 }}>
-      <button onClick={() => s.set({ npFull: true })} title="Open Now playing"
-        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', width: 270, flex: 'none', padding: 0, border: 'none', background: 'none', color: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+    <div className="player live">
+      <button className="player-now" onClick={() => s.set({ npFull: true })} title="Open Now playing">
         <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={cur.ep.imageUrl ?? cur.show.imageUrl} size={48} font={14} />
-        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.title}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--color-neutral-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.show.title} · <ChapterName chapters={ch} /></span>
+        <div className="player-now-text">
+          <span className="player-title">{cur.title}</span>
+          <span className="player-sub">{cur.show.title} · <ChapterName chapters={ch} /></span>
         </div>
       </button>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-          <GhostIcon icon="ph ph-skip-back" title="Previous chapter" size={30} style={btn} onClick={s.prevChapter} />
-          <GhostIcon icon="ph ph-arrow-counter-clockwise" title={`Back ${back} s`} size={30} iconSize={17} style={btn} onClick={s.skipBack} />
-          <button className="btn btn-icon btn-primary" onClick={s.togglePlay} title="Play/Pause (Space)" aria-label={s.playing ? 'Pause' : 'Play'} style={{ width: 40, height: 40, borderRadius: '50%' }}>
-            <i className={s.playing ? 'ph-fill ph-pause' : 'ph-fill ph-play'} style={{ fontSize: 16 }} />
+      <div className="player-center">
+        <div className="player-controls">
+          <GhostIcon icon="ph ph-skip-back" title="Previous chapter" size={30} color={btn} onClick={s.prevChapter} />
+          <GhostIcon icon="ph ph-arrow-counter-clockwise" title={`Back ${back} s`} size={30} iconSize={17} color={btn} onClick={s.skipBack} />
+          <button className="btn btn-icon btn-primary player-play" onClick={s.togglePlay} title="Play/Pause (Space)" aria-label={s.playing ? 'Pause' : 'Play'}>
+            <i className={s.playing ? 'ph-fill ph-pause' : 'ph-fill ph-play'} />
           </button>
-          <GhostIcon icon="ph ph-arrow-clockwise" title={`Forward ${fwd} s`} size={30} iconSize={17} style={btn} onClick={s.skipFwd} />
-          <GhostIcon icon="ph ph-skip-forward" title="Next chapter" size={30} style={btn} onClick={s.nextChapter} />
+          <GhostIcon icon="ph ph-arrow-clockwise" title={`Forward ${fwd} s`} size={30} iconSize={17} color={btn} onClick={s.skipFwd} />
+          <GhostIcon icon="ph ph-skip-forward" title="Next chapter" size={30} color={btn} onClick={s.nextChapter} />
         </div>
-        <div style={{ width: '100%', maxWidth: 560, display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--color-neutral-400)', fontVariantNumeric: 'tabular-nums' }}>
-          <span style={{ width: 44, textAlign: 'right' }}><Elapsed /></span>
+        <div className="player-time">
+          <span className="player-elapsed"><Elapsed /></span>
           <SeekBar />
-          <span style={{ width: 44 }}><Remaining dur={cur.dur} speed={s.speed} /></span>
+          <span className="player-remaining"><Remaining dur={cur.dur} speed={s.speed} /></span>
         </div>
       </div>
-      <div style={{ width: 270, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-        <button className="btn btn-secondary" onClick={s.cycleSpeed} title="Playback speed" style={{ fontSize: 12, padding: '3px 8px', minHeight: 0, fontVariantNumeric: 'tabular-nums', width: 48 }}>{s.speed}×</button>
+      <div className="player-right">
+        <button className="btn btn-secondary player-speed" onClick={s.cycleSpeed} title="Playback speed">{s.speed}×</button>
         <SleepButton id="sleep-bar" placement={{ bottom: 40, right: -60 }} />
-        <GhostIcon icon="ph ph-sidebar-simple" title="Now playing panel" color={s.npOpen ? 'var(--color-accent)' : 'var(--color-neutral-300)'} style={{ transform: 'scaleX(-1)' }} onClick={() => s.set({ npOpen: !s.npOpen })} />
+        <GhostIcon icon="ph ph-sidebar-simple" title="Now playing panel" color={s.npOpen ? 'var(--color-accent)' : 'var(--color-neutral-300)'} className="flip-x" onClick={() => s.set({ npOpen: !s.npOpen })} />
         <GhostIcon icon="ph ph-queue" title="Queue" color={s.screen === 'queue' ? 'var(--color-accent)' : 'var(--color-neutral-300)'} onClick={() => s.go('queue')} />
         <Volume />
       </div>
@@ -166,10 +164,10 @@ export function PlayerBar() {
 function IdleBar() {
   const s = useStore(useShallow((s) => ({ first: s.queue[0], play: s.play })));
   return (
-    <div style={{ height: 78, flex: 'none', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '0 var(--space-6)', background: 'var(--color-surface)', boxShadow: '0 -1px 0 var(--color-neutral-900)', color: 'var(--color-neutral-500)', fontSize: 12.5 }}>
-      <span style={{ width: 48, height: 48, borderRadius: 6, background: 'var(--color-neutral-900)', display: 'grid', placeItems: 'center' }}><i className="ph ph-waveform" style={{ fontSize: 20 }} /></span>
-      <span style={{ flex: 1 }}>Nothing playing. Pick an episode{s.first ? ', or start your queue' : ''}.</span>
-      {s.first && <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => s.play(s.first)}><i className="ph-fill ph-play" />Play queue</button>}
+    <div className="player idle">
+      <span className="idle-art"><i className="ph ph-waveform idle-icon" /></span>
+      <span className="idle-text">Nothing playing. Pick an episode{s.first ? ', or start your queue' : ''}.</span>
+      {s.first && <button className="btn btn-primary idle-play" onClick={() => s.play(s.first)}><i className="ph-fill ph-play" />Play queue</button>}
     </div>
   );
 }
