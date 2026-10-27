@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { cadence, parseFeed } from '../shared/feed';
+import { cadence } from '../shared/feed';
+import { parseFeedAsync } from './feed-parse';
 import { fileStem, safeName, shortHash } from '../shared/filename';
 import { parseJsonChapters, parseTranscript } from '../shared/meta';
 import { GpodderClient, syncOnce, type EpisodeAction } from '../shared/gpodder';
@@ -401,8 +402,8 @@ export function cleanupKeys(s: Pick<Data, 'eps' | 'sv' | 'storageLimitGb' | 'cur
 }
 
 /** The show a feed describes. Its episodes carry no show notes (see notes.ts): those come back separately, by guid. */
-function showFromFeed(url: string, xml: string, id: string, etag?: string, lastModified?: string): { show: Show; newFeedUrl?: string; notes: Map<string, string> } {
-  const f = parseFeed(xml);
+async function showFromFeed(url: string, xml: string, id: string, etag?: string, lastModified?: string): Promise<{ show: Show; newFeedUrl?: string; notes: Map<string, string> }> {
+  const f = await parseFeedAsync(xml);
   const notes = new Map<string, string>();
   const eps = f.episodes.map(({ description, ...ep }) => {
     if (description) notes.set(ep.guid, description);
@@ -819,7 +820,7 @@ export const useStore = create<State>()(
                 if (res.status === 401) { needAuth++; continue; }
                 if (res.status === 304) continue;
                 if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-                const { show: upd, newFeedUrl, notes } = showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
+                const { show: upd, newFeedUrl, notes } = await showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
                 const s = get();
                 const live = findShow(s, sh.id);
                 if (!live) continue;
@@ -911,7 +912,7 @@ export const useStore = create<State>()(
           const feedUrl = res.movedTo ?? clean;
           const dup = res.movedTo && already(feedUrl);
           if (dup) return dup;
-          const { show: parsed, notes } = showFromFeed(feedUrl, res.text, '', res.etag, res.lastModified);
+          const { show: parsed, notes } = await showFromFeed(feedUrl, res.text, '', res.etag, res.lastModified);
           let id = slug(parsed.title);
           while (findShow(get(), id)) id += '-';
           const show = { ...parsed, id };

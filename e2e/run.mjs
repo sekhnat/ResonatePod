@@ -209,6 +209,8 @@ try {
     await page.keyboard.press('Enter');
     await page.getByRole('heading', { name: 'Fixture FM' }).waitFor();
     await page.getByText('Episode one').waitFor();
+    // The feed was read in a worker, not on the page's own thread (and the page would have parsed it itself if the worker hadn't started).
+    assert.ok(page.workers().some((w) => /feed\.worker/.test(w.url())), `workers: ${page.workers().map((w) => w.url()).join(', ') || 'none'}`);
     // Show notes aren't kept on the episodes; these are the ones from the feed, still waiting to be saved.
     await page.getByTitle('Show notes').last().click();
     await page.getByText('Fixture show notes for episode one.').waitFor();
