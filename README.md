@@ -73,6 +73,10 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 
 The `.deb` depends on `libnotify4` and `libsecret-1-0`, which `apt` installs for you.
 
+The AppImage knows where its updates come from, and each release carries a `.zsync` file next to it, so
+[AppImageUpdate](https://github.com/AppImageCommunity/AppImageUpdate) and launchers such as Gear Lever can update it
+in place, downloading only what changed.
+
 ## Features
 
 ### Subscriptions and feeds
@@ -156,6 +160,7 @@ npm run typecheck    # tsc -b
 npm test             # unit tests (Vitest)
 npm run test:e2e     # builds, then drives the app end to end (use `xvfb-run -a` on a headless box)
 npm run dist         # release/Resonate-<version>.AppImage and resonate_<version>_amd64.deb
+npm run dist:update-info  # after dist: puts the update address in the AppImage and writes its .zsync (needs zsyncmake)
 ```
 
 `npm run dev:web` runs the UI in a plain browser. It can only stream and has no downloads, and many
@@ -207,7 +212,7 @@ It is not on Flathub; submitting it there is a separate step. Inside the sandbox
 1. Bump `version` in `package.json` (and `package-lock.json`): `npm version <x.y.z> --no-git-tag-version`.
 2. Commit, then tag and push: `git tag v<x.y.z> && git push origin main v<x.y.z>`.
 
-CI checks that the tag matches the `package.json` version, then attaches the AppImage, `.deb`,
+CI checks that the tag matches the `package.json` version, then attaches the AppImage and its `.zsync`, the `.deb`,
 `SHA256SUMS.txt` and its Sigstore signature (`SHA256SUMS.txt.sigstore.json`, signed keylessly with the
 workflow's identity) to a GitHub release with generated notes.
 

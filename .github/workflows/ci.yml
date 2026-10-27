@@ -97,8 +97,8 @@ jobs:
           fi
       - name: Build packages
         run: npm run dist -- --publish never
-      - name: Install a virtual display
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb
+      - name: Install a virtual display and zsync
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb zsync
       - name: End-to-end test against the packaged app
         run: xvfb-run -a node e2e/run.mjs
         env:
@@ -121,8 +121,12 @@ jobs:
           name: linux-unpacked
           path: release/linux-unpacked
           retention-days: 1
+      # Puts the address updates come from into the AppImage and writes its .zsync (for AppImageUpdate and the like).
+      # This changes the AppImage, so it runs before the checksums are made.
+      - name: Add update information to the AppImage
+        run: npm run dist:update-info
       - name: Checksums
-        run: cd release && sha256sum *.AppImage *.deb > SHA256SUMS.txt && cat SHA256SUMS.txt
+        run: cd release && sha256sum *.AppImage *.AppImage.zsync *.deb > SHA256SUMS.txt && cat SHA256SUMS.txt
       # Signs the checksums with GitHub's identity for this workflow run (no key to keep): the signature says these
       # files were produced by this repository's workflow at this tag. Verify with the command in the README.
       - name: Install cosign
@@ -143,13 +147,14 @@ jobs:
             A podcast downloader and player for the Linux desktop.
 
             **Install**
-            - **AppImage** (any distribution): download `Resonate-*.AppImage`, then `chmod +x Resonate-*.AppImage` and run it.
+            - **AppImage** (any distribution): download `Resonate-*.AppImage`, then `chmod +x Resonate-*.AppImage` and run it. It can update itself in place with AppImageUpdate, using the `.zsync` file.
             - **Debian / Ubuntu**: `sudo apt install ./resonate_*_amd64.deb`
 
             The tray icon uses StatusNotifierItem; on GNOME it needs the AppIndicator extension.
-            `SHA256SUMS.txt` lists checksums for both files, and `SHA256SUMS.txt.sigstore.json` is its Sigstore signature (see the README to verify it).
+            `SHA256SUMS.txt` lists checksums for the files, and `SHA256SUMS.txt.sigstore.json` is its Sigstore signature (see the README to verify it).
           files: |
             release/*.AppImage
+            release/*.AppImage.zsync
             release/*.deb
             release/SHA256SUMS.txt
             release/SHA256SUMS.txt.sigstore.json
@@ -163,6 +168,7 @@ jobs:
           name: resonate-linux
           path: |
             release/*.AppImage
+            release/*.AppImage.zsync
             release/*.deb
             release/SHA256SUMS.txt
           if-no-files-found: error
