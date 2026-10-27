@@ -4,10 +4,12 @@ import { createReadStream, promises as fs, readFileSync, writeFileSync } from 'n
 import { hostname } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import type { LibraryPatch } from '../shared/library';
 import type { DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
 import { readEmbeddedChapters } from '../shared/embedded';
 import { DownloadManager, diskUsage, expandHome, moveFiles } from './downloads';
 import { DownloadRoots, rootsFromLibrary } from './paths';
+import { LibraryDb, openLibrary } from './db/library';
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 const USER_DATA = process.env.RESONATE_USER_DATA;
@@ -48,6 +50,9 @@ const dataFile = (name: string) => path.join(app.getPath('userData'), name);
 
 // Where the renderer is allowed to read, delete and download files (see paths.ts).
 const roots = new DownloadRoots(dataFile('main-settings.json'), '~/Podcasts');
+
+// The library (shows, episodes, state, settings), opened once the app is ready.
+let library: LibraryDb | null = null;
 
 function desktop(): 'KDE' | 'GNOME' {
   const d = (process.env.XDG_CURRENT_DESKTOP ?? '').toUpperCase();
@@ -363,6 +368,10 @@ function registerIpc() {
   });
   ipcMain.handle('autostart:set', (_e, on: boolean) => setAutostart(on));
 
+  ipcMain.handle('lib:load', () => library!.load());
+  ipcMain.handle('lib:patch', (_e, patch: LibraryPatch) => library!.patch(patch));
+  ipcMain.handle('lib:notes', (_e, show: string, guid: string) => library!.notes(String(show), String(guid)));
+
   ipcMain.handle('library:load', () => fs.readFile(dataFile('library.json'), 'utf8').catch(() => null));
   ipcMain.handle('library:save', async (_e, json: string) => {
     const tmp = dataFile('library.json.tmp');
@@ -459,6 +468,9 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     await loadCredentials();
     await roots.load(() => fs.readFile(dataFile('library.json'), 'utf8').then(rootsFromLibrary, () => []));
+    const opened = openLibrary(dataFile('library.db'));
+    library = opened.db;
+    if (opened.recovered) console.warn(`library.db was damaged; kept as ${opened.recovered} and started a new library`);
     registerMediaProtocol();
     registerIpc();
     createWindow();
@@ -475,5 +487,6 @@ if (!app.requestSingleInstanceLock()) {
     setTimeout(done, 2000);
     win.webContents.send('app:flush');
   });
+  app.on('will-quit', () => { library?.close(); library = null; });
   app.on('activate', showWindow);
 }
