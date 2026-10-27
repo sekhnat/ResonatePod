@@ -3,11 +3,9 @@ import { SORTS, type Sort } from '../store';
 import { liveMeta, type EpisodeRow } from '../model';
 import { usePlayhead } from '../playhead';
 
-export const selectStyle: CSSProperties = { width: 'auto', fontSize: 12.5, minHeight: 36, paddingRight: 6, cursor: 'pointer' };
-
 export function SortSelect({ value, onPick }: { value: Sort; onPick: (v: Sort) => void }) {
   return (
-    <select className="input" aria-label="Sort episodes" title="Sort episodes" value={value} style={selectStyle}
+    <select className="input select-compact" aria-label="Sort episodes" title="Sort episodes" value={value}
       onChange={(e) => onPick(e.target.value as Sort)}>
       {SORTS.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
@@ -21,8 +19,8 @@ export function Art({ bg, mono, img, size, font, radius = 6, weight = 600, style
   const [failed, setFailed] = useState<string | null>(null);
   const showImg = img && failed !== img;
   return (
-    <span style={{ width: size, height: size, flex: 'none', borderRadius: radius, background: bg, display: 'grid', placeItems: 'center', fontSize: font, fontWeight: weight, color: 'var(--color-neutral-100)', overflow: 'hidden', position: 'relative', ...style }}>
-      {showImg ? <img src={img} alt="" loading="lazy" onError={() => setFailed(img)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : mono}
+    <span className="art" style={{ width: size, height: size, borderRadius: radius, background: bg, fontSize: font, fontWeight: weight, ...style }}>
+      {showImg ? <img className="art-img" src={img} alt="" loading="lazy" onError={() => setFailed(img)} /> : mono}
       {children}
     </span>
   );
@@ -40,8 +38,7 @@ export function Seg<T = string>({ options, value, onPick, format = String, style
         return (
           <span key={label} className="seg-opt" role="radio" aria-checked={on} tabIndex={0}
             onClick={() => onPick(o)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(o); } }}
-            style={{ background: on ? 'var(--color-accent-800)' : 'transparent', color: on ? 'var(--color-accent-100)' : 'inherit', fontSize: 12, padding: '5px 10px' }}>
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(o); } }}>
             {label}
           </span>
         );
@@ -52,26 +49,20 @@ export function Seg<T = string>({ options, value, onPick, format = String, style
 
 export function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
   return (
-    <button role="switch" aria-checked={on} aria-label={label} onClick={onToggle}
-      style={{ width: 36, height: 20, borderRadius: 10, border: 'none', padding: 0, position: 'relative', flex: 'none', background: on ? 'var(--color-accent-700)' : 'var(--color-neutral-800)', cursor: 'pointer' }}>
-      <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: on ? 'var(--color-accent-100)' : 'var(--color-neutral-400)', transition: 'left .15s' }} />
+    <button className="toggle" role="switch" aria-checked={on} aria-label={label} onClick={onToggle}>
+      <span className="toggle-knob" />
     </button>
   );
 }
 
-export const sectionLabel: CSSProperties = { fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-500)' };
-
-export const h1Style: CSSProperties = { margin: 0, fontSize: 26, fontWeight: 500, letterSpacing: '-0.02em' };
-export const subStyle: CSSProperties = { fontSize: 12.5, color: 'var(--color-neutral-400)' };
-
 export function PageHeader({ title, sub, children }: { title: string; sub?: ReactNode; children?: ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <h1 style={h1Style}>{title}</h1>
-        {sub && <span style={subStyle}>{sub}</span>}
+    <div className="page-header">
+      <div className="page-heading">
+        <h1 className="page-title">{title}</h1>
+        {sub && <span className="page-sub">{sub}</span>}
       </div>
-      {children && <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>{children}</div>}
+      {children && <div className="page-actions">{children}</div>}
     </div>
   );
 }
@@ -91,17 +82,16 @@ export function RowProgress({ e }: { e: EpisodeRow }) {
   const progress = usePlayhead((p) => (e.isCur && e.dur ? Math.round((p / e.dur) * 200) / 200 : e.progress));
   if (!(progress > 0 && progress < 1)) return null;
   return (
-    <div style={{ width: 64, height: 3, borderRadius: 2, background: 'var(--color-neutral-800)', overflow: 'hidden' }}>
-      <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'var(--color-accent-500)' }} />
+    <div className="row-progress">
+      <div className="row-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
     </div>
   );
 }
 
 export function RowPlay({ isCur, isPlaying, onClick }: { isCur: boolean; isPlaying: boolean; onClick: () => void }) {
   return (
-    <button className="btn btn-icon btn-secondary" onClick={onClick} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}
-      style={{ width: 32, height: 32, borderRadius: '50%', color: isCur ? 'var(--color-accent)' : 'var(--color-neutral-300)', borderColor: isCur ? 'var(--color-accent)' : 'var(--color-divider)' }}>
-      <i className={isPlaying ? 'ph-fill ph-pause' : 'ph-fill ph-play'} style={{ fontSize: 13 }} />
+    <button className={`btn btn-icon btn-secondary row-play${isCur ? ' cur' : ''}`} onClick={onClick} title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'}>
+      <i className={isPlaying ? 'ph-fill ph-pause' : 'ph-fill ph-play'} />
     </button>
   );
 }
@@ -110,7 +100,7 @@ export function GhostIcon({ icon, title, onClick, size = 32, iconSize = 16, colo
   icon: string; title: string; onClick?: () => void; size?: number; iconSize?: number; color?: string; style?: CSSProperties;
 }) {
   return (
-    <button className="btn btn-icon" title={title} aria-label={title} onClick={onClick} style={{ width: size, height: size, border: 'none', color, ...style }}>
+    <button className="btn btn-icon ghost-icon" title={title} aria-label={title} onClick={onClick} style={{ width: size, height: size, color, ...style }}>
       <i className={icon} style={{ fontSize: iconSize }} />
     </button>
   );

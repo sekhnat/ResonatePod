@@ -27,10 +27,10 @@ export function useSecretConsent() {
     secure: status?.secure === true,
     blocked: !status || (insecure && !agreed),
     notice: insecure ? (
-      <div role="note" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', borderRadius: 'var(--radius-md)', background: 'var(--color-neutral-900)', fontSize: 12.5, lineHeight: 1.45 }}>
-        <span style={{ color: 'var(--color-accent-300)' }}>{WHY[status!.backend] ?? WHY.unknown}</span>
-        <span style={{ color: 'var(--color-neutral-300)' }}>It would be saved as plain text in ~/.config/Resonate/secrets.json.</span>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--color-text)', cursor: 'pointer' }}>
+      <div role="note" className="secret-notice">
+        <span className="secret-notice-why">{WHY[status!.backend] ?? WHY.unknown}</span>
+        <span className="secret-notice-what">It would be saved as plain text in ~/.config/Resonate/secrets.json.</span>
+        <label className="secret-notice-agree">
           <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />Save it anyway
         </label>
       </div>

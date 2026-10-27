@@ -3,7 +3,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { isFeedUrl } from '../lib/opml';
 import { importOpmlFile } from '../lib/library-io';
-import { h1Style, sectionLabel, subStyle } from '../components/ui';
 import { CountrySelect, DirectoryCard, useSuggestions } from '../components/DirectoryCard';
 
 /** First run: no subscriptions yet. */
@@ -26,8 +25,8 @@ export function WelcomeScreen() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)', maxWidth: 720, paddingTop: 'var(--space-8)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         <i className="ph-fill ph-waveform" style={{ fontSize: 40, color: 'var(--color-accent)' }} />
-        <h1 style={{ ...h1Style, fontSize: 30 }}>Welcome to Resonate</h1>
-        <span style={{ ...subStyle, fontSize: 14, lineHeight: 1.5 }}>Subscribe to a few shows to get started. New episodes land in your inbox, download automatically, and play from here or the system tray.</span>
+        <h1 className="page-title" style={{ fontSize: 30 }}>Welcome to Resonate</h1>
+        <span className="page-sub" style={{ fontSize: 14, lineHeight: 1.5 }}>Subscribe to a few shows to get started. New episodes land in your inbox, download automatically, and play from here or the system tray.</span>
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
         <div style={{ flex: 1, position: 'relative' }}>
@@ -67,7 +66,7 @@ function Popular() {
   return (
     <section aria-label="Popular in your region" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <span style={sectionLabel}>Popular in your region</span>
+        <span className="section-label">Popular in your region</span>
         <CountrySelect style={{ minHeight: 28, fontSize: 12, padding: '2px 6px' }} />
       </div>
       {sug.state === 'loading'
