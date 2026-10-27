@@ -98,6 +98,12 @@ describe('subscribing and refreshing', () => {
     expect(jobs[K41].suffix).toBeUndefined(); // the default rule takes the newest three, so 40 isn't started
   });
 
+  it('cycles playback speed to the next faster preset, from presets or not', () => {
+    const next = (speed: number) => { useStore.setState({ speed }); st().cycleSpeed(); return st().speed; };
+    expect([1, 1.2, 1.5, 2].map(next)).toEqual([1.2, 1.5, 2, 1]);
+    expect([0.8, 1.1, 1.75, 2.5].map(next)).toEqual([1, 1.2, 2, 1]);
+  });
+
   it('applies per-show auto-download rules', () => {
     st().setOverride('kernel-panic-hour', 'dl', 'Latest 1');
     expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([K42]);
