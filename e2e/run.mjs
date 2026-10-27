@@ -365,6 +365,7 @@ try {
     await waitFor('the slow download to start', () => part() && statSync(path.join(podcasts('Members Only'), part())).size >= HOLD);
     await page.waitForTimeout(700);
     await app.close();
+    assert.ok(existsSync(path.join(home, 'config', 'library.db')), 'the library database is created at start-up');
     assert.ok(part(), 'the partial file is kept');
     holdSlow = false;
     rangesFor['/p/slow.wav'] = [];
