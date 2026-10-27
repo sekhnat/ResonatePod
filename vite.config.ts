@@ -28,7 +28,23 @@ const contentSecurityPolicy = (): Plugin => ({
   transformIndexHtml: (html) => html.replace('<meta charset="utf-8" />', `<meta charset="utf-8" />\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`),
 });
 
+/**
+ * The icon and text fonts list woff, ttf and svg copies as fallbacks for old browsers. The app runs in Chromium, which
+ * takes the woff2 and never loads the others, but the build still ships them (about 7 MB for the two icon fonts alone).
+ * Dropping them from the font-face rules keeps only what is used.
+ */
+const woff2Only = (): Plugin => ({
+  name: 'resonate-woff2-only',
+  enforce: 'pre',
+  apply: 'build',
+  transform(css, id) {
+    if (!/\/node_modules\/(@phosphor-icons\/web|@fontsource\/inter)\/.*\.css$/.test(id.split('?')[0])) return null;
+    const trimmed = css.replace(/,\s*url\([^)]*\)\s*format\((['"])(?:woff|truetype|svg)\1\)/g, '');
+    return trimmed === css ? null : { code: trimmed, map: null };
+  },
+});
+
 export default defineConfig({
-  plugins: [react(), contentSecurityPolicy()],
+  plugins: [react(), woff2Only(), contentSecurityPolicy()],
   base: './',
 });
