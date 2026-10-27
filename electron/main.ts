@@ -229,6 +229,8 @@ interface TextResponse { status: number; text: string; header(name: string): str
 // arrived for the idle time, or when the whole exchange outlasts the total time.
 const HTTP_IDLE_MS = Number(process.env.RESONATE_HTTP_TIMEOUT_MS) || 20_000;
 const HTTP_TOTAL_MS = Number(process.env.RESONATE_HTTP_TIMEOUT_MS) || 60_000;
+// Bodies are buffered whole, so a runaway response must be cut off rather than held in memory.
+const HTTP_MAX_BYTES = 50 * 1024 * 1024;
 
 /** GET/POST with redirects followed by hand, so we know whether every hop was permanent. */
 function request(url: string, req: HttpRequest): Promise<TextResponse> {
@@ -260,10 +262,18 @@ function request(url: string, req: HttpRequest): Promise<TextResponse> {
       touch();
       r.followRedirect();
     });
+    const cap = Math.min(req.maxBytes ?? HTTP_MAX_BYTES, HTTP_MAX_BYTES);
     r.on('response', (res) => {
       const chunks: Buffer[] = [];
+      let received = 0;
       touch();
-      res.on('data', (c) => { chunks.push(c); touch(); });
+      if (Number(res.headers['content-length']) > cap) { finish(new Error('response too large')); return; }
+      res.on('data', (c) => {
+        received += c.length;
+        if (received > cap) { finish(new Error('response too large')); return; }
+        chunks.push(c);
+        touch();
+      });
       res.on('end', () => finish(null, {
         status: res.statusCode,
         text: Buffer.concat(chunks).toString('utf8'),
