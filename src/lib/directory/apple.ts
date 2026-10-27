@@ -54,16 +54,16 @@ const toResult = (p: ItunesPodcast, blurb?: string): DirectoryResult | null =>
 const notNull = <T>(x: T | null | undefined): x is T => x != null;
 const genreParam = (genre?: string) => (genre && GENRES[genre] ? `&genreId=${GENRES[genre]}` : '');
 
-export async function search(term: string, opts: { country: string; genre?: string; limit?: number }): Promise<DirectoryResult[]> {
+export async function search(term: string, opts: { country: string; genre?: string; limit?: number }, signal?: AbortSignal): Promise<DirectoryResult[]> {
   const url = `${BASE}/search?media=podcast&entity=podcast&limit=${opts.limit ?? 50}&country=${opts.country}&term=${encodeURIComponent(term)}${genreParam(opts.genre)}`;
-  const data = await getJson<{ results: ItunesPodcast[] }>(url, LABEL);
+  const data = await getJson<{ results: ItunesPodcast[] }>(url, LABEL, undefined, signal);
   return data.results.map((p) => toResult(p)).filter(notNull);
 }
 
 /** Episodes whose title or notes match; each result is the episode's show. */
-export async function episodes(term: string, opts: { country: string; limit?: number }): Promise<DirectoryResult[]> {
+export async function episodes(term: string, opts: { country: string; limit?: number }, signal?: AbortSignal): Promise<DirectoryResult[]> {
   const url = `${BASE}/search?media=podcast&entity=podcastEpisode&limit=${opts.limit ?? 10}&country=${opts.country}&term=${encodeURIComponent(term)}`;
-  const data = await getJson<{ results: ItunesEpisode[] }>(url, LABEL);
+  const data = await getJson<{ results: ItunesEpisode[] }>(url, LABEL, undefined, signal);
   return data.results
     .filter((e) => e.feedUrl)
     .map((e) => ({
@@ -82,17 +82,17 @@ export async function episodes(term: string, opts: { country: string; limit?: nu
 interface ChartEntry { id: { attributes: { 'im:id': string } }; summary?: { label: string } }
 
 /** The top podcasts chart for a country (the list AntennaPod suggests from), overall or for one genre. */
-export async function top(country: string, genre?: string, limit = 30): Promise<DirectoryResult[]> {
+export async function top(country: string, genre?: string, limit = 30, signal?: AbortSignal): Promise<DirectoryResult[]> {
   const g = genre ? GENRES[genre] : undefined;
   const chart = await getJson<{ feed: { entry?: ChartEntry[] | ChartEntry } }>(
-    `${BASE}/${country}/rss/toppodcasts/limit=${limit}${g ? `/genre=${g}` : ''}/explicit=true/json`, LABEL);
+    `${BASE}/${country}/rss/toppodcasts/limit=${limit}${g ? `/genre=${g}` : ''}/explicit=true/json`, LABEL, undefined, signal);
   // A chart with one entry comes back as an object, not an array.
   const raw = chart.feed.entry;
   const entries = Array.isArray(raw) ? raw : raw ? [raw] : [];
   if (!entries.length) return [];
   const blurbs = new Map(entries.map((e) => [e.id.attributes['im:id'], e.summary?.label ?? '']));
   const ids = entries.map((e) => e.id.attributes['im:id']);
-  const data = await getJson<{ results: ItunesPodcast[] }>(`${BASE}/lookup?entity=podcast&country=${country}&id=${ids.join(',')}`, LABEL);
+  const data = await getJson<{ results: ItunesPodcast[] }>(`${BASE}/lookup?entity=podcast&country=${country}&id=${ids.join(',')}`, LABEL, undefined, signal);
   const byId = new Map(data.results.map((p) => [String(p.collectionId), p]));
   return ids
     .map((id) => byId.get(id))

@@ -30,8 +30,8 @@ export async function authHeaders(k: PodcastIndexKey, now = Date.now()): Promise
   return { 'X-Auth-Date': time, 'X-Auth-Key': k.key, Authorization: hex(digest) };
 }
 
-export async function search(term: string, k: PodcastIndexKey, limit = 30): Promise<DirectoryResult[]> {
-  const data = await getJson<{ feeds?: PiFeed[] }>(`${BASE}/search/byterm?q=${encodeURIComponent(term)}&max=${limit}`, 'Podcast Index', await authHeaders(k));
+export async function search(term: string, k: PodcastIndexKey, limit = 30, signal?: AbortSignal): Promise<DirectoryResult[]> {
+  const data = await getJson<{ feeds?: PiFeed[] }>(`${BASE}/search/byterm?q=${encodeURIComponent(term)}&max=${limit}`, 'Podcast Index', await authHeaders(k), signal);
   return (data.feeds ?? [])
     .filter((f) => f.url)
     .map((f) => ({

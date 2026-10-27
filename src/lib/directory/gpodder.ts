@@ -28,13 +28,13 @@ export const toResult = (p: GpodderPodcast, genre = 'Podcast'): DirectoryResult 
 
 const results = (list: GpodderPodcast[], genre?: string) => list.map((p) => toResult(p, genre)).filter((r): r is DirectoryResult => !!r);
 
-export async function search(term: string): Promise<DirectoryResult[]> {
-  return results(await getJson<GpodderPodcast[]>(`${BASE}/search.json?q=${encodeURIComponent(term)}`, LABEL));
+export async function search(term: string, signal?: AbortSignal): Promise<DirectoryResult[]> {
+  return results(await getJson<GpodderPodcast[]>(`${BASE}/search.json?q=${encodeURIComponent(term)}`, LABEL, undefined, signal));
 }
 
 /** The most-subscribed podcasts on gpodder.net, overall or for a category. */
-export async function top(genre?: string, limit = 50): Promise<DirectoryResult[]> {
+export async function top(genre?: string, limit = 50, signal?: AbortSignal): Promise<DirectoryResult[]> {
   const tag = genre ? TAGS[genre] : undefined;
   const url = tag ? `${BASE}/api/2/tag/${encodeURIComponent(tag)}/${limit}.json` : `${BASE}/toplist/${limit}.json`;
-  return results(await getJson<GpodderPodcast[]>(url, LABEL), tag ? genre : undefined);
+  return results(await getJson<GpodderPodcast[]>(url, LABEL, undefined, signal), tag ? genre : undefined);
 }

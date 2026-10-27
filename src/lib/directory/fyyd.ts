@@ -16,8 +16,8 @@ interface FyydPodcast {
   categories?: number[];
 }
 
-export async function search(term: string, limit = 30): Promise<DirectoryResult[]> {
-  const data = await getJson<{ data?: FyydPodcast[] }>(`${BASE}/search/podcast?title=${encodeURIComponent(term)}&count=${limit}`, 'fyyd');
+export async function search(term: string, limit = 30, signal?: AbortSignal): Promise<DirectoryResult[]> {
+  const data = await getJson<{ data?: FyydPodcast[] }>(`${BASE}/search/podcast?title=${encodeURIComponent(term)}&count=${limit}`, 'fyyd', undefined, signal);
   return (data.data ?? [])
     .filter((p) => p.xmlURL)
     .map((p) => ({
