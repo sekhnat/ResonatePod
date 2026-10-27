@@ -84,9 +84,15 @@ export function RowMeta({ e, prefix = '' }: { e: EpisodeRow; prefix?: string }) 
   return <>{prefix}{sec >= 0 ? liveMeta(e, sec) : e.meta}</>;
 }
 
-/** How far through an episode is (0–1), live for the playing one and in steps of half a percent. */
-export function useRowProgress(e: EpisodeRow) {
-  return usePlayhead((p) => (e.isCur && e.dur ? Math.round((p / e.dur) * 200) / 200 : e.progress));
+/** How far through an episode is shown, as a small bar: live for the playing one (in steps of half a percent), saved for the rest. */
+export function RowProgress({ e }: { e: EpisodeRow }) {
+  const progress = usePlayhead((p) => (e.isCur && e.dur ? Math.round((p / e.dur) * 200) / 200 : e.progress));
+  if (!(progress > 0 && progress < 1)) return null;
+  return (
+    <div style={{ width: 64, height: 3, borderRadius: 2, background: 'var(--color-neutral-800)', overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'var(--color-accent-500)' }} />
+    </div>
+  );
 }
 
 export function RowPlay({ isCur, isPlaying, onClick }: { isCur: boolean; isPlaying: boolean; onClick: () => void }) {

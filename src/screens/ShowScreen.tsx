@@ -1,19 +1,33 @@
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { art, epKey, mono } from '../data';
-import { epInfo, sortFor, useStore } from '../store';
-import { applyFilter, applySort, ruleLabel, rowsFor, unplayedFor, type EpisodeRow } from '../model';
-import { Art, GhostIcon, RowMeta, RowPlay, Seg, SortSelect, useRowProgress } from '../components/ui';
+import { epInfo, findShow, getEp, sortFor, useStore } from '../store';
+import { applyFilter, applySort, episodeRow, orderable, ruleLabel, unplayedFor, type EpisodeRow } from '../model';
+import { Art, GhostIcon, RowMeta, RowPlay, RowProgress, Seg, SortSelect } from '../components/ui';
+import { VirtualList } from '../components/VirtualList';
 
 const FILTERS = ['All', 'Unplayed', 'Downloaded'] as const;
 
+/** The page for the show that's open. Keyed by show, so what belongs to one show (an open row) can't carry over to the next. */
 export function ShowScreen() {
-  const s = useStore();
-  const [limit, setLimit] = useState(50);
-  const sh = s.shows.find((x) => x.id === s.showId);
+  const showId = useStore((s) => s.showId);
+  return <ShowPage key={showId} id={showId} />;
+}
+
+function ShowPage({ id }: { id: string }) {
+  const s = useStore(useShallow((s) => ({
+    sh: findShow(s, id), eps: s.eps, cur: s.cur, filter: s.filter, sort: sortFor(s, id), unplayed: unplayedFor(s, id), rule: ruleLabel(s, id),
+    play: s.play, set: s.set, setSort: s.setSort,
+  })));
+  const { sh } = s;
+  // The order of the list depends on the episodes, their played state, the playing one, the filter and the sort,
+  // and on nothing else (not downloads, not the playback position), so it is built only when one of those changes.
+  const keys = useMemo(() => {
+    if (!sh) return [];
+    const items = sh.eps.map((e) => orderable(sh, e, getEp(s, epKey(sh.id, e.guid)), s.cur));
+    return applySort(applyFilter(items, s.filter), s.sort).map((r) => r.key);
+  }, [sh, s.eps, s.cur, s.filter, s.sort]);
   if (!sh) return null;
-  const all = applySort(applyFilter(rowsFor(s, sh.eps.map((e) => epKey(sh.id, e.guid))), s.filter), sortFor(s, sh.id));
-  const rows = all.slice(0, limit);
-  const unplayed = unplayedFor(s, sh.id);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
@@ -33,7 +47,7 @@ export function ShowScreen() {
             <button className="btn btn-secondary" title="Unsubscribe…" onClick={() => s.set({ dialog: 'unsubscribe' })}>
               <i className="ph ph-check" style={{ fontSize: 14 }} />Subscribed
             </button>
-            <span className="tag tag-neutral" style={{ gap: 5, whiteSpace: 'nowrap' }}><i className="ph ph-download-simple" />{ruleLabel(s, sh.id)}</span>
+            <span className="tag tag-neutral" style={{ gap: 5, whiteSpace: 'nowrap' }}><i className="ph ph-download-simple" />{s.rule}</span>
             <button className="btn btn-icon btn-secondary" onClick={() => s.set({ cfgOpen: true })} title="Show settings" aria-label="Show settings" style={{ width: 34, height: 34 }}>
               <i className="ph ph-sliders-horizontal" style={{ fontSize: 15 }} />
             </button>
@@ -43,35 +57,34 @@ export function ShowScreen() {
       <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: 'var(--color-neutral-300)', maxWidth: 620, textWrap: 'pretty' } as React.CSSProperties}>{sh.desc}</p>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 'var(--space-3)' }}>
-          <span style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>{sh.eps.length} episodes · {unplayed} unplayed</span>
+          <span style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>{sh.eps.length} episodes · {s.unplayed} unplayed</span>
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
-            <SortSelect value={sortFor(s, sh.id)} onPick={(v) => s.setSort(sh.id, v)} />
+            <SortSelect value={s.sort} onPick={(v) => s.setSort(sh.id, v)} />
             <Seg options={FILTERS} value={s.filter} onPick={(filter) => s.set({ filter })} />
           </div>
         </div>
-        {rows.map((e) => <ShowEpisodeRow key={e.key} e={e} />)}
-        {all.length > limit && (
-          <button className="btn btn-secondary" style={{ alignSelf: 'center', fontSize: 12, marginTop: 'var(--space-4)' }} onClick={() => setLimit((l) => l + 100)}>
-            Show more ({all.length - limit} more)
-          </button>
-        )}
+        <VirtualList count={keys.length} estimate={62} itemKey={(i) => keys[i]}>
+          {(i) => <ShowEpisodeRow id={keys[i]} />}
+        </VirtualList>
         {!sh.eps.length && <Empty icon="ph ph-rss" text="This feed has no episodes yet. They'll appear after the next refresh." />}
-        {!!sh.eps.length && !rows.length && <Empty icon="ph ph-funnel" text={`No ${s.filter.toLowerCase()} episodes in this show.`} />}
+        {!!sh.eps.length && !keys.length && <Empty icon="ph ph-funnel" text={`No ${s.filter.toLowerCase()} episodes in this show.`} />}
       </div>
     </div>
   );
 }
 
-function ShowEpisodeRow({ e }: { e: EpisodeRow }) {
-  const s = useStore();
-  const progress = useRowProgress(e);
+/** One episode. It picks its own row out of the store, so a download's progress or a played flag redraws just this row. */
+const ShowEpisodeRow = memo(function ShowEpisodeRow({ id }: { id: string }) {
+  const e = useStore(useShallow((s) => episodeRow(s, id)));
+  const a = useStore(useShallow((s) => ({ play: s.play, cancelDownload: s.cancelDownload, deleteFile: s.deleteFile, startDownload: s.startDownload, markPlayed: s.markPlayed, addToQueue: s.addToQueue })));
   const [open, setOpen] = useState(false);
-  const notes = open ? epInfo(s, e.key)?.ep.description : '';
+  const notes = useStore((s) => (open ? epInfo(s, id)?.ep.description : ''));
+  if (!e) return null;
   const dlIcon = e.downloading ? 'ph ph-x' : e.downloaded ? 'ph ph-trash' : 'ph ph-download-simple';
   const dlLabel = e.downloading ? 'Cancel download' : e.downloaded ? 'Delete file' : 'Download';
-  const onDl = () => (e.downloading ? s.cancelDownload(e.key) : e.downloaded ? s.deleteFile(e.key) : s.startDownload(e.key));
+  const onDl = () => (e.downloading ? a.cancelDownload(e.key) : e.downloaded ? a.deleteFile(e.key) : a.startDownload(e.key));
   return (
-    <div className="h-row" onDoubleClick={() => s.play(e.key)}
+    <div className="h-row" onDoubleClick={() => a.play(e.key)}
       style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '10px 10px', margin: '0 -10px', borderRadius: 'var(--radius-md)', background: e.isCur ? 'color-mix(in srgb,var(--color-accent-900) 70%,transparent)' : 'transparent' }}>
       <i className={e.status === 'downloading' ? `${e.stIcon} spin` : e.stIcon} title={e.stLabel} style={{ fontSize: 18, width: 20, color: e.stColor }} />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -83,19 +96,15 @@ function ShowEpisodeRow({ e }: { e: EpisodeRow }) {
         {open && <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-neutral-300)', whiteSpace: 'pre-line', maxHeight: 260, overflow: 'auto' }}>{notes || 'No show notes for this episode.'}</p>}
       </div>
       <div className="row-actions" style={{ display: 'flex' }}>
-        <GhostIcon icon={e.played ? 'ph ph-arrow-u-up-left' : 'ph ph-checks'} title={e.played ? 'Mark unplayed' : 'Mark played'} onClick={() => s.markPlayed(e.key, !e.played)} />
-        <GhostIcon icon="ph ph-queue" title="Add to queue" onClick={() => s.addToQueue(e.key)} />
+        <GhostIcon icon={e.played ? 'ph ph-arrow-u-up-left' : 'ph ph-checks'} title={e.played ? 'Mark unplayed' : 'Mark played'} onClick={() => a.markPlayed(e.key, !e.played)} />
+        <GhostIcon icon="ph ph-queue" title="Add to queue" onClick={() => a.addToQueue(e.key)} />
       </div>
-      {progress > 0 && progress < 1 && (
-        <div style={{ width: 64, height: 3, borderRadius: 2, background: 'var(--color-neutral-800)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${Math.round(progress * 100)}%`, background: 'var(--color-accent-500)' }} />
-        </div>
-      )}
+      <RowProgress e={e} />
       <GhostIcon icon={dlIcon} title={dlLabel} onClick={onDl} />
-      <RowPlay isCur={e.isCur} isPlaying={e.isPlaying} onClick={() => s.play(e.key)} />
+      <RowPlay isCur={e.isCur} isPlaying={e.isPlaying} onClick={() => a.play(e.key)} />
     </div>
   );
-}
+});
 
 export const titleColor = (e: EpisodeRow) => (e.played ? 'var(--color-neutral-500)' : e.isCur ? 'var(--color-accent-200)' : 'var(--color-text)');
 

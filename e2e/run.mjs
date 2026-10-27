@@ -65,6 +65,12 @@ const flipFeed = () => `<?xml version="1.0"?>
 <item><title>Only episode</title><guid>flip-1</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>
 </channel></rss>`;
 
+// A back catalogue: 600 episodes, numbered from the oldest.
+const bigFeed = () => `<?xml version="1.0"?>
+<rss version="2.0"><channel><title>Big Catalogue</title><description>Lots of episodes.</description>
+${Array.from({ length: 600 }, (_, i) => `<item><title>Big episode ${600 - i}</title><guid>big-${i}</guid><pubDate>${new Date(Date.now() - i * 864e5).toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>`).join('\n')}
+</channel></rss>`;
+
 const html = '<html><body><cite>Ana:</cite><time>0:00:00</time><p>Welcome to the members feed.</p><cite>Ben:</cite><time>0:00:02</time><p>Mail time.</p></body></html>';
 const privateFeed = () => {
   const item = (title, guid, file, type, ago, extra = '') => `<item><title>${title}</title><guid>${guid}</guid><pubDate>${new Date(Date.now() - ago * 36e5).toUTCString()}</pubDate><enclosure url="${base}${file}" length="${media[file].length}" type="${type}"/>${extra}</item>`;
@@ -116,6 +122,7 @@ const server = createServer((req, res) => {
   if (listed) return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(directoryFeed(listed[1]));
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
   if (url === '/long.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(longFeed());
+  if (url === '/big.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(bigFeed());
   if (url === '/huge.xml') {
     // 60 MB with no Content-Length, so only counting the bytes can stop it.
     res.writeHead(200, { 'Content-Type': 'application/rss+xml' });
@@ -505,6 +512,27 @@ try {
       await refresh.locator('.ph-arrows-clockwise').waitFor({ timeout: 10000 });
     }
     await page.getByText(/Feeds refreshed.*failed/).first().waitFor();
+  });
+
+  await step('a long show mounts only the rows on screen and scrolls to the rest', async () => {
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/big.xml`);
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading', { name: 'Big Catalogue' }).waitFor();
+    const mounted = () => page.locator('.h-row').count();
+    await page.getByText('Big episode 600', { exact: true }).waitFor();
+    const top = await mounted();
+    assert.ok(top > 5 && top < 60, `${top} rows mounted for 600 episodes`);
+    await page.evaluate(() => document.querySelector('main').scrollTo(0, 1e7));
+    await page.getByText('Big episode 1', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Big episode 600', { exact: true }).count(), 0, 'rows scrolled far out of view are unmounted');
+    assert.ok(await mounted() < 60, `${await mounted()} rows mounted at the bottom`);
+    // Sorting still orders the whole list, not just what was on screen.
+    await page.getByLabel('Sort episodes').selectOption('Oldest first');
+    await page.evaluate(() => document.querySelector('main').scrollTo(0, 0));
+    await page.getByText('Big episode 1', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Big episode 600', { exact: true }).count(), 0);
+    await shot('17-long-show');
   });
 
   await step('a runaway response is cut off instead of buffered', async () => {

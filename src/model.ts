@@ -1,5 +1,5 @@
-import { art, epKey, fmt, mono } from './data';
-import { dlByKey, downloadsBlocked, epInfo, getEp, ruleFor, type Filter, type Sort, type State } from './store';
+import { art, epKey, fmt, mono, type Episode, type Show } from './data';
+import { dlByKey, downloadsBlocked, epInfo, findShow, getEp, ruleFor, type EpState, type Filter, type Sort, type State } from './store';
 
 export type EpStatus = 'cloud' | 'downloaded' | 'played' | 'downloading';
 
@@ -95,23 +95,34 @@ export function episodeRow(s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'play
 export const liveMeta = (e: Pick<EpisodeRow, 'head' | 'tail' | 'dur'>, pos: number) =>
   [e.head, `${fmt(e.dur - pos)} left`, e.tail].filter(Boolean).join(' · ');
 
+/** For building rows when what they would say about downloads doesn't matter (sorting and filtering). */
+export const NO_DOWNLOADS: State['dl'] = [];
+
 export const rowsFor = (s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'playing'>, keys: string[]) => keys.map((k) => episodeRow(s, k)).filter((r): r is EpisodeRow => !!r);
 
-export const applyFilter = (rows: EpisodeRow[], f: Filter) =>
+/** The few fields ordering and filtering look at, so a list can be put in order without building its rows. */
+export type Orderable = Pick<EpisodeRow, 'key' | 'title' | 'pubDate' | 'dur' | 'played' | 'downloaded'>;
+
+export const orderable = (show: Show, ep: Episode, st: EpState, cur: string | null): Orderable => {
+  const key = epKey(show.id, ep.guid);
+  return { key, title: ep.title, pubDate: ep.pubDate, dur: ep.duration, played: st.played && cur !== key, downloaded: !!st.file };
+};
+
+export const applyFilter = <T extends Pick<Orderable, 'played' | 'downloaded'>>(rows: T[], f: Filter): T[] =>
   rows.filter((r) => f === 'All' || (f === 'Unplayed' && !r.played) || (f === 'Downloaded' && r.downloaded));
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 /** Orders by `by`, with unknown values (0) last in either direction. */
-const byValue = (by: (r: EpisodeRow) => number, dir: 1 | -1) => (a: EpisodeRow, b: EpisodeRow) => {
+const byValue = (by: (r: Orderable) => number, dir: 1 | -1) => (a: Orderable, b: Orderable) => {
   const x = by(a), y = by(b);
   return !x === !y ? dir * (x - y) : x ? -1 : 1;
 };
 
 /** Sorts a copy of `rows`; ties fall back to newest first. */
-export function applySort(rows: EpisodeRow[], sort: Sort): EpisodeRow[] {
-  const newest = (a: EpisodeRow, b: EpisodeRow) => b.pubDate - a.pubDate;
-  const primary: Record<Sort, (a: EpisodeRow, b: EpisodeRow) => number> = {
+export function applySort<T extends Orderable>(rows: T[], sort: Sort): T[] {
+  const newest = (a: Orderable, b: Orderable) => b.pubDate - a.pubDate;
+  const primary: Record<Sort, (a: Orderable, b: Orderable) => number> = {
     'Newest first': byValue((r) => r.pubDate, -1),
     'Oldest first': byValue((r) => r.pubDate, 1),
     'Longest first': byValue((r) => r.dur, -1),
@@ -147,20 +158,22 @@ export const inboxKeys = perLibrary((s) => {
   return out.sort((a, b) => b.at - a.at).map((x) => x.key);
 });
 
-const unplayedCounts = perLibrary((s) => {
-  const counts = new Map<string, number>();
-  for (const sh of s.shows) {
-    if (counts.has(sh.id)) continue;
-    let n = 0;
-    for (const e of sh.eps) { const st = s.eps[epKey(sh.id, e.guid)]; if (st?.inbox && !st.played) n++; }
-    counts.set(sh.id, n);
-  }
-  return counts;
-});
+// One show's count, kept while neither its episodes nor the state records have been replaced. A page asks for a single
+// show, so it must not pay for counting all of them; the sidebar asks for every show and pays once per change.
+const unplayedCache = new Map<string, { episodes: Episode[]; state: Library['eps']; n: number }>();
 
-export const unplayedFor = (s: Library, showId: string) => unplayedCounts(s).get(showId) ?? 0;
+export const unplayedFor = (s: Library, showId: string) => {
+  const sh = findShow(s, showId);
+  if (!sh) return 0;
+  const hit = unplayedCache.get(showId);
+  if (hit && hit.episodes === sh.eps && hit.state === s.eps) return hit.n;
+  let n = 0;
+  for (const e of sh.eps) { const st = s.eps[epKey(sh.id, e.guid)]; if (st?.inbox && !st.played) n++; }
+  unplayedCache.set(showId, { episodes: sh.eps, state: s.eps, n });
+  return n;
+};
 
-export const totalUnplayed = (s: Library) => s.shows.reduce((a, sh) => a + unplayedFor(s, sh.id), 0);
+export const totalUnplayed = perLibrary((s) => s.shows.reduce((a, sh) => a + unplayedFor(s, sh.id), 0));
 
 export function ruleLabel(s: State, showId: string) {
   const r = ruleFor(s, showId);

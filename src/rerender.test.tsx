@@ -2,11 +2,12 @@
 // and download progress replaces `dl` just as often, so a whole-store subscription redraws the window constantly.
 import { Profiler, act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommandPalette } from './components/CommandPalette';
 import { Dialogs } from './components/Dialogs';
 import { InboxScreen } from './screens/InboxScreen';
 import { QueueScreen } from './screens/QueueScreen';
+import { ShowScreen } from './screens/ShowScreen';
 import { HeaderBar } from './components/HeaderBar';
 import { NowPlayingPanel } from './components/NowPlaying';
 import { PlayerBar } from './components/PlayerBar';
@@ -15,7 +16,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { ShowsScreen } from './screens/ShowsScreen';
 import { useStore } from './store';
 import { setPlayhead } from './playhead';
-import { makeShow } from '../test/perf/fixture';
+import { makeLibrary, makeShow } from '../test/perf/fixture';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -34,7 +35,8 @@ function mount(ui: ReactNode) {
   document.body.appendChild(container);
   const root = createRoot(container);
   let commits = 0;
-  act(() => { root.render(<Profiler id="t" onRender={() => { commits++; }}>{ui}</Profiler>); });
+  // Pages scroll inside a <main>, which is what the virtual lists look for.
+  act(() => { root.render(<main><Profiler id="t" onRender={() => { commits++; }}>{ui}</Profiler></main>); });
   commits = 0; // the first paint doesn't count
   return { container, commits: () => commits, unmount: () => { act(() => root.unmount()); container.remove(); } };
 }
@@ -43,6 +45,11 @@ const change = (patch: Parameters<typeof useStore.setState>[0]) => act(() => { u
 const move = (pos: number) => act(() => { setPlayhead(pos); });
 
 let view: ReturnType<typeof mount> | null = null;
+beforeAll(() => {
+  // jsdom does no layout. Give the page and its rows a size so a virtual list has something to mount.
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get() { return (this as HTMLElement).tagName === 'MAIN' ? 600 : 60; } });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get() { return 800; } });
+});
 beforeEach(() => {
   setPlayhead(0);
   useStore.setState({ ...initial, hydrated: true, shows: [makeShow(0, 3)], eps: { [K]: { played: false, pos: 0, inbox: true } }, showId: 'show-0', cur: K }, true);
@@ -87,6 +94,40 @@ describe('the command palette', () => {
     expect(view.commits()).toBe(0);
     change({ query: 'episode 3' });
     expect(view.container.textContent).toContain('Episode 3');
+  });
+});
+
+describe('a long show page', () => {
+  const rows = (v: ReturnType<typeof mount>) => v.container.querySelectorAll('.h-row');
+
+  beforeEach(() => {
+    const lib = makeLibrary({ shows: 1, episodes: 2000 });
+    useStore.setState({ shows: lib.shows, eps: lib.eps, showId: 'show-0', cur: K, screen: 'show' });
+  });
+
+  it('mounts only the rows near the top of 2,000 episodes', () => {
+    view = mount(<ShowScreen />);
+    expect(rows(view).length).toBeGreaterThan(5);
+    expect(rows(view).length).toBeLessThan(40);
+    expect(view.container.textContent).toContain('2,000'.replace(',', '') + ' episodes');
+  });
+
+  it('redraws one row for that episode’s download progress, and none as playback advances', () => {
+    view = mount(<ShowScreen />);
+    ghost.renders = 0;
+    for (let t = 1; t <= 10; t++) move(t * 10);
+    expect(ghost.renders).toBe(0);
+    for (let i = 1; i <= 10; i++) change({ dl: [{ key: K, received: i * 500, total: 5000, speed: 100 }] });
+    expect(ghost.renders).toBe(10 * 3); // three buttons in the one row whose percentage changed, ten times
+    expect(view.container.textContent).toContain('100%');
+  });
+
+  it('keeps an open row’s notes to that show', () => {
+    view = mount(<ShowScreen />);
+    act(() => { (view!.container.querySelector('[title="Show notes"]') as HTMLElement).click(); });
+    expect(view.container.textContent).toContain('Show notes for this episode');
+    change({ showId: 'show-0', filter: 'Unplayed' });
+    expect(rows(view).length).toBeGreaterThan(0);
   });
 });
 
