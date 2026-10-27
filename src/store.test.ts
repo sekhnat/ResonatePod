@@ -57,6 +57,16 @@ describe('subscribing and refreshing', () => {
     expect(st().lastChecked).toBeGreaterThan(0);
   });
 
+  it('clears the refreshing flag even when the refresh throws', async () => {
+    // autoDownloadKeys reads the overrides after every feed is done; make that blow up.
+    useStore.setState({ ovr: new Proxy({}, { get() { throw new Error('boom'); } }) });
+    await expect(st().refresh()).rejects.toThrow('boom');
+    expect(st().refreshing).toBe(false);
+    useStore.setState({ ovr: {} });
+    await st().refresh();
+    expect(st().lastChecked).toBeGreaterThan(0);
+  });
+
   it('sends the stored ETag and accepts 304 Not Modified', async () => {
     useStore.setState({ shows: st().shows.map((s) => ({ ...s, etag: '"v2"' })) });
     await st().refresh();

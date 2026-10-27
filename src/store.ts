@@ -725,61 +725,66 @@ export const useStore = create<State>()(
         refresh: async () => {
           if (get().refreshing) return;
           set({ refreshing: true });
-          let fresh = 0;
-          let failed = 0;
-          let needAuth = 0;
-          const moved: string[] = [];
-          const shows = get().shows;
-          const work = [...shows];
-          const worker = async () => {
-            for (let sh = work.shift(); sh; sh = work.shift()) {
-              try {
-                const headers: Record<string, string> = {};
-                if (sh.etag) headers['If-None-Match'] = sh.etag;
-                if (sh.lastModified) headers['If-Modified-Since'] = sh.lastModified;
-                const res = await platform.http(sh.feedUrl, { headers });
-                if (res.status === 401) { needAuth++; continue; }
-                if (res.status === 304) continue;
-                if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-                const { show: upd, newFeedUrl } = showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
-                const s = get();
-                const live = findShow(s, sh.id);
-                if (!live) continue;
-                // Follow the feed when it has moved: a permanent redirect, or itunes:new-feed-url.
-                const target = res.movedTo ?? newFeedUrl;
-                if (target && !s.shows.some((x) => x.feedUrl === target)) {
-                  upd.feedUrl = target;
-                  // A validator from the old address means nothing to the new one.
-                  if (!res.movedTo) { upd.etag = undefined; upd.lastModified = undefined; }
-                  moved.push(upd.title);
+          try {
+            let fresh = 0;
+            let failed = 0;
+            let needAuth = 0;
+            const moved: string[] = [];
+            const shows = get().shows;
+            const work = [...shows];
+            const worker = async () => {
+              for (let sh = work.shift(); sh; sh = work.shift()) {
+                try {
+                  const headers: Record<string, string> = {};
+                  if (sh.etag) headers['If-None-Match'] = sh.etag;
+                  if (sh.lastModified) headers['If-Modified-Since'] = sh.lastModified;
+                  const res = await platform.http(sh.feedUrl, { headers });
+                  if (res.status === 401) { needAuth++; continue; }
+                  if (res.status === 304) continue;
+                  if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+                  const { show: upd, newFeedUrl } = showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
+                  const s = get();
+                  const live = findShow(s, sh.id);
+                  if (!live) continue;
+                  // Follow the feed when it has moved: a permanent redirect, or itunes:new-feed-url.
+                  const target = res.movedTo ?? newFeedUrl;
+                  if (target && !s.shows.some((x) => x.feedUrl === target)) {
+                    upd.feedUrl = target;
+                    // A validator from the old address means nothing to the new one.
+                    if (!res.movedTo) { upd.etag = undefined; upd.lastModified = undefined; }
+                    moved.push(upd.title);
+                  }
+                  const prev = new Map(live.eps.map((e) => [e.guid, e]));
+                  const added = upd.eps.filter((e) => !prev.has(e.guid));
+                  fresh += added.length;
+                  const eps = { ...s.eps };
+                  for (const e of added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
+                  // Keep durations the player measured when the feed doesn't carry one.
+                  const merged: Episode[] = upd.eps.map((e) => ({ ...e, duration: e.duration || prev.get(e.guid)?.duration || 0 }));
+                  set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: merged } : x)) });
+                } catch {
+                  failed++;
                 }
-                const prev = new Map(live.eps.map((e) => [e.guid, e]));
-                const added = upd.eps.filter((e) => !prev.has(e.guid));
-                fresh += added.length;
-                const eps = { ...s.eps };
-                for (const e of added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
-                // Keep durations the player measured when the feed doesn't carry one.
-                const merged: Episode[] = upd.eps.map((e) => ({ ...e, duration: e.duration || prev.get(e.guid)?.duration || 0 }));
-                set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: merged } : x)) });
-              } catch {
-                failed++;
               }
-            }
-          };
-          await Promise.all([worker(), worker(), worker(), worker()]);
-          const s = get();
-          const queued = s.shows.flatMap((sh) => autoDownloadKeys(s, sh.id));
-          set({ refreshing: false, lastChecked: Date.now() });
-          if (platform.isDesktop) queued.forEach((k) => get().startDownload(k));
-          const parts = [fresh ? `${fresh} new episode${fresh > 1 ? 's' : ''}` : 'no new episodes'];
-          if (queued.length && platform.isDesktop) parts.push(`${queued.length} downloading`);
-          if (failed) parts.push(`${failed} feed${failed > 1 ? 's' : ''} failed`);
-          if (needAuth) parts.push(`${needAuth} feed${needAuth > 1 ? 's need' : ' needs'} a password`);
-          if (shows.length) s.toast(`Feeds refreshed · ${parts.join(' · ')}`);
-          for (const title of moved) s.toast(`${title} moved to a new address`);
-          if (fresh && s.tg.notify && typeof Notification !== 'undefined') new Notification('Resonate', { body: `${fresh} new episode${fresh > 1 ? 's' : ''}` });
-          void get().cleanupStorage({ quiet: true });
-          if (s.sync.server) void get().runSync();
+            };
+            await Promise.all([worker(), worker(), worker(), worker()]);
+            const s = get();
+            const queued = s.shows.flatMap((sh) => autoDownloadKeys(s, sh.id));
+            set({ refreshing: false, lastChecked: Date.now() });
+            if (platform.isDesktop) queued.forEach((k) => get().startDownload(k));
+            const parts = [fresh ? `${fresh} new episode${fresh > 1 ? 's' : ''}` : 'no new episodes'];
+            if (queued.length && platform.isDesktop) parts.push(`${queued.length} downloading`);
+            if (failed) parts.push(`${failed} feed${failed > 1 ? 's' : ''} failed`);
+            if (needAuth) parts.push(`${needAuth} feed${needAuth > 1 ? 's need' : ' needs'} a password`);
+            if (shows.length) s.toast(`Feeds refreshed · ${parts.join(' · ')}`);
+            for (const title of moved) s.toast(`${title} moved to a new address`);
+            if (fresh && s.tg.notify && typeof Notification !== 'undefined') new Notification('Resonate', { body: `${fresh} new episode${fresh > 1 ? 's' : ''}` });
+            void get().cleanupStorage({ quiet: true });
+            if (s.sync.server) void get().runSync();
+          } finally {
+            // Whatever threw above, the next refresh must be able to start.
+            if (get().refreshing) set({ refreshing: false });
+          }
         },
 
         addFeed: async (url, opts = {}) => {

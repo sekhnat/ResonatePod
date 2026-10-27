@@ -110,7 +110,7 @@ function browserPlatform(): Platform {
     hostname: 'browser',
     async http(url, req = {}) {
       const a = auth.get(origin(url));
-      const res = await fetch(url, { method: req.method ?? 'GET', headers: { ...(a ? { Authorization: a } : {}), ...req.headers }, body: req.body });
+      const res = await fetch(url, { method: req.method ?? 'GET', headers: { ...(a ? { Authorization: a } : {}), ...req.headers }, body: req.body, signal: AbortSignal.timeout(60_000) });
       return { status: res.status, text: await res.text(), etag: res.headers.get('etag') ?? undefined, lastModified: res.headers.get('last-modified') ?? undefined };
     },
     loadLibrary: async () => LS.get('resonate-library'),
