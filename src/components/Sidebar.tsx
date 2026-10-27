@@ -1,17 +1,21 @@
+import { useShallow } from 'zustand/react/shallow';
 import { art, mono } from '../data';
 import { Art } from './ui';
 import { useStore, type Screen } from '../store';
 import { totalUnplayed, unplayedFor } from '../model';
 
 export function Sidebar() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({
+    screen: s.screen, showId: s.showId, shows: s.shows, eps: s.eps, queue: s.queue.length, dls: s.dl.length,
+    usedBytes: s.usedBytes, storageLimitGb: s.storageLimitGb, folder: s.folder, go: s.go, openShow: s.openShow,
+  })));
   const active = s.screen === 'show' ? 'shows' : s.screen;
   const unplayed = totalUnplayed(s);
   const nav: [Screen, string, string, string][] = [
     ['inbox', 'New episodes', 'ph ph-tray', unplayed ? String(unplayed) : ''],
     ['shows', 'Shows', 'ph ph-squares-four', ''],
-    ['queue', 'Queue', 'ph ph-queue', s.queue.length ? String(s.queue.length) : ''],
-    ['downloads', 'Downloads', 'ph ph-download-simple', s.dl.length ? String(s.dl.length) : ''],
+    ['queue', 'Queue', 'ph ph-queue', s.queue ? String(s.queue) : ''],
+    ['downloads', 'Downloads', 'ph ph-download-simple', s.dls ? String(s.dls) : ''],
     ['discover', 'Discover', 'ph ph-compass', ''],
   ];
   const usedGb = s.usedBytes / 1024 ** 3;

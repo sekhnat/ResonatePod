@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { totalUnplayed } from '../model';
 import { platform } from '../platform';
@@ -6,19 +7,24 @@ import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
 import { GhostIcon, useOutside } from './ui';
 
 export function HeaderBar() {
-  const s = useStore();
+  // Counts rather than the lists they come from: download progress replaces `dl` four times a second.
+  const s = useStore(useShallow((s) => ({
+    show: s.shows.find((x) => x.id === s.showId), shows: s.shows.length, screen: s.screen, unplayed: totalUnplayed(s), folder: s.folder,
+    dls: s.dl.length, failed: s.dl.filter((d) => d.error).length, canGoBack: s.history.length > 0, refreshing: s.refreshing, menu: s.menu,
+    set: s.set, go: s.go, goBack: s.goBack, refresh: s.refresh,
+  })));
   const chrome = platform.desktop;
-  const show = s.shows.find((x) => x.id === s.showId);
+  const { show } = s;
   const titles: Record<string, [string, string]> = {
-    inbox: ['New episodes', `${totalUnplayed(s)} unplayed`],
-    shows: ['Shows', `${s.shows.length} subscription${s.shows.length === 1 ? '' : 's'}`],
+    inbox: ['New episodes', `${s.unplayed} unplayed`],
+    shows: ['Shows', `${s.shows} subscription${s.shows === 1 ? '' : 's'}`],
     show: [show?.title ?? 'Show', show?.author ?? ''],
     queue: ['Queue', 'Up next'],
-    downloads: ['Downloads', s.dl.length ? [`${s.dl.filter((d) => !d.error).length} in progress`, ...(s.dl.some((d) => d.error) ? [`${s.dl.filter((d) => d.error).length} failed`] : [])].join(' · ') : 'All done'],
+    downloads: ['Downloads', s.dls ? [`${s.dls - s.failed} in progress`, ...(s.failed ? [`${s.failed} failed`] : [])].join(' · ') : 'All done'],
     discover: ['Discover', 'Apple Podcasts · gpodder.net · fyyd'],
     settings: ['Preferences', `Resonate ${APP_VERSION}`],
   };
-  const [title, sub] = s.shows.length || s.screen === 'discover' || s.screen === 'settings' ? titles[s.screen] : ['Welcome', 'Resonate'];
+  const [title, sub] = s.shows || s.screen === 'discover' || s.screen === 'settings' ? titles[s.screen] : ['Welcome', 'Resonate'];
   const menuRef = useOutside<HTMLDivElement>(s.menu === 'main', () => s.set({ menu: null }), '[data-menu-trigger="main"]');
   const closeMenu = () => s.set({ menu: null });
   const controls: [string, number, string, () => void][] = chrome === 'KDE'
@@ -30,7 +36,7 @@ export function HeaderBar() {
       style={{ height: 46, flex: 'none', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: '0 var(--space-3)', background: 'linear-gradient(180deg,var(--color-surface),color-mix(in srgb,var(--color-surface) 60%,var(--color-bg)))', boxShadow: '0 1px 0 var(--color-neutral-900)', position: 'relative', zIndex: 8 }}>
       {chrome === 'KDE' && <i className="ph-fill ph-waveform" style={{ fontSize: 18, color: 'var(--color-accent)', padding: '0 4px' }} />}
       <div style={{ display: 'flex', gap: 2, width: 212 }}>
-        <GhostIcon icon="ph ph-caret-left" title="Back" onClick={s.goBack} color="var(--color-text)" style={{ opacity: s.history.length ? 1 : 0.45 }} />
+        <GhostIcon icon="ph ph-caret-left" title="Back" onClick={s.goBack} color="var(--color-text)" style={{ opacity: s.canGoBack ? 1 : 0.45 }} />
         <GhostIcon icon={s.refreshing ? 'ph ph-circle-notch spin' : 'ph ph-arrows-clockwise'} title="Refresh all feeds (Ctrl+R)" onClick={() => void s.refresh()} color="var(--color-text)" />
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.15, minWidth: 0, pointerEvents: 'none' }}>
