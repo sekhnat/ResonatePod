@@ -10,6 +10,7 @@ import { readEmbeddedChapters } from '../shared/embedded';
 import { DownloadManager, diskUsage, expandHome, moveFiles } from './downloads';
 import { DownloadRoots, rootsFromLibrary } from './paths';
 import { LibraryDb, openLibrary } from './db/library';
+import { importLegacyLibrary } from './db/legacy';
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL;
 const USER_DATA = process.env.RESONATE_USER_DATA;
@@ -372,13 +373,6 @@ function registerIpc() {
   ipcMain.handle('lib:patch', (_e, patch: LibraryPatch) => library!.patch(patch));
   ipcMain.handle('lib:notes', (_e, show: string, guid: string) => library!.notes(String(show), String(guid)));
 
-  ipcMain.handle('library:load', () => fs.readFile(dataFile('library.json'), 'utf8').catch(() => null));
-  ipcMain.handle('library:save', async (_e, json: string) => {
-    const tmp = dataFile('library.json.tmp');
-    await fs.writeFile(tmp, json);
-    await fs.rename(tmp, dataFile('library.json'));
-  });
-
   ipcMain.handle('dl:start', async (_e, job: DownloadJob) => {
     const folder = await roots.resolve(job.folder);
     if (!folder) {
@@ -471,6 +465,15 @@ if (!app.requestSingleInstanceLock()) {
     const opened = openLibrary(dataFile('library.db'));
     library = opened.db;
     if (opened.recovered) console.warn(`library.db was damaged; kept as ${opened.recovered} and started a new library`);
+    // A library saved by an older version (one JSON file) moves into the database once, and the file is kept as a backup.
+    if (library.isEmpty()) {
+      const legacy = await fs.readFile(dataFile('library.json'), 'utf8').catch(() => null);
+      const imported = legacy ? importLegacyLibrary(library, legacy) : null;
+      if (imported) {
+        await fs.rename(dataFile('library.json'), dataFile('library.json.bak'));
+        console.log(`Imported library.json: ${imported.shows} shows, ${imported.episodes} episodes, ${imported.states} episode states (kept as library.json.bak)`);
+      }
+    }
     registerMediaProtocol();
     registerIpc();
     createWindow();

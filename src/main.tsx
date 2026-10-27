@@ -8,6 +8,9 @@ import '@phosphor-icons/web/fill';
 import './styles/nocturne.css';
 import './styles/app.css';
 import App from './App';
+import { hydrate } from './persistence';
+
+void hydrate();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

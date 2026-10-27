@@ -22,7 +22,8 @@ export interface Episode {
   enclosureUrl: string;
   enclosureType: string;
   sizeBytes: number;
-  description: string;
+  /** Show notes. Held only until they are saved: the database keeps them, and an episode loaded from it has none (see libNotes). */
+  description?: string;
   link?: string;
   imageUrl?: string;
   chaptersUrl?: string;

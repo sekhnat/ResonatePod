@@ -1,5 +1,6 @@
 import { shallow } from 'zustand/shallow';
-import { downloadsBlocked, epInfo, flushSave, getEp, sleepLabel, useStore, type State } from './store';
+import { downloadsBlocked, epInfo, getEp, sleepLabel, useStore, type State } from './store';
+import { flushSave } from './persistence';
 import { dlSummary } from './model';
 import { platform } from './platform';
 import { startEngine } from './audio/engine';
