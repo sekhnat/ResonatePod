@@ -53,6 +53,19 @@ describe('parseFeed', () => {
   it('rejects things that are not podcast feeds', () => {
     expect(() => parseFeed('<rss><channel>')).toThrow('not valid XML');
     expect(() => parseFeed('<html><body>hi</body></html>')).toThrow('Not a podcast RSS feed');
+    expect(() => parseFeed('hello there')).toThrow('Not a podcast RSS feed');
+    expect(() => parseFeed('')).toThrow('Not a podcast RSS feed');
+  });
+
+  it('rejects a feed that was cut off, instead of parsing it as a shorter one', () => {
+    const secondItem = xml.indexOf('<item>', xml.indexOf('<item>') + 1);
+    expect(() => parseFeed(xml.slice(0, secondItem + 40))).toThrow('not valid XML');
+    expect(() => parseFeed(xml.slice(0, xml.lastIndexOf('</channel>')))).toThrow('not valid XML');
+    expect(() => parseFeed(xml.slice(0, -3))).toThrow('not valid XML');
+  });
+
+  it('accepts whitespace and comments after the closing tag', () => {
+    expect(parseFeed(`${xml}\n\n<!-- cached by the CDN -->\n`).episodes).toHaveLength(f.episodes.length);
   });
 });
 

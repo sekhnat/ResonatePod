@@ -1,4 +1,4 @@
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
 import type { Chapter, Episode, Feed } from './types';
 
 const parser = new XMLParser({
@@ -92,11 +92,17 @@ const rank = (type: string) => {
   return i < 0 ? TRANSCRIPT_PREF.length : i;
 };
 
+// The parser never throws on bad XML: a feed cut off mid-download would parse as a shorter one. A separate
+// validation pass cost a third of parsing a big feed, so only check that the document ends where an RSS one does.
+const ENDS_LIKE_RSS = /<\/rss\s*>(?:\s|<!--[\s\S]*?-->)*$/i;
+
 export function parseFeed(xml: string): Feed {
-  if (XMLValidator.validate(xml) !== true) throw new Error('The feed is not valid XML');
-  const doc = parser.parse(xml) as Record<string, Node>;
-  const rss = doc.rss as Record<string, unknown> | undefined;
-  const ch = rss?.channel as Record<string, unknown> | undefined;
+  let doc: Record<string, Node>;
+  try { doc = parser.parse(xml) as Record<string, Node>; } catch { throw new Error('The feed is not valid XML'); }
+  const rss = doc.rss as Record<string, unknown> | string | undefined;
+  if (!rss || typeof rss !== 'object') throw new Error('Not a podcast RSS feed');
+  if (!ENDS_LIKE_RSS.test(xml.slice(-2048))) throw new Error('The feed is not valid XML');
+  const ch = rss.channel as Record<string, unknown> | undefined;
   if (!ch) throw new Error('Not a podcast RSS feed');
   const episodes = ((ch.item as Record<string, unknown>[]) ?? [])
     .map(parseItem)
