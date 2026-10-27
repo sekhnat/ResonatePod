@@ -12,6 +12,7 @@ import type { OpmlFeed } from './lib/opml';
 import { defaultCountry, gpodderResult, resolveFeedUrl, type DirectoryResult, type SourceChoice } from './lib/directory';
 import { SMALL_BODY_BYTES, platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
+import { dropNotes, holdNotes } from './notes';
 
 export type Screen = 'inbox' | 'shows' | 'show' | 'queue' | 'downloads' | 'discover' | 'settings';
 export type Filter = 'All' | 'Unplayed' | 'Downloaded';
@@ -399,14 +400,20 @@ export function cleanupKeys(s: Pick<Data, 'eps' | 'sv' | 'storageLimitGb' | 'cur
   return [...out];
 }
 
-function showFromFeed(url: string, xml: string, id: string, etag?: string, lastModified?: string): { show: Show; newFeedUrl?: string } {
+/** The show a feed describes. Its episodes carry no show notes (see notes.ts): those come back separately, by guid. */
+function showFromFeed(url: string, xml: string, id: string, etag?: string, lastModified?: string): { show: Show; newFeedUrl?: string; notes: Map<string, string> } {
   const f = parseFeed(xml);
+  const notes = new Map<string, string>();
+  const eps = f.episodes.map(({ description, ...ep }) => {
+    if (description) notes.set(ep.guid, description);
+    return ep;
+  });
   const show: Show = {
     id, title: f.title, author: f.author, hue: hueFor(f.title), cat: f.category, freq: cadence(f.episodes),
-    desc: f.description, feedUrl: url, imageUrl: f.imageUrl, link: f.link, eps: f.episodes,
+    desc: f.description, feedUrl: url, imageUrl: f.imageUrl, link: f.link, eps,
     etag, lastModified, subscribedAt: Date.now(),
   };
-  return { show, newFeedUrl: f.newFeedUrl && f.newFeedUrl !== url ? f.newFeedUrl : undefined };
+  return { show, newFeedUrl: f.newFeedUrl && f.newFeedUrl !== url ? f.newFeedUrl : undefined, notes };
 }
 
 /** `https://user:pass@host/feed` → the bare URL plus the credentials. */
@@ -812,7 +819,7 @@ export const useStore = create<State>()(
                 if (res.status === 401) { needAuth++; continue; }
                 if (res.status === 304) continue;
                 if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-                const { show: upd, newFeedUrl } = showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
+                const { show: upd, newFeedUrl, notes } = showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
                 const s = get();
                 const live = findShow(s, sh.id);
                 if (!live) continue;
@@ -834,7 +841,9 @@ export const useStore = create<State>()(
                 const current: Episode[] = upd.eps.map((e) => {
                   const old = prev.get(e.guid);
                   const next = { ...e, duration: e.duration || old?.duration || 0 };
-                  return old && sameEpisode(old, next) ? old : next;
+                  if (old && sameEpisode(old, next)) return old;
+                  holdNotes(sh.id, e.guid, notes.get(e.guid)); // a new or changed episode's notes are saved with it
+                  return next;
                 });
                 // Feeds often list only their latest episodes. One the feed has dropped stays while anything refers to it
                 // (a downloaded file, play history, the queue, the playing episode), so those keep resolving.
@@ -902,10 +911,11 @@ export const useStore = create<State>()(
           const feedUrl = res.movedTo ?? clean;
           const dup = res.movedTo && already(feedUrl);
           if (dup) return dup;
-          const { show: parsed } = showFromFeed(feedUrl, res.text, '', res.etag, res.lastModified);
+          const { show: parsed, notes } = showFromFeed(feedUrl, res.text, '', res.etag, res.lastModified);
           let id = slug(parsed.title);
           while (findShow(get(), id)) id += '-';
           const show = { ...parsed, id };
+          for (const [guid, text] of notes) holdNotes(id, guid, text);
           const eps = { ...get().eps };
           // Only the newest episode is new; the others have nothing to record yet (see withEp).
           if (show.eps.length) eps[epKey(id, show.eps[0].guid)] = { played: false, pos: 0, inbox: true };
@@ -932,6 +942,7 @@ export const useStore = create<State>()(
         const show = findShow(s, id);
         if (!show) return;
         const prefix = `${id}:`;
+        dropNotes(id);
         const shows = s.shows.filter((x) => x.id !== id);
         s.dl.filter((d) => d.key.startsWith(prefix)).forEach((d) => platform.download.cancel(d.key));
         // Downloaded files stay on disk (the dialog says so); their records go with the show.

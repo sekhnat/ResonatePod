@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { CommandPalette } from './components/CommandPalette';
 import { Dialogs } from './components/Dialogs';
 import { InboxScreen } from './screens/InboxScreen';
+import { platform } from './platform';
 import { QueueScreen } from './screens/QueueScreen';
 import { ShowScreen } from './screens/ShowScreen';
 import { HeaderBar } from './components/HeaderBar';
@@ -129,12 +130,15 @@ describe('a long show page', () => {
     expect(view.container.textContent).toContain('100%');
   });
 
-  it('keeps an open row’s notes to that show', () => {
+  it('reads an episode’s show notes when its row is opened', async () => {
+    const libNotes = vi.spyOn(platform, 'libNotes').mockResolvedValue('The notes from the database.');
     view = mount(<ShowScreen />);
+    expect(libNotes).not.toHaveBeenCalled();
     act(() => { (view!.container.querySelector('[title="Show notes"]') as HTMLElement).click(); });
-    expect(view.container.textContent).toContain('Show notes for this episode');
-    change({ showId: 'show-0', filter: 'Unplayed' });
-    expect(rows(view).length).toBeGreaterThan(0);
+    expect(view.container.textContent).toContain('Loading…');
+    await act(async () => { await Promise.resolve(); });
+    expect(view.container.textContent).toContain('The notes from the database.');
+    expect(libNotes).toHaveBeenCalledWith('show-0', 'show-0-ep-0');
   });
 });
 

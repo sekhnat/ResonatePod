@@ -49,7 +49,7 @@ const feed = () => `<?xml version="1.0"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
 <channel><title>Fixture FM</title><itunes:author>Resonate Tests</itunes:author><description>A feed served by the e2e test.</description><link>${base}/</link>
 <item><title>Episode two</title><guid>fx-2</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>
-<item><title>Episode one</title><guid>fx-1</guid><pubDate>${new Date(Date.now() - 864e5).toUTCString()}</pubDate><enclosure url="${base}/ep1.wav" length="${media['/ep1.wav'].length}" type="audio/wav"/>
+<item><title>Episode one</title><guid>fx-1</guid><pubDate>${new Date(Date.now() - 864e5).toUTCString()}</pubDate><description>Fixture show notes for episode one.</description><enclosure url="${base}/ep1.wav" length="${media['/ep1.wav'].length}" type="audio/wav"/>
 <podcast:chapters url="${base}/ch.json" type="application/json+chapters"/><podcast:transcript url="${base}/t.vtt" type="text/vtt"/></item>
 </channel></rss>`;
 
@@ -209,6 +209,10 @@ try {
     await page.keyboard.press('Enter');
     await page.getByRole('heading', { name: 'Fixture FM' }).waitFor();
     await page.getByText('Episode one').waitFor();
+    // Show notes aren't kept on the episodes; these are the ones from the feed, still waiting to be saved.
+    await page.getByTitle('Show notes').last().click();
+    await page.getByText('Fixture show notes for episode one.').waitFor();
+    await page.getByTitle('Hide show notes').click();
     await shot('02-show');
   });
 
@@ -563,6 +567,9 @@ try {
     await page.getByText('Legacy two').waitFor();
     await page.locator('nav').getByRole('button', { name: 'Legacy FM' }).click();
     await page.getByText('Legacy one').waitFor();
+    // The show notes were stored with the episodes and are read back when a row is opened.
+    await page.getByTitle('Show notes').last().click();
+    await page.getByText('Notes for Legacy one.').waitFor();
     assert.ok(existsSync(path.join(old, 'library.db')), 'the database is created');
     assert.ok(existsSync(path.join(old, 'library.json.bak')), 'the old file is kept as a backup');
     assert.ok(!existsSync(path.join(old, 'library.json')), 'and is no longer read');

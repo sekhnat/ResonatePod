@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { art, epKey, mono } from '../data';
-import { epInfo, findShow, getEp, sortFor, useStore } from '../store';
+import { art, epKey, mono, parseKey } from '../data';
+import { findShow, getEp, sortFor, useStore } from '../store';
+import { useNotes } from '../notes';
 import { applyFilter, applySort, episodeRow, orderable, ruleLabel, unplayedFor, type EpisodeRow } from '../model';
 import { Art, GhostIcon, RowMeta, RowPlay, RowProgress, Seg, SortSelect } from '../components/ui';
 import { VirtualList } from '../components/VirtualList';
@@ -78,7 +79,8 @@ const ShowEpisodeRow = memo(function ShowEpisodeRow({ id }: { id: string }) {
   const e = useStore(useShallow((s) => episodeRow(s, id)));
   const a = useStore(useShallow((s) => ({ play: s.play, cancelDownload: s.cancelDownload, deleteFile: s.deleteFile, startDownload: s.startDownload, markPlayed: s.markPlayed, addToQueue: s.addToQueue })));
   const [open, setOpen] = useState(false);
-  const notes = useStore((s) => (open ? epInfo(s, id)?.ep.description : ''));
+  const [showId, guid] = parseKey(id);
+  const notes = useNotes(showId, guid, open); // read from the database when the row is opened, not kept for every episode
   if (!e) return null;
   const dlIcon = e.downloading ? 'ph ph-x' : e.downloaded ? 'ph ph-trash' : 'ph ph-download-simple';
   const dlLabel = e.downloading ? 'Cancel download' : e.downloaded ? 'Delete file' : 'Download';
@@ -93,7 +95,7 @@ const ShowEpisodeRow = memo(function ShowEpisodeRow({ id }: { id: string }) {
           <span onClick={() => setOpen((o) => !o)} title={open ? 'Hide show notes' : 'Show notes'} style={{ fontSize: 14, fontWeight: 500, color: titleColor(e), whiteSpace: open ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>{e.title}</span>
         </div>
         <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}><RowMeta e={e} /></span>
-        {open && <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-neutral-300)', whiteSpace: 'pre-line', maxHeight: 260, overflow: 'auto' }}>{notes || 'No show notes for this episode.'}</p>}
+        {open && <p style={{ margin: '6px 0 0', fontSize: 12.5, lineHeight: 1.55, color: 'var(--color-neutral-300)', whiteSpace: 'pre-line', maxHeight: 260, overflow: 'auto' }}>{notes === null ? 'Loading…' : notes || 'No show notes for this episode.'}</p>}
       </div>
       <div className="row-actions" style={{ display: 'flex' }}>
         <GhostIcon icon={e.played ? 'ph ph-arrow-u-up-left' : 'ph ph-checks'} title={e.played ? 'Mark unplayed' : 'Mark played'} onClick={() => a.markPlayed(e.key, !e.played)} />
