@@ -2,17 +2,12 @@ import { EventEmitter } from 'node:events';
 import { createWriteStream, promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { fileStem, safeName } from '../shared/filename';
 import type { DownloadEvent, DownloadJob } from '../shared/types';
 
 type Fetch = (url: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) => Promise<Response>;
 
 export const expandHome = (p: string) => (p === '~' || p.startsWith('~/') ? path.join(homedir(), p.slice(1)) : p);
-
-// A name made only of dots ("." or "..") would walk out of its folder, so it counts as no name at all.
-const safe = (s: string) => {
-  const name = s.replace(/[/\\:*?"<>|\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
-  return /^\.*$/.test(name) ? 'untitled' : name;
-};
 
 const EXT: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/mp4': 'mp4', 'video/x-m4v': 'm4v', 'video/quicktime': 'mov', 'video/webm': 'webm' };
 
@@ -24,9 +19,7 @@ export function targetPath(job: DownloadJob) {
   try { pathname = new URL(job.url).pathname; } catch { throw new JobError('the episode has no valid download address'); }
   const fromUrl = /\.([a-z0-9]{2,4})(?:$|[?#])/i.exec(pathname)?.[1];
   const ext = (fromUrl ?? EXT[job.mime] ?? 'mp3').toLowerCase();
-  const published = new Date(job.pubDate).getTime();
-  const date = job.pubDate && Number.isFinite(published) ? new Date(published).toISOString().slice(0, 10) : 'undated';
-  return path.join(expandHome(job.folder), safe(job.showTitle), `${date} - ${safe(job.title)}.${ext}`);
+  return path.join(expandHome(job.folder), safeName(job.showTitle), `${fileStem(job.pubDate, job.title, job.suffix)}.${ext}`);
 }
 
 interface Queued { job: DownloadJob; attempt: number }

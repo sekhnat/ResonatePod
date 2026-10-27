@@ -83,6 +83,21 @@ describe('subscribing and refreshing', () => {
     expect(start.mock.calls[0][0]).toMatchObject({ url: 'https://cdn.example/kp42.mp3', folder: '~/Podcasts', showTitle: 'Kernel Panic Hour' });
   });
 
+  it('tells apart episodes that would be saved under the same file name', async () => {
+    platform.isDesktop = true;
+    const start = vi.spyOn(platform.download, 'start').mockImplementation(() => {});
+    // Same title and day as episode 42, from the same show.
+    feedBody = feed.replace('<item>', `<item><title>Wayland, five years on</title><guid>kp:ep:42b</guid><pubDate>Mon, 19 Oct 2026 18:00:00 +0000</pubDate><enclosure url="https://cdn.example/kp42b.mp3" length="1000" type="audio/mpeg"/></item><item>`);
+    st().unsubscribe('kernel-panic-hour', true);
+    await st().addFeed(FEED_URL, { quiet: true });
+    const jobs = Object.fromEntries(start.mock.calls.map((c) => [c[0].key, c[0]]));
+    const twin = 'kernel-panic-hour:kp:ep:42b';
+    expect(jobs[K42].suffix).toMatch(/^[0-9a-f]{6}$/);
+    expect(jobs[twin].suffix).toMatch(/^[0-9a-f]{6}$/);
+    expect(jobs[K42].suffix).not.toBe(jobs[twin].suffix);
+    expect(jobs[K41].suffix).toBeUndefined(); // the default rule takes the newest three, so 40 isn't started
+  });
+
   it('applies per-show auto-download rules', () => {
     st().setOverride('kernel-panic-hour', 'dl', 'Latest 1');
     expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([K42]);

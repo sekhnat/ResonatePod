@@ -67,6 +67,14 @@ describe('DownloadManager', () => {
     expect(() => m.cancel('kp:1')).not.toThrow();
   });
 
+  it('gives two episodes that share a day and title different files', () => {
+    const a = targetPath({ ...job('/tmp/pods'), suffix: 'a1b2c3' });
+    const b = targetPath({ ...job('/tmp/pods'), suffix: 'd4e5f6' });
+    expect(a).toBe('/tmp/pods/Kernel Panic Hour/2026-10-19 - Wayland [a1b2c3].mp3');
+    expect(new Set([a, b, targetPath(job('/tmp/pods'))]).size).toBe(3);
+    expect(targetPath({ ...job('/tmp/pods'), suffix: '../../x' })).toBe('/tmp/pods/Kernel Panic Hour/2026-10-19 - Wayland [x].mp3');
+  });
+
   it('keeps a dots-only show title inside the download folder', () => {
     for (const showTitle of ['..', '.', '...', ' .. ']) {
       expect(targetPath({ ...job('/tmp/pods'), showTitle })).toBe('/tmp/pods/untitled/2026-10-19 - Wayland.mp3');
