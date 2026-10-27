@@ -225,6 +225,11 @@ async function loadCredentials() {
 
 interface TextResponse { status: number; text: string; header(name: string): string | undefined; finalUrl: string; permanent: boolean }
 
+// A server that stops answering must not hold a refresh worker forever: give up when nothing has
+// arrived for the idle time, or when the whole exchange outlasts the total time.
+const HTTP_IDLE_MS = Number(process.env.RESONATE_HTTP_TIMEOUT_MS) || 20_000;
+const HTTP_TOTAL_MS = Number(process.env.RESONATE_HTTP_TIMEOUT_MS) || 60_000;
+
 /** GET/POST with redirects followed by hand, so we know whether every hop was permanent. */
 function request(url: string, req: HttpRequest): Promise<TextResponse> {
   return new Promise((resolve, reject) => {
@@ -234,25 +239,41 @@ function request(url: string, req: HttpRequest): Promise<TextResponse> {
     let finalUrl = url;
     let permanent = true;
     let hops = 0;
+    let settled = false;
+    let idle: NodeJS.Timeout | undefined;
+    let total: NodeJS.Timeout | undefined;
+    const finish = (err: Error | null, value?: TextResponse) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(idle);
+      clearTimeout(total);
+      if (err) { r.abort(); reject(err); } else resolve(value!);
+    };
+    const timedOut = () => finish(new Error('timed out'));
+    const touch = () => { clearTimeout(idle); idle = setTimeout(timedOut, HTTP_IDLE_MS); };
+    total = setTimeout(timedOut, HTTP_TOTAL_MS);
+    touch();
     r.on('redirect', (status, _method, to) => {
-      if (++hops > 8) { r.abort(); reject(new Error('too many redirects')); return; }
+      if (++hops > 8) { finish(new Error('too many redirects')); return; }
       if (status !== 301 && status !== 308) permanent = false;
       finalUrl = to;
+      touch();
       r.followRedirect();
     });
     r.on('response', (res) => {
       const chunks: Buffer[] = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve({
+      touch();
+      res.on('data', (c) => { chunks.push(c); touch(); });
+      res.on('end', () => finish(null, {
         status: res.statusCode,
         text: Buffer.concat(chunks).toString('utf8'),
         header: (n) => { const v = res.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v; },
         finalUrl,
         permanent: hops > 0 && permanent,
       }));
-      res.on('error', reject);
+      res.on('error', (err) => finish(err));
     });
-    r.on('error', reject);
+    r.on('error', (err) => finish(err));
     if (req.body) r.write(req.body);
     r.end();
   });

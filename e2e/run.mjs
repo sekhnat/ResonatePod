@@ -60,6 +60,11 @@ const longFeed = () => `<?xml version="1.0"?>
 <item><title>Pilot</title><guid>long-1</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>
 </channel></rss>`;
 
+const flipFeed = () => `<?xml version="1.0"?>
+<rss version="2.0"><channel><title>Flip FM</title><description>Answers once, then goes quiet.</description>
+<item><title>Only episode</title><guid>flip-1</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>
+</channel></rss>`;
+
 const html = '<html><body><cite>Ana:</cite><time>0:00:00</time><p>Welcome to the members feed.</p><cite>Ben:</cite><time>0:00:02</time><p>Mail time.</p></body></html>';
 const privateFeed = () => {
   const item = (title, guid, file, type, ago, extra = '') => `<item><title>${title}</title><guid>${guid}</guid><pubDate>${new Date(Date.now() - ago * 36e5).toUTCString()}</pubDate><enclosure url="${base}${file}" length="${media[file].length}" type="${type}"/>${extra}</item>`;
@@ -111,6 +116,8 @@ const server = createServer((req, res) => {
   if (listed) return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(directoryFeed(listed[1]));
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
   if (url === '/long.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(longFeed());
+  // Answers once so it can be subscribed to, then never again.
+  if (url === '/flip.xml') return hit === 1 ? res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(flipFeed()) : undefined;
   if ((url === '/private.xml' || url.startsWith('/p/')) && req.headers.authorization !== AUTH) {
     return res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="members"' }).end();
   }
@@ -150,7 +157,7 @@ async function launch() {
   app = await electron.launch({
     executablePath: packaged ? path.resolve(packaged) : electronPath,
     args: packaged ? ['--no-sandbox'] : ['.', '--no-sandbox'],
-    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: path.join(home, 'config'), XDG_CURRENT_DESKTOP: 'KDE',
+    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: path.join(home, 'config'), XDG_CURRENT_DESKTOP: 'KDE', RESONATE_HTTP_TIMEOUT_MS: '2000',
       RESONATE_URL_REWRITE: JSON.stringify({ 'https://itunes.apple.com': `${base}/apple`, 'https://gpodder.net': `${base}/gpodder`, 'https://api.fyyd.de': `${base}/fyyd` }) },
   });
   page = await app.firstWindow();
@@ -456,6 +463,21 @@ try {
     await shot('16-long-names');
   });
 
+  await step('a feed that stops answering cannot wedge refresh', async () => {
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/flip.xml`);
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading', { name: 'Flip FM' }).waitFor();
+    const refresh = page.getByRole('button', { name: 'Refresh all feeds (Ctrl+R)' });
+    // The first request answered; every refresh after that hangs until the 2 s timeout gives up.
+    for (const round of [1, 2]) {
+      await refresh.click();
+      await waitFor(`refresh ${round} to ask the feed again`, () => hits['/flip.xml'] >= round + 1);
+      await refresh.locator('.ph-arrows-clockwise').waitFor({ timeout: 10000 });
+    }
+    await page.getByText(/Feeds refreshed.*failed/).first().waitFor();
+  });
+
   assert.deepEqual(errors.filter((e) => !/itunes\.apple\.com|ERR_NAME|ERR_TUNNEL|ERR_PROXY/.test(e)), [], 'console errors');
   console.log(`\nAll e2e steps passed. Screenshots: ${shots}`);
 } catch (err) {
@@ -464,5 +486,6 @@ try {
   process.exitCode = 1;
 } finally {
   await app.close();
+  server.closeAllConnections();
   server.close();
 }
