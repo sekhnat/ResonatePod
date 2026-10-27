@@ -39,6 +39,8 @@ const hits = {};
 const rangesFor = {};
 // Which paths were asked for with an Authorization header, to see where a login travels.
 const withAuth = new Set();
+// Paths whose connection the client closed before the server answered.
+const closed = new Set();
 // The slow episode sends its first 64 KB and then holds the connection open, so a
 // restart interrupts it at a known point; clearing this lets it finish.
 let holdSlow = true;
@@ -130,6 +132,7 @@ const server = createServer((req, res) => {
   if (listed) return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(directoryFeed(listed[1]));
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
   if (url === '/long.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(longFeed());
+  if (url === '/hang.xml') { req.on('close', () => closed.add(url)); return; } // never answers
   // A feed and its episode on the (logged-in) fixture origin that both redirect to another host, localhost.
   if (url === '/hop.xml') return res.writeHead(302, { Location: `http://localhost:${server.address().port}/hop-target.xml` }).end();
   if (url === '/hop-target.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(hopFeed());
@@ -575,6 +578,17 @@ try {
     assert.ok(withAuth.has('/hop-media.wav'), 'and so does the first hop of the episode');
     assert.ok(!withAuth.has('/hop-target.xml'), 'the feed’s login was passed to another site');
     assert.ok(!withAuth.has('/hop-media-target.wav'), 'the episode’s login was passed to another site');
+  });
+
+  await step('a request the page gives up on is cancelled in the main process', async () => {
+    // The bridge's own timeout is 2 s here, so a close within 1.5 s of a cancel at 0.3 s can only be the cancel.
+    const outcome = await page.evaluate(async (url) => {
+      const p = window.resonate.http(url, undefined, 'e2e-cancel').then(() => 'answered', (e) => String(e.message ?? e));
+      setTimeout(() => window.resonate.cancelHttp('e2e-cancel'), 300);
+      return p;
+    }, `${base}/hang.xml`);
+    assert.match(outcome, /cancelled/);
+    await waitFor('the server to see the connection close', () => closed.has('/hang.xml'), 1500);
   });
 
   await step('a runaway response is cut off instead of buffered', async () => {

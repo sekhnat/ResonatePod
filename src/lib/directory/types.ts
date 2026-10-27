@@ -21,8 +21,8 @@ export interface DirectoryResult {
 
 export class DirectoryError extends Error {}
 
-export async function getJson<T>(url: string, label: string, headers?: Record<string, string>): Promise<T> {
-  const res = await platform.http(url, { headers, maxBytes: SMALL_BODY_BYTES });
+export async function getJson<T>(url: string, label: string, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> {
+  const res = await platform.http(url, { headers, maxBytes: SMALL_BODY_BYTES }, signal);
   if (res.status !== 200) throw new DirectoryError(`${label} responded with HTTP ${res.status}`);
   try {
     return JSON.parse(res.text) as T;

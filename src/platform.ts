@@ -17,7 +17,8 @@ export interface Platform {
   isDesktop: boolean;
   desktop: 'KDE' | 'GNOME';
   hostname: string;
-  http(url: string, req?: HttpRequest): Promise<HttpResponse>;
+  /** Aborting `signal` stops the request (and rejects with the signal's reason). */
+  http(url: string, req?: HttpRequest, signal?: AbortSignal): Promise<HttpResponse>;
   /** The saved library, read once at start-up (show notes are left out; see libNotes). */
   libLoad(): Promise<LibrarySnapshot>;
   /** Saves what changed, all together or not at all. */
@@ -66,12 +67,24 @@ const LS = {
   set: (k: string, v: string | null) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* storage unavailable */ } },
 };
 
+let httpIds = 0;
+
 function electronPlatform(api: ResonateApi): Platform {
   return {
     isDesktop: true,
     desktop: api.env.desktop,
     hostname: api.env.hostname,
-    http: api.http,
+    http: (url, req, signal) => {
+      if (!signal) return api.http(url, req);
+      if (signal.aborted) return Promise.reject(signal.reason);
+      // The request gets a name, so the main process can be told to drop it.
+      const id = String(++httpIds);
+      return new Promise((resolve, reject) => {
+        const stop = () => { api.cancelHttp(id); reject(signal.reason); };
+        signal.addEventListener('abort', stop, { once: true });
+        api.http(url, req, id).then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
+      });
+    },
     libLoad: api.libLoad,
     libPatch: api.libPatch,
     libNotes: api.libNotes,
@@ -119,9 +132,9 @@ function browserPlatform(): Platform {
     isDesktop: false,
     desktop: 'KDE',
     hostname: 'browser',
-    async http(url, req = {}) {
+    async http(url, req = {}, signal) {
       const a = auth.get(origin(url));
-      const res = await fetch(url, { method: req.method ?? 'GET', headers: { ...(a ? { Authorization: a } : {}), ...req.headers }, body: req.body, signal: AbortSignal.timeout(60_000) });
+      const res = await fetch(url, { method: req.method ?? 'GET', headers: { ...(a ? { Authorization: a } : {}), ...req.headers }, body: req.body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000) });
       return { status: res.status, text: await res.text(), etag: res.headers.get('etag') ?? undefined, lastModified: res.headers.get('last-modified') ?? undefined };
     },
     libLoad: async () => library.load(),

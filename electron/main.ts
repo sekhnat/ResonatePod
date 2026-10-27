@@ -291,11 +291,14 @@ const HTTP_TOTAL_MS = Number(process.env.RESONATE_HTTP_TIMEOUT_MS) || 60_000;
 // Bodies are buffered whole, so a runaway response must be cut off rather than held in memory.
 const HTTP_MAX_BYTES = 50 * 1024 * 1024;
 
+/** Requests the page may still cancel, by the name it gave them. */
+const cancellers = new Map<string, () => void>();
+
 /**
  * GET/POST with redirects followed by hand, so we know whether every hop was permanent. A redirect to another origin
  * is a new request without the first origin's login (see hopHeaders); a POST isn't followed to another origin at all.
  */
-function request(url: string, req: HttpRequest): Promise<TextResponse> {
+function request(url: string, req: HttpRequest, id?: string): Promise<TextResponse> {
   return new Promise((resolve, reject) => {
     let r!: Electron.ClientRequest;
     let current = url;
@@ -310,8 +313,10 @@ function request(url: string, req: HttpRequest): Promise<TextResponse> {
       settled = true;
       clearTimeout(idle);
       clearTimeout(total);
+      if (id) cancellers.delete(id);
       if (err) { r.abort(); reject(err); } else resolve(value!);
     };
+    if (id) cancellers.set(id, () => finish(new Error('cancelled')));
     const timedOut = () => finish(new Error('timed out'));
     const touch = () => { clearTimeout(idle); idle = setTimeout(timedOut, HTTP_IDLE_MS); };
     total = setTimeout(timedOut, HTTP_TOTAL_MS);
@@ -408,9 +413,10 @@ async function setAutostart(on: boolean) {
 function registerIpc() {
   ipcMain.on('env', (e) => { e.returnValue = { desktop: desktop(), hostname: hostname() }; });
 
-  ipcMain.handle('http', async (_e, url: string, req: HttpRequest = {}): Promise<HttpResponse> => {
+  ipcMain.on('http:cancel', (_e, id: string) => { cancellers.get(String(id))?.(); });
+  ipcMain.handle('http', async (_e, url: string, req: HttpRequest = {}, id?: string): Promise<HttpResponse> => {
     checkRequest(url, req);
-    const res = await request(url, req ?? {}); // a null from the page is as good as nothing
+    const res = await request(url, req ?? {}, typeof id === 'string' ? id : undefined); // a null from the page is as good as nothing
     return {
       status: res.status, text: res.status === 304 ? '' : res.text,
       etag: res.header('etag'), lastModified: res.header('last-modified'),

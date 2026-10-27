@@ -48,8 +48,18 @@ export function normalizeFeedUrl(url: string) {
   }
 }
 
-const withTimeout = <T>(p: Promise<T>, ms = TIMEOUT_MS) =>
-  Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
+/**
+ * Runs a lookup that may be given up on. When time is up it fails with "timed out" and the signal it was given is
+ * aborted, so its request is cancelled instead of being left running; a lookup that ignores the signal still fails on time.
+ */
+const withTimeout = <T>(run: (signal: AbortSignal) => Promise<T>, ms = TIMEOUT_MS): Promise<T> => {
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout>;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => { const err = new Error('timed out'); ctrl.abort(err); reject(err); }, ms);
+  });
+  return Promise.race([run(ctrl.signal), late]).finally(() => clearTimeout(timer));
+};
 
 export async function podcastIndexKey(): Promise<PodcastIndexKey | null> {
   const raw = await platform.getSecret('podcastindex').catch(() => null);
@@ -105,17 +115,17 @@ export interface SearchOptions { country: string; genre?: string; source: Source
 /** Searches one directory, or all of them at once (only those that can answer: Podcast Index needs a key). */
 export async function searchDirectories(term: string, opts: SearchOptions): Promise<SearchOutcome> {
   const piKey = opts.source === 'all' || opts.source === 'podcastindex' ? await podcastIndexKey() : null;
-  const runners: Record<Source, () => Promise<DirectoryResult[]>> = {
-    apple: () => apple.search(term, { country: opts.country, genre: opts.genre }),
-    gpodder: () => gpodder.search(term),
-    fyyd: () => fyyd.search(term),
-    podcastindex: () => (piKey ? podcastindex.search(term, piKey) : Promise.reject(new Error('add an API key in Preferences'))),
+  const runners: Record<Source, (signal: AbortSignal) => Promise<DirectoryResult[]>> = {
+    apple: (signal) => apple.search(term, { country: opts.country, genre: opts.genre }, signal),
+    gpodder: (signal) => gpodder.search(term, signal),
+    fyyd: (signal) => fyyd.search(term, undefined, signal),
+    podcastindex: (signal) => (piKey ? podcastindex.search(term, piKey, undefined, signal) : Promise.reject(new Error('add an API key in Preferences'))),
   };
   const chosen: Source[] = opts.source === 'all' ? (['apple', 'podcastindex', 'gpodder', 'fyyd'] as Source[]).filter((s) => s !== 'podcastindex' || piKey) : [opts.source];
   const wantEpisodes = opts.source === 'all' || opts.source === 'apple';
   const [settled, eps] = await Promise.all([
-    Promise.allSettled(chosen.map((s) => withTimeout(runners[s]()))),
-    wantEpisodes ? withTimeout(apple.episodes(term, { country: opts.country })).catch(() => []) : Promise.resolve([]),
+    Promise.allSettled(chosen.map((s) => withTimeout(runners[s]))),
+    wantEpisodes ? withTimeout((signal) => apple.episodes(term, { country: opts.country }, signal)).catch(() => []) : Promise.resolve([]),
   ]);
   const lists: { source: Source; results: DirectoryResult[] }[] = [];
   const failed: SearchOutcome['failed'] = [];
@@ -146,8 +156,8 @@ export async function suggestions(opts: {
   const followedUrls = new Set(opts.subscribed.map((s) => normalizeFeedUrl(s.feedUrl)));
   const followedTitles = new Set(opts.subscribed.map((s) => s.title.trim().toLowerCase()));
   const [chart, personal] = await Promise.all([
-    withTimeout(apple.top(opts.country, undefined, 25)).catch(() => null),
-    opts.personal ? withTimeout(opts.personal()).catch(() => null) : Promise.resolve(null),
+    withTimeout((signal) => apple.top(opts.country, undefined, 25, signal)).catch(() => null),
+    opts.personal ? withTimeout(() => opts.personal!()).catch(() => null) : Promise.resolve(null),
   ]);
   if (!chart && !personal?.length) throw new Error('Couldn’t reach the podcast directories');
   const sources = [...(personal?.length ? ['your gpodder.net account'] : []), ...(chart ? [`Apple top chart · ${countryName(opts.country)}`] : [])];

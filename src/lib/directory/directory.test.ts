@@ -42,6 +42,36 @@ afterEach(() => { vi.mocked(platform.getSecret).mockRestore(); });
 
 const titles = (rs: { title: string }[]) => rs.map((r) => r.title);
 
+describe('a directory that takes too long', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('has its request cancelled when time is up, and the others still answer', async () => {
+    vi.useFakeTimers();
+    const cancelled: string[] = [];
+    const fast = http.getMockImplementation()!;
+    http.mockImplementation((url, req, signal) => {
+      if (!url.includes('gpodder.net')) return fast(url, req, signal);
+      return new Promise((_, reject) => signal?.addEventListener('abort', () => { cancelled.push(url); reject(signal.reason); }));
+    });
+    const search = searchDirectories('linux', { source: 'all', country: 'us' });
+    await vi.advanceTimersByTimeAsync(9000);
+    const out = await search;
+    expect(cancelled).toEqual([expect.stringContaining('gpodder.net/search.json')]); // stopped, not left running
+    expect(out.failed).toEqual([{ source: 'gpodder', message: 'timed out' }]);
+    expect(out.answered).toEqual(expect.arrayContaining(['apple', 'fyyd']));
+    expect(out.results.length).toBeGreaterThan(0);
+  });
+
+  it('is not cancelled when it answers in time', async () => {
+    const signals: (AbortSignal | undefined)[] = [];
+    const fast = http.getMockImplementation()!;
+    http.mockImplementation((url, req, signal) => { signals.push(signal); return fast(url, req, signal); });
+    await searchDirectories('linux', { source: 'all', country: 'us' });
+    expect(signals.length).toBeGreaterThan(0);
+    expect(signals.every((s) => s && !s.aborted)).toBe(true);
+  });
+});
+
 describe('Apple Podcasts', () => {
   it('searches in the chosen storefront and skips shows without a feed', async () => {
     const rs = await apple.search('linux', { country: 'gb', genre: 'Technology' });

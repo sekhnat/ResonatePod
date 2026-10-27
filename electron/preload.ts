@@ -6,7 +6,9 @@ const env = ipcRenderer.sendSync('env') as { desktop: 'KDE' | 'GNOME'; hostname:
 
 const api = {
   env,
-  http: (url: string, req?: HttpRequest): Promise<HttpResponse> => ipcRenderer.invoke('http', url, req),
+  /** `id` names the request so cancelHttp can stop it. */
+  http: (url: string, req?: HttpRequest, id?: string): Promise<HttpResponse> => ipcRenderer.invoke('http', url, req, id),
+  cancelHttp: (id: string) => ipcRenderer.send('http:cancel', id),
   libLoad: (): Promise<LibrarySnapshot> => ipcRenderer.invoke('lib:load'),
   libPatch: (patch: LibraryPatch): Promise<void> => ipcRenderer.invoke('lib:patch', patch),
   libNotes: (show: string, guid: string): Promise<string> => ipcRenderer.invoke('lib:notes', show, guid),
