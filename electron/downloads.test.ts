@@ -49,6 +49,24 @@ describe('DownloadManager', () => {
     expect(targetPath(job('/tmp/pods'))).toBe('/tmp/pods/Kernel Panic Hour/2026-10-19 - Wayland.mp3');
   });
 
+  it('names a file even when the publish date is unusable', () => {
+    for (const pubDate of [NaN, Infinity, 8.64e15 + 1, 0]) {
+      expect(targetPath({ ...job('/tmp/pods'), pubDate })).toBe('/tmp/pods/Kernel Panic Hour/undated - Wayland.mp3');
+    }
+  });
+
+  it('reports a bad download address once, without retrying it', async () => {
+    const m = new DownloadManager(async () => { throw new Error('fetch should not be reached'); }, { retryDelays: [10, 10] });
+    const events: DownloadEvent[] = [];
+    m.on('event', (e: DownloadEvent) => events.push(e));
+    const failed = until(m, (e) => e.type === 'error');
+    m.start({ ...job('/tmp/pods'), url: 'not a url' });
+    expect(await failed).toMatchObject({ type: 'error', message: 'the episode has no valid download address' });
+    await new Promise((ok) => setTimeout(ok, 50));
+    expect(events.map((e) => e.type)).toEqual(['error']);
+    expect(() => m.cancel('kp:1')).not.toThrow();
+  });
+
   it('keeps a dots-only show title inside the download folder', () => {
     for (const showTitle of ['..', '.', '...', ' .. ']) {
       expect(targetPath({ ...job('/tmp/pods'), showTitle })).toBe('/tmp/pods/untitled/2026-10-19 - Wayland.mp3');
