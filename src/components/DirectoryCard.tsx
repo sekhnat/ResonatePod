@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { art, dateLabel, hueFor, mono } from '../data';
 import { useStore } from '../store';
@@ -71,22 +71,22 @@ function SourceTag({ source }: { source: Source }) {
   );
 }
 
-export const resultGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(250px,1fr))', gap: 'var(--space-4)' };
 
 
-export function CountrySelect({ style }: { style?: CSSProperties }) {
+/** `look` is a smaller one: rounded beside the category chips, plain in the welcome screen's header. */
+export function CountrySelect({ look }: { look?: 'pill' | 'small' }) {
   const country = useStore((s) => s.directory.country);
   const setDirectory = useStore((s) => s.setDirectory);
   const options = COUNTRIES.map((cc) => ({ cc, name: countryName(cc) })).sort((a, b) => a.name.localeCompare(b.name));
   return (
-    <select className="input select-compact" aria-label="Region" title="Region for charts and search" value={country} style={style}
+    <select className={`input select-compact${look ? ` ${look}` : ''}`} aria-label="Region" title="Region for charts and search" value={country}
       onChange={(e) => setDirectory({ country: e.target.value })}>
       {options.map((o) => <option key={o.cc} value={o.cc}>{o.name}</option>)}
     </select>
   );
 }
 
-export function SourceSelect({ style }: { style?: CSSProperties }) {
+export function SourceSelect({ look }: { look?: 'pill' | 'small' }) {
   const { source, podcastIndex } = useStore((s) => s.directory);
   const setDirectory = useStore((s) => s.setDirectory);
   const options: [SourceChoice, string][] = [
@@ -94,7 +94,7 @@ export function SourceSelect({ style }: { style?: CSSProperties }) {
     ...(['apple', 'gpodder', 'fyyd', 'podcastindex'] as Source[]).filter((x) => x !== 'podcastindex' || podcastIndex).map((x) => [x, SOURCES[x].label] as [SourceChoice, string]),
   ];
   return (
-    <select className="input select-compact" aria-label="Directory" title="Which directory to search" value={source} style={style}
+    <select className={`input select-compact${look ? ` ${look}` : ''}`} aria-label="Directory" title="Which directory to search" value={source}
       onChange={(e) => setDirectory({ source: e.target.value as SourceChoice })}>
       {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
     </select>

@@ -71,25 +71,25 @@ export function SettingsScreen() {
     if (r.kind === 'toggle') return <Toggle on={s.tg[r.k]} onToggle={() => s.setToggle(r.k)} label={r.label} />;
     if (r.kind === 'node') return r.node;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 12.5, color: 'var(--color-neutral-400)', fontFamily: 'ui-monospace,monospace' }}>{r.value}</span>
-        <button className="btn btn-secondary" onClick={r.run} style={{ fontSize: 12, padding: '4px 10px', minHeight: 0 }}>{r.action}</button>
+      <div className="prefs-value">
+        <span className="prefs-value-text">{r.value}</span>
+        <button className="btn btn-secondary prefs-btn" onClick={r.run}>{r.action}</button>
       </div>
     );
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)', maxWidth: 640 }}>
+    <div className="page wide prefs">
       <h1 className="page-title">Preferences</h1>
       {groups.map((g) => (
-        <section key={g.title} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-accent-300)', paddingBottom: 4 }}>{g.title}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)' }}>
-            {g.rows.map((r, i) => (
-              <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)', padding: '12px 14px', boxShadow: `0 -1px 0 ${i ? 'var(--color-neutral-900)' : 'transparent'}` }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 13.5 }}>{r.label}</span>
-                  {r.hint && <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{r.hint}</span>}
+        <section key={g.title} className="prefs-group">
+          <div className="prefs-heading">{g.title}</div>
+          <div className="prefs-card">
+            {g.rows.map((r) => (
+              <div key={r.label} className="prefs-row">
+                <div className="prefs-text">
+                  <span className="prefs-label">{r.label}</span>
+                  {r.hint && <span className="prefs-hint">{r.hint}</span>}
                 </div>
                 {control(r)}
               </div>

@@ -4,10 +4,8 @@ import { CATS } from '../data';
 import { useStore } from '../store';
 import { isFeedUrl } from '../lib/opml';
 import { SOURCES, appleId, browse, countryName, normalizeFeedUrl, searchDirectories, type DirectoryResult, type SearchOutcome, type Source } from '../lib/directory';
-import { CountrySelect, DirectoryCard, SourceSelect, resultGrid, useSuggestions } from '../components/DirectoryCard';
+import { CountrySelect, DirectoryCard, SourceSelect, useSuggestions } from '../components/DirectoryCard';
 import { Empty } from './ShowScreen';
-
-const compact = { minHeight: 29, fontSize: 12, padding: '3px 6px', borderRadius: 999 };
 
 type Load<T> = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ok'; data: T };
 
@@ -33,39 +31,38 @@ export function DiscoverScreen() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div className="page">
       <h1 className="page-title">Discover</h1>
-      <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-        <div style={{ flex: 1, position: 'relative' }}>
-          <i className="ph ph-magnifying-glass" style={{ position: 'absolute', left: 11, top: 11, fontSize: 15, color: 'var(--color-neutral-500)' }} />
-          <input ref={input} className="input" placeholder="Search podcasts, or paste an RSS feed URL" style={{ paddingLeft: 34 }} autoFocus
+      <div className="dsc-search">
+        <div className="dsc-input-wrap">
+          <i className="ph ph-magnifying-glass dsc-input-icon" />
+          <input ref={input} className="input dsc-input" placeholder="Search podcasts, or paste an RSS feed URL" autoFocus
             value={s.discoverQuery} onChange={(e) => s.set({ discoverQuery: e.target.value })}
             onKeyDown={(e) => { if (e.key === 'Enter' && isUrl) void addByUrl(); }} />
         </div>
-        <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={busy && isUrl} onClick={() => void addByUrl()}>
-          <i className={busy && isUrl ? 'ph ph-circle-notch spin' : 'ph ph-rss'} style={{ fontSize: 14 }} />Add by URL
+        <button className="btn btn-secondary btn-12" disabled={busy && isUrl} onClick={() => void addByUrl()}>
+          <i className={`${busy && isUrl ? 'ph ph-circle-notch spin' : 'ph ph-rss'} ico-14`} />Add by URL
         </button>
       </div>
-      <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
-        <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <div className="dsc-filters">
+        <div className="dsc-cats">
         {CATS.map((c) => {
           const on = s.cat === c;
           return (
-            <span key={c} className="seg-opt" role="button" tabIndex={0} aria-pressed={on} onClick={() => s.set({ cat: c })}
-              onKeyDown={(e) => { if (e.key === 'Enter') s.set({ cat: c }); }}
-              style={{ border: '1px solid var(--color-divider)', borderRadius: 999, fontSize: 12, padding: '5px 12px', background: on ? 'var(--color-accent-800)' : 'transparent', color: on ? 'var(--color-accent-100)' : 'inherit' }}>{c}</span>
+            <span key={c} className="seg-opt cat-chip" role="button" tabIndex={0} aria-pressed={on} onClick={() => s.set({ cat: c })}
+              onKeyDown={(e) => { if (e.key === 'Enter') s.set({ cat: c }); }}>{c}</span>
           );
         })}
         </div>
-        <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
-          <SourceSelect style={compact} />
-          <CountrySelect style={compact} />
+        <div className="dsc-selects">
+          <SourceSelect look="pill" />
+          <CountrySelect look="pill" />
         </div>
       </div>
       {isUrl ? (
-        <div style={{ fontSize: 12.5, color: 'var(--color-neutral-400)' }}>
+        <div className="dsc-hint">
           {appleId(q) ? 'That’s an Apple Podcasts link — Resonate will look up the show’s feed.' : 'That looks like a feed URL.'} Press Enter or{' '}
-          <button className="btn btn-ghost" style={{ fontSize: 12.5, padding: '0 4px' }} onClick={() => void addByUrl()}>Add by URL</button> to subscribe.
+          <button className="btn btn-ghost dsc-hint-btn" onClick={() => void addByUrl()}>Add by URL</button> to subscribe.
         </div>
       ) : q ? (
         <SearchResults q={q} />
@@ -81,18 +78,18 @@ export function DiscoverScreen() {
 
 function ErrorRow({ message, retry }: { message: string; retry: () => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--color-neutral-400)' }}>
-      <i className="ph ph-wifi-slash" style={{ fontSize: 18 }} />{message}
-      <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={retry}>Try again</button>
+    <div className="dsc-error">
+      <i className="ph ph-wifi-slash ico-18" />{message}
+      <button className="btn btn-secondary btn-12" onClick={retry}>Try again</button>
     </div>
   );
 }
 
 function SectionHead({ title, sub }: { title: string; sub?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+    <div className="section-head">
       <span className="section-label">{title}</span>
-      {sub && <span style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{sub}</span>}
+      {sub && <span className="section-sub">{sub}</span>}
     </div>
   );
 }
@@ -100,11 +97,11 @@ function SectionHead({ title, sub }: { title: string; sub?: string }) {
 function SuggestedRow({ sug }: { sug: ReturnType<typeof useSuggestions> }) {
   if (sug.state === 'ok' && !sug.results.length) return null;
   return (
-    <section aria-label="Suggested for you" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+    <section aria-label="Suggested for you" className="dsc-section">
       <SectionHead title="Suggested for you" sub={sug.state === 'ok' ? sug.sources.join(' · ') : undefined} />
       {sug.state === 'loading' && <Empty icon="ph ph-circle-notch spin" text="Finding suggestions…" />}
       {sug.state === 'error' && <ErrorRow message={sug.message} retry={sug.retry} />}
-      {sug.state === 'ok' && <div style={resultGrid}>{sug.results.map((r) => <DirectoryCard key={r.id} r={r} />)}</div>}
+      {sug.state === 'ok' && <div className="result-grid">{sug.results.map((r) => <DirectoryCard key={r.id} r={r} />)}</div>}
     </section>
   );
 }
@@ -133,12 +130,12 @@ function BrowseGrid({ skip }: { skip: DirectoryResult[] }) {
   if (load.state === 'ok' && load.data.length && !shown.length) return null;
   const title = fromGpodder ? `Most subscribed on gpodder.net${genre ? ` · ${genre}` : ''}` : `Top ${genre ? `${genre} ` : ''}podcasts · ${countryName(country)}`;
   return (
-    <section aria-label={title} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+    <section aria-label={title} className="dsc-section">
       <SectionHead title={title} sub={fromGpodder ? undefined : 'Apple Podcasts chart'} />
       {load.state === 'loading' && <Empty icon="ph ph-circle-notch spin" text="Loading popular shows…" />}
       {load.state === 'error' && <ErrorRow message={`Couldn’t reach ${fromGpodder ? 'gpodder.net' : 'Apple Podcasts'} (${load.message}).`} retry={() => setRetry((n) => n + 1)} />}
       {load.state === 'ok' && (load.data.length
-        ? <div style={resultGrid}>{shown.map((r) => <DirectoryCard key={r.id} r={r} />)}</div>
+        ? <div className="result-grid">{shown.map((r) => <DirectoryCard key={r.id} r={r} />)}</div>
         : <Empty icon="ph ph-magnifying-glass" text="Nothing in this category yet." />)}
     </section>
   );
@@ -169,16 +166,16 @@ function SearchResults({ q }: { q: string }) {
   if (!answered.length) return <ErrorRow message={`Couldn’t reach ${names(down)} (${failed[0]?.message ?? 'no answer'}).`} retry={() => setRetry((n) => n + 1)} />;
   return (
     <>
-      <section aria-label="Shows" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <section aria-label="Shows" className="dsc-section">
         <SectionHead title="Shows" sub={`${results.length} from ${names(answered)}${down.length ? ` · ${names(down)} didn’t answer` : ''}`} />
         {results.length
-          ? <div style={resultGrid}>{results.map((r) => <DirectoryCard key={r.id} r={r} showSources={source === 'all'} />)}</div>
+          ? <div className="result-grid">{results.map((r) => <DirectoryCard key={r.id} r={r} showSources={source === 'all'} />)}</div>
           : <Empty icon="ph ph-magnifying-glass" text="No podcasts match. Try another search, or paste a feed URL." />}
       </section>
       {episodes.length > 0 && (
-        <section aria-label="Episodes" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <section aria-label="Episodes" className="dsc-section">
           <SectionHead title="Episodes" sub="Apple Podcasts" />
-          <div style={resultGrid}>{episodes.map((r) => <DirectoryCard key={r.id} r={r} />)}</div>
+          <div className="result-grid">{episodes.map((r) => <DirectoryCard key={r.id} r={r} />)}</div>
         </section>
       )}
     </>
