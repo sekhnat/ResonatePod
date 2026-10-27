@@ -1,5 +1,6 @@
 import type { EpisodeRecord, LibraryPatch, ShowRecord } from '../shared/library';
 import type { Show } from './data';
+import { heldNotes, notesSaved } from './notes';
 import { platform } from './platform';
 import { setPlayhead } from './playhead';
 import { getEp, initialData, useStore, type Data, type State } from './store';
@@ -33,8 +34,11 @@ const sameFields = (a: object, b: object, skip: string) => {
   return true;
 };
 
-/** What to write to bring the saved library up to date with the store; null when nothing differs. */
-export function diffLibrary(prev: Saved, next: Saved): LibraryPatch | null {
+/**
+ * What to write to bring the saved library up to date with the store; null when nothing differs. `notes` supplies the
+ * show notes waiting to be saved with an episode (the store's episodes don't carry them).
+ */
+export function diffLibrary(prev: Saved, next: Saved, notes: (show: string, guid: string) => string | undefined = () => undefined): LibraryPatch | null {
   const patch: LibraryPatch = {};
 
   if (prev.shows !== next.shows) {
@@ -53,7 +57,9 @@ export function diffLibrary(prev: Saved, next: Saved): LibraryPatch | null {
       const seen = new Set<string>();
       for (const ep of eps) {
         seen.add(ep.guid);
-        if (known.get(ep.guid) !== ep) episodes.upsert!.push({ show: show.id, ep: ep as unknown as EpisodeRecord });
+        if (known.get(ep.guid) === ep) continue;
+        const description = notes(show.id, ep.guid);
+        episodes.upsert!.push({ show: show.id, ep: (description === undefined ? ep : { ...ep, description }) as unknown as EpisodeRecord });
       }
       for (const guid of known.keys()) if (!seen.has(guid)) episodes.delete!.push({ show: show.id, guid });
     }
@@ -89,11 +95,17 @@ const changed = (a: Saved, s: State) => a.shows !== s.shows || a.eps !== s.eps |
 async function save() {
   if (!saved) return;
   const now = refs(useStore.getState());
-  const patch = diffLibrary(saved, now);
+  const withNotes: { show: string; guid: string }[] = [];
+  const patch = diffLibrary(saved, now, (show, guid) => {
+    const text = heldNotes(show, guid);
+    if (text !== undefined) withNotes.push({ show, guid });
+    return text;
+  });
   if (!patch) return;
   try {
     await platform.libPatch(patch);
     saved = now;
+    for (const { show, guid } of withNotes) notesSaved(show, guid);
   } catch (err) {
     // Left as it was, so the next save sends this change again along with anything newer.
     console.error('Saving the library failed', err);

@@ -5,6 +5,7 @@ import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } f
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
 import { paletteItems, searchIndex, selectPalette } from './components/CommandPalette';
+import { heldNotes, loadNotes } from './notes';
 
 const FEED_URL = 'https://kernelpanic.example/feed.xml';
 const feed = readFileSync('test/fixtures/feed.xml', 'utf8');
@@ -534,6 +535,14 @@ describe('episode rows', () => {
     useStore.setState({ eps: { ...st().eps, [K41]: { ...getEp(st(), K41), pos: 600 } } });
     expect(row(K41).meta).toContain('54:00 left'); // 3840 s - 600 s
     expect(row(K40).meta).not.toContain('left');
+  });
+});
+
+describe('show notes', () => {
+  it('stay out of the episodes in the store, and wait to be saved with them', async () => {
+    expect(st().shows[0].eps.some((e) => 'description' in e)).toBe(false);
+    expect(heldNotes('kernel-panic-hour', 'kp:ep:42')).toBe('Screen sharing, portals and fractional scaling.');
+    expect(await loadNotes('kernel-panic-hour', 'kp:ep:42')).toBe('Screen sharing, portals and fractional scaling.');
   });
 });
 

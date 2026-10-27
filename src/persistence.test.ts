@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { makeShow } from '../test/perf/fixture';
 import { platform, type Platform } from './platform';
 import { diffLibrary, flushSave, hydrate, startPersistence } from './persistence';
+import { heldNotes, holdNotes, resetNotes } from './notes';
 import { getPlayhead, setPlayhead } from './playhead';
 import { useStore } from './store';
 
@@ -10,11 +11,14 @@ const st = () => useStore.getState();
 const K = 'show-0:show-0-ep-0';
 const K1 = 'show-0:show-0-ep-1';
 
+/** A show as the store holds it: its episodes have no show notes. */
+const bare = (show: ReturnType<typeof makeShow>) => ({ ...show, eps: show.eps.map(({ description: _notes, ...ep }) => ep) });
+
 let libPatch: MockInstance<Platform['libPatch']>;
 const sent = () => libPatch.mock.calls.map((c) => c[0]);
 
 beforeEach(() => {
-  useStore.setState({ ...initial, hydrated: true, shows: [makeShow(0, 3, 40)], eps: { [K]: { played: false, pos: 0, inbox: true } } }, true);
+  useStore.setState({ ...initial, hydrated: true, shows: [bare(makeShow(0, 3, 40))], eps: { [K]: { played: false, pos: 0, inbox: true } } }, true);
   setPlayhead(0);
   libPatch = vi.spyOn(platform, 'libPatch').mockResolvedValue();
   startPersistence();
@@ -94,6 +98,31 @@ describe('saving as the store changes', () => {
   });
 });
 
+describe('show notes in a save', () => {
+  it('go with the episodes they belong to, and only until the save has succeeded', async () => {
+    resetNotes();
+    const [show] = st().shows;
+    const fresh = { ...show.eps[0], guid: 'new', pubDate: show.eps[0].pubDate + 1 };
+    holdNotes('show-0', 'new', 'Notes from the feed.');
+    useStore.setState({ shows: [{ ...show, eps: [fresh, ...show.eps] }] });
+    libPatch.mockRejectedValueOnce(new Error('disk full'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await flushSave();
+    expect(heldNotes('show-0', 'new')).toBe('Notes from the feed.'); // not lost: the save failed
+    await flushSave();
+    expect(sent().at(-1)!.episodes!.upsert).toEqual([{ show: 'show-0', ep: { ...fresh, description: 'Notes from the feed.' } }]);
+    expect(heldNotes('show-0', 'new')).toBeUndefined();
+  });
+
+  it('are not sent for an episode that changed without new notes', async () => {
+    resetNotes();
+    const [show] = st().shows;
+    useStore.setState({ shows: [{ ...show, eps: show.eps.map((e, i) => (i === 0 ? { ...e, duration: 999 } : e)) }] });
+    await flushSave();
+    expect(sent().at(-1)!.episodes!.upsert![0].ep).not.toHaveProperty('description');
+  });
+});
+
 describe('what a change costs', () => {
   const saved = () => ({ shows: st().shows, eps: st().eps, ...Object.fromEntries(Object.entries(st())) }) as Parameters<typeof diffLibrary>[0];
   const withState = (patch: Parameters<typeof useStore.setState>[0]) => { const before = saved(); useStore.setState(patch); return diffLibrary(before, saved()); };
@@ -104,7 +133,7 @@ describe('what a change costs', () => {
   });
 
   it('is a few hundred bytes for an episode marked played, in a library of thousands', () => {
-    const big = makeShow(1, 3000, 2048);
+    const big = bare(makeShow(1, 3000, 2048));
     useStore.setState({ shows: [...st().shows, big] });
     const before = saved();
     st().markPlayed(K, true);
@@ -114,7 +143,7 @@ describe('what a change costs', () => {
   });
 
   it('is the show, its place and its episodes for a new subscription', () => {
-    const patch = withState({ shows: [...st().shows, makeShow(1, 2, 10)] })!;
+    const patch = withState({ shows: [...st().shows, bare(makeShow(1, 2, 10))] })!;
     expect(patch.shows).toMatchObject({ upsert: [{ id: 'show-1' }], delete: [], order: ['show-0', 'show-1'] });
     expect(patch.shows!.upsert![0]).not.toHaveProperty('eps');
     expect(patch.episodes!.upsert!.map((e) => `${e.show}:${e.ep.guid}`)).toEqual(['show-1:show-1-ep-0', 'show-1:show-1-ep-1']);
@@ -142,7 +171,7 @@ describe('what a change costs', () => {
   });
 
   it('is only the order when shows are rearranged', () => {
-    useStore.setState({ shows: [...st().shows, makeShow(1, 1, 10)] });
+    useStore.setState({ shows: [...st().shows, bare(makeShow(1, 1, 10))] });
     const [a, b] = st().shows;
     expect(withState({ shows: [b, a] })).toEqual({ shows: { upsert: [], delete: [], order: ['show-1', 'show-0'] } });
   });
