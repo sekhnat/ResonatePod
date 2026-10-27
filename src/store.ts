@@ -420,6 +420,8 @@ const initialUi: Ui = {
   toasts: [],
 };
 
+const MAX_PENDING_ACTIONS = 5000;
+
 let toastId = 0;
 let lastChapterIdx = -1;
 let playStartedAt: number | null = null;
@@ -471,7 +473,10 @@ export const useStore = create<State>()(
           podcast: info.show.feedUrl, episode: info.ep.enclosureUrl, action: 'play', timestamp: isoNow(),
           started: Math.floor(started), position: Math.floor(s.pos), total: Math.floor(info.dur || s.pos),
         };
-        set({ sync: { ...s.sync, pending: [...s.sync.pending, action].slice(-500) } });
+        // A newer session of an episode replaces the older one, so a long offline spell stays small;
+        // the cap is only a backstop for someone who plays thousands of different episodes without syncing.
+        const sameEpisode = (a: EpisodeAction) => a.action === 'play' && a.podcast === action.podcast && a.episode === action.episode;
+        set({ sync: { ...s.sync, pending: [...s.sync.pending.filter((a) => !sameEpisode(a)), action].slice(-MAX_PENDING_ACTIONS) } });
       };
 
       const saveCurPos = (): Record<string, EpState> => {
@@ -957,6 +962,7 @@ export const useStore = create<State>()(
             const password = (await platform.getSecret('gpodder')) ?? '';
             const client = new GpodderClient({ server: s.sync.server, user: s.sync.user, password, device: s.sync.device }, platform.http);
             const pending = s.sync.pending;
+            const sent = new Set(pending);
             const r = await syncOnce(client, { local: s.shows.map((x) => x.feedUrl), known: s.sync.known, subsSince: s.sync.subsSince, actionsSince: s.sync.actionsSince, pending });
             for (const url of r.addLocally) await get().addFeed(url, { quiet: true });
             for (const url of r.removeLocally) { const sh = get().shows.find((x) => x.feedUrl === url); if (sh) get().unsubscribe(sh.id, true); }
@@ -976,7 +982,7 @@ export const useStore = create<State>()(
             }
             set((x) => ({
               eps,
-              sync: { ...x.sync, subsSince: r.subsSince, actionsSince: r.actionsSince, known: x.shows.map((sh) => sh.feedUrl), pending: x.sync.pending.slice(pending.length), lastSynced: Date.now() },
+              sync: { ...x.sync, subsSince: r.subsSince, actionsSince: r.actionsSince, known: x.shows.map((sh) => sh.feedUrl), pending: x.sync.pending.filter((a) => !sent.has(a)), lastSynced: Date.now() },
             }));
           } catch (err) {
             get().toast(`Sync failed: ${(err as Error).message}`);
