@@ -2,16 +2,17 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 /**
- * What the page may load and run. Everything it executes is its own (no inline script, no eval); styles may be inline
- * because components set style attributes; pictures and audio come from the feeds' own servers (http and https) and from
- * the app's media protocol. The browser would have injected nothing of its own, so this stops a script that gets into a
- * feed's text from phoning home or pulling in more code. (The dev server needs inline scripts for hot reloading, so the
- * policy is only added to builds.)
+ * What the page may load and run. Everything it executes is its own (no inline script, no eval) and so is its CSS: the
+ * components use classes, and the few values worked out at run time are set through the DOM's style property, which this
+ * policy doesn't restrict (only style attributes in markup and <style> elements are). Pictures and audio come from the
+ * feeds' own servers (http and https) and from the app's media protocol. The browser would have injected nothing of its
+ * own, so this stops a script that gets into a feed's text from phoning home or pulling in more code. (The dev server
+ * needs inline scripts for hot reloading, so the policy is only added to builds.)
  */
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self'",
   "img-src 'self' https: http: data:",
   "media-src 'self' resonate-media: https: http: blob:",
   "font-src 'self' data:",
