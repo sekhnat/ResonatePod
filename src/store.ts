@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
+import { persist, subscribeWithSelector, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { cadence, parseFeed } from '../shared/feed';
 import { fileStem, safeName, shortHash } from '../shared/filename';
 import { parseJsonChapters, parseTranscript } from '../shared/meta';
@@ -499,7 +499,9 @@ const libraryStorage: PersistStorage<Persisted> = {
   removeItem: () => platform.saveLibrary('{}'),
 };
 
+// subscribeWithSelector lets the engine and the tray listen to just the fields they act on.
 export const useStore = create<State>()(
+  subscribeWithSelector(
   persist(
     (set, get) => {
       /** Queues a gpodder play action for the current episode, when sync is set up. */
@@ -1056,5 +1058,6 @@ export const useStore = create<State>()(
         useStore.setState({ hydrated: true, showId: state?.shows[0]?.id ?? '' });
       },
     },
+  ),
   ),
 );
