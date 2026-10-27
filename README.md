@@ -55,7 +55,16 @@ E2E_SHOTS=/tmp/shots xvfb-run -a npm run test:e2e
 ## Installation
 
 Download the latest build from [Releases](https://github.com/sekhnat/ResonatePod/releases/latest).
-Every release includes a `SHA256SUMS.txt` to verify the files.
+Every release includes a `SHA256SUMS.txt` to verify the files, and a Sigstore signature of it.
+
+To check that the files were built by this repository's release workflow (needs [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)):
+
+```sh
+cosign verify-blob SHA256SUMS.txt --bundle SHA256SUMS.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/sekhnat/ResonatePod/\.github/workflows/ci\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum -c SHA256SUMS.txt --ignore-missing
+```
 
 | Package | Install |
 | --- | --- |
@@ -188,8 +197,9 @@ test/fixtures/   Sample feed, chapters, transcript, and small media files (chapt
 1. Bump `version` in `package.json` (and `package-lock.json`): `npm version <x.y.z> --no-git-tag-version`.
 2. Commit, then tag and push: `git tag v<x.y.z> && git push origin main v<x.y.z>`.
 
-CI checks that the tag matches the `package.json` version, then attaches the AppImage, `.deb` and
-`SHA256SUMS.txt` to a GitHub release with generated notes.
+CI checks that the tag matches the `package.json` version, then attaches the AppImage, `.deb`,
+`SHA256SUMS.txt` and its Sigstore signature (`SHA256SUMS.txt.sigstore.json`, signed keylessly with the
+workflow's identity) to a GitHub release with generated notes.
 
 ## Known limitations
 
