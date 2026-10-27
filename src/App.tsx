@@ -63,14 +63,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (!hydrated) return <div style={{ height: '100vh', background: 'var(--color-bg)' }} />;
+  if (!hydrated) return <div className="app-loading" />;
 
   return (
-    <div className="window" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)', overflow: 'hidden', position: 'relative' }}>
+    <div className="window app-window">
       <HeaderBar />
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
+      <div className="app-body">
         <Sidebar />
-        <main style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: 'var(--space-8)' }}>
+        <main className="app-main">
           <Main />
         </main>
         {npOpen && hasCur && <NowPlayingPanel />}
@@ -83,7 +83,7 @@ export default function App() {
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className="toast" onClick={() => dismissToast(t.id)}>
-            <i className="ph ph-info" style={{ color: 'var(--color-accent)', fontSize: 15 }} />{t.text}
+            <i className="ph ph-info toast-icon" />{t.text}
           </div>
         ))}
       </div>
