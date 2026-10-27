@@ -622,7 +622,7 @@ try {
     await page.keyboard.press('Escape');
   });
 
-  await step('the page refuses script it did not ship with', async () => {
+  await step('the page refuses script and inline styles it did not ship with', async () => {
     // (page.evaluate itself is exempt from the policy, so eval isn't a fair probe; loading code the page didn't ship is.)
     const outcome = await page.evaluate(async () => {
       const script = document.createElement('script');
@@ -632,9 +632,23 @@ try {
       return { inline: window.__injected ? 'ran' : 'blocked', module };
     });
     assert.deepEqual(outcome, { inline: 'blocked', module: 'blocked' });
+    // The page's own styling is classes, so inline CSS is refused too; setting a style through the DOM (what React does
+    // for the few run-time values) is not a style the policy covers.
+    const styling = await page.evaluate(() => {
+      const el = document.body.appendChild(document.createElement('div'));
+      el.style.width = '123px';
+      const probe = document.body.appendChild(document.createElement('div'));
+      probe.setAttribute('style', 'width: 77px');
+      const sheet = document.head.appendChild(document.createElement('style'));
+      sheet.textContent = 'body { outline: 5px solid red }';
+      const result = { dom: getComputedStyle(el).width, attribute: getComputedStyle(probe).width === '77px' ? 'applied' : 'blocked', element: getComputedStyle(document.body).outlineStyle === 'solid' ? 'applied' : 'blocked' };
+      el.remove(); probe.remove(); sheet.remove();
+      return result;
+    });
+    assert.deepEqual(styling, { dom: '123px', attribute: 'blocked', element: 'blocked' });
     // Each refusal is logged as a console error; these are the ones this step asked for.
     const refusals = () => errors.filter((e) => /Content Security Policy/.test(e));
-    await waitFor('the refusals to be logged', () => refusals().length >= 2);
+    await waitFor('the refusals to be logged', () => refusals().length >= 4);
     errors.splice(0, errors.length, ...errors.filter((e) => !/Content Security Policy/.test(e)));
   });
 
