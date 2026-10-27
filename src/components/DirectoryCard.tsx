@@ -127,6 +127,8 @@ export function useSuggestions(limit = 12): SuggestionState & { retry(): void } 
       .then((r) => { cache.set(key, r); if (live) setSt({ state: 'ok', ...r }); })
       .catch((err: Error) => { if (live) setSt({ state: 'error', message: err.message }); });
     return () => { live = false; };
+    // `key` is the country and sync server; gpodderSuggestions is a stable store action and `limit` is fixed by the caller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, attempt]);
   const retry = () => { cache.delete(key); setAttempt((a) => a + 1); };
   if (st.state !== 'ok') return { ...st, retry };

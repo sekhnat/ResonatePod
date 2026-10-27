@@ -14,6 +14,7 @@
     "test:db": "ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs run --config vitest.db.config.ts",
     "test:e2e": "npm run build && node e2e/run.mjs",
     "typecheck": "tsc -b",
+    "lint": "eslint .",
     "bench": "vitest bench --run",
     "test:perf": "PERF=1 vitest run test/perf",
     "icons": "node scripts/icons.mjs",
@@ -31,6 +32,7 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
@@ -39,9 +41,14 @@
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.24.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
     "jsdom": "^25.0.1",
     "playwright-core": "^1.48.2",
     "typescript": "^5.6.3",
+    "typescript-eslint": "^8.72.1",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
   },

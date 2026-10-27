@@ -1,5 +1,6 @@
 /** One path segment from free text: no separators or control characters, never empty, never just dots. */
 export function safeName(s: string): string {
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what a file name must not keep
   const name = s.replace(/[/\\:*?"<>|\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
   // A name made only of dots ("." or "..") would walk out of its folder, so it counts as no name at all.
   return /^\.*$/.test(name) ? 'untitled' : name;

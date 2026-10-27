@@ -328,7 +328,6 @@ function request(url: string, req: HttpRequest, id?: string): Promise<TextRespon
     let hops = 0;
     let settled = false;
     let idle: NodeJS.Timeout | undefined;
-    let total: NodeJS.Timeout | undefined;
     const finish = (err: Error | null, value?: TextResponse) => {
       if (settled) return;
       settled = true;
@@ -337,10 +336,10 @@ function request(url: string, req: HttpRequest, id?: string): Promise<TextRespon
       if (id) cancellers.delete(id);
       if (err) { r.abort(); reject(err); } else resolve(value!);
     };
-    if (id) cancellers.set(id, () => finish(new Error('cancelled')));
     const timedOut = () => finish(new Error('timed out'));
+    const total = setTimeout(timedOut, HTTP_TOTAL_MS);
+    if (id) cancellers.set(id, () => finish(new Error('cancelled')));
     const touch = () => { clearTimeout(idle); idle = setTimeout(timedOut, HTTP_IDLE_MS); };
-    total = setTimeout(timedOut, HTTP_TOTAL_MS);
     touch();
     const cap = Math.min(req.maxBytes ?? HTTP_MAX_BYTES, HTTP_MAX_BYTES);
 
