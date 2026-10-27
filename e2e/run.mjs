@@ -37,6 +37,8 @@ const media = {
 const AUTH = 'Basic ' + Buffer.from('ana:pw').toString('base64');
 const hits = {};
 const rangesFor = {};
+// Which paths were asked for with an Authorization header, to see where a login travels.
+const withAuth = new Set();
 // The slow episode sends its first 64 KB and then holds the connection open, so a
 // restart interrupts it at a known point; clearing this lets it finish.
 let holdSlow = true;
@@ -69,6 +71,11 @@ const flipFeed = () => `<?xml version="1.0"?>
 const bigFeed = () => `<?xml version="1.0"?>
 <rss version="2.0"><channel><title>Big Catalogue</title><description>Lots of episodes.</description>
 ${Array.from({ length: 600 }, (_, i) => `<item><title>Big episode ${600 - i}</title><guid>big-${i}</guid><pubDate>${new Date(Date.now() - i * 864e5).toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>`).join('\n')}
+</channel></rss>`;
+
+const hopFeed = () => `<?xml version="1.0"?>
+<rss version="2.0"><channel><title>Hop FM</title><description>Sends you elsewhere.</description>
+<item><title>Hop episode</title><guid>hop-1</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/hop-media.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>
 </channel></rss>`;
 
 const html = '<html><body><cite>Ana:</cite><time>0:00:00</time><p>Welcome to the members feed.</p><cite>Ben:</cite><time>0:00:02</time><p>Mail time.</p></body></html>';
@@ -113,6 +120,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const server = createServer((req, res) => {
   const url = req.url.split('?')[0];
   const hit = (hits[url] = (hits[url] ?? 0) + 1);
+  if (req.headers.authorization) withAuth.add(url);
   (rangesFor[url] ??= []).push(req.headers.range);
   if (url === '/old.xml') return res.writeHead(301, { Location: '/feed.xml' }).end();
   const dir = directory(url, req.url.split('?')[1] ?? '');
@@ -122,6 +130,11 @@ const server = createServer((req, res) => {
   if (listed) return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(directoryFeed(listed[1]));
   if (url === '/feed.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(feed());
   if (url === '/long.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(longFeed());
+  // A feed and its episode on the (logged-in) fixture origin that both redirect to another host, localhost.
+  if (url === '/hop.xml') return res.writeHead(302, { Location: `http://localhost:${server.address().port}/hop-target.xml` }).end();
+  if (url === '/hop-target.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(hopFeed());
+  if (url === '/hop-media.wav') return res.writeHead(302, { Location: `http://localhost:${server.address().port}/hop-media-target.wav` }).end();
+  if (url === '/hop-media-target.wav') return res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': media['/ep2.wav'].length }).end(media['/ep2.wav']);
   if (url === '/big.xml') return res.writeHead(200, { 'Content-Type': 'application/rss+xml' }).end(bigFeed());
   if (url === '/huge.xml') {
     // 60 MB with no Content-Length, so only counting the bytes can stop it.
@@ -549,6 +562,19 @@ try {
     await page.getByText('Big episode 1', { exact: true }).waitFor();
     assert.equal(await page.getByText('Big episode 600', { exact: true }).count(), 0);
     await shot('17-long-show');
+  });
+
+  await step('a login is not passed on when a redirect leaves the site', async () => {
+    // By now the fixture origin (127.0.0.1) has a login stored; the two redirects below end at localhost, another origin.
+    await page.locator('nav button', { hasText: 'Discover' }).click();
+    await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/hop.xml`);
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading', { name: 'Hop FM' }).waitFor();
+    await waitFor('the episode to be fetched through its redirect', () => hits['/hop-media-target.wav'] >= 1, 15000);
+    assert.ok(withAuth.has('/hop.xml'), 'the first hop of the feed carries the login (the test is meaningful)');
+    assert.ok(withAuth.has('/hop-media.wav'), 'and so does the first hop of the episode');
+    assert.ok(!withAuth.has('/hop-target.xml'), 'the feed’s login was passed to another site');
+    assert.ok(!withAuth.has('/hop-media-target.wav'), 'the episode’s login was passed to another site');
   });
 
   await step('a runaway response is cut off instead of buffered', async () => {

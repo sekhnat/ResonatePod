@@ -9,6 +9,7 @@ import type { DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction,
 import { readEmbeddedChapters } from '../shared/embedded';
 import { DownloadManager, diskUsage, expandHome, moveFiles } from './downloads';
 import { DownloadRoots, rootsFromLibrary } from './paths';
+import { hopHeaders, originOf } from './hops';
 import { LibraryDb, openLibrary } from './db/library';
 import { importLegacyLibrary } from './db/legacy';
 
@@ -28,7 +29,6 @@ let quitting = false;
 // ---------- feed credentials (HTTP Basic, per origin) ----------
 
 const credentials = new Map<string, string>();
-const originOf = (url: string) => { try { return new URL(url).origin; } catch { return ''; } };
 const authFor = (url: string): Record<string, string> => {
   const c = credentials.get(originOf(url));
   return c ? { Authorization: c } : {};
@@ -43,8 +43,53 @@ const rewrite = (url: string) => {
   return url;
 };
 
-const downloads = new DownloadManager((url, init) =>
-  net.fetch(url, { ...init, headers: { 'User-Agent': userAgent(), ...authFor(url), ...init?.headers } } as RequestInit));
+/**
+ * A GET that follows redirects itself, hop by hop, and hands back the final answer as a web Response (the body streams).
+ * Each hop gets only the headers its origin may have (see hopHeaders): net.fetch follows redirects with the headers it
+ * started with, so the login for the first origin would go to wherever the server points it, a CDN or a tracker, and it
+ * can't be told to stop (a "manual" redirect makes it throw). `toFetch` rewrites a URL just before it is requested.
+ */
+function fetchFollowing(url: string, init: { headers?: Record<string, string>; signal?: AbortSignal } = {}, toFetch = (u: string) => u): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    let r!: Electron.ClientRequest;
+    let current = url;
+    let hops = 0;
+    let answered = false;
+    const aborted = () => Object.assign(new Error('aborted'), { name: 'AbortError' });
+    const fail = (err: Error) => { r?.abort(); reject(err); };
+    if (init.signal?.aborted) { reject(aborted()); return; }
+    init.signal?.addEventListener('abort', () => { r.abort(); if (!answered) reject(aborted()); }, { once: true });
+
+    const open = (target: string) => {
+      const mine = net.request({ url: toFetch(target), redirect: 'manual' });
+      r = mine;
+      for (const [k, v] of Object.entries(hopHeaders(init.headers, url, target, userAgent(), authFor))) mine.setHeader(k, v);
+      mine.on('redirect', (_status, _method, to) => {
+        if (r !== mine) return;
+        if (++hops > 8) { fail(new Error('too many redirects')); return; }
+        const sameOrigin = originOf(to) === originOf(current);
+        current = to;
+        if (sameOrigin) { mine.followRedirect(); return; }
+        open(to); // another origin: a request of its own, with only the headers that origin may have
+        mine.abort();
+      });
+      mine.on('response', (res) => {
+        if (r !== mine) return;
+        answered = true;
+        const headers = new Headers();
+        for (const [k, v] of Object.entries(res.headers)) for (const one of Array.isArray(v) ? v : [v]) headers.append(k, one);
+        // A response with no body to have must not be given one.
+        const body = [101, 204, 205, 304].includes(res.statusCode) ? null : (Readable.toWeb(res as unknown as Readable) as ReadableStream);
+        resolve(new Response(body, { status: res.statusCode, statusText: res.statusMessage, headers }));
+      });
+      mine.on('error', (err) => { if (r === mine && !answered) fail(err); });
+      mine.end();
+    };
+    open(url);
+  });
+}
+
+const downloads = new DownloadManager((url, init) => fetchFollowing(url, init));
 
 const asset = (name: string) => path.join(__dirname, '..', 'assets', name);
 const dataFile = (name: string) => path.join(app.getPath('userData'), name);
@@ -140,7 +185,7 @@ async function serveFile(file: string, range: string | null): Promise<Response> 
 }
 
 async function serveRemote(url: string, range: string | null): Promise<Response> {
-  const res = await net.fetch(rewrite(url), { headers: { 'User-Agent': userAgent(), ...authFor(url), ...(range ? { Range: range } : {}) } });
+  const res = await fetchFollowing(url, { headers: range ? { Range: range } : {} }, rewrite);
   const headers = new Headers({ 'Access-Control-Allow-Origin': '*' });
   for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
     const v = res.headers.get(h);
@@ -245,12 +290,14 @@ const HTTP_TOTAL_MS = Number(process.env.RESONATE_HTTP_TIMEOUT_MS) || 60_000;
 // Bodies are buffered whole, so a runaway response must be cut off rather than held in memory.
 const HTTP_MAX_BYTES = 50 * 1024 * 1024;
 
-/** GET/POST with redirects followed by hand, so we know whether every hop was permanent. */
+/**
+ * GET/POST with redirects followed by hand, so we know whether every hop was permanent. A redirect to another origin
+ * is a new request without the first origin's login (see hopHeaders); a POST isn't followed to another origin at all.
+ */
 function request(url: string, req: HttpRequest): Promise<TextResponse> {
   return new Promise((resolve, reject) => {
-    const r = net.request({ url: rewrite(url), method: req.method ?? 'GET', redirect: 'manual' });
-    const headers = { 'User-Agent': userAgent(), ...authFor(url), ...req.headers };
-    for (const [k, v] of Object.entries(headers)) r.setHeader(k, v);
+    let r!: Electron.ClientRequest;
+    let current = url;
     let finalUrl = url;
     let permanent = true;
     let hops = 0;
@@ -268,37 +315,52 @@ function request(url: string, req: HttpRequest): Promise<TextResponse> {
     const touch = () => { clearTimeout(idle); idle = setTimeout(timedOut, HTTP_IDLE_MS); };
     total = setTimeout(timedOut, HTTP_TOTAL_MS);
     touch();
-    r.on('redirect', (status, _method, to) => {
-      if (++hops > 8) { finish(new Error('too many redirects')); return; }
-      if (status !== 301 && status !== 308) permanent = false;
-      finalUrl = to;
-      touch();
-      r.followRedirect();
-    });
     const cap = Math.min(req.maxBytes ?? HTTP_MAX_BYTES, HTTP_MAX_BYTES);
-    r.on('response', (res) => {
-      const chunks: Buffer[] = [];
-      let received = 0;
-      touch();
-      if (Number(res.headers['content-length']) > cap) { finish(new Error('response too large')); return; }
-      res.on('data', (c) => {
-        received += c.length;
-        if (received > cap) { finish(new Error('response too large')); return; }
-        chunks.push(c);
+
+    const open = (target: string, body?: string) => {
+      const mine = net.request({ url: rewrite(target), method: req.method ?? 'GET', redirect: 'manual' });
+      r = mine;
+      for (const [k, v] of Object.entries(hopHeaders(req.headers, url, target, userAgent(), authFor))) mine.setHeader(k, v);
+      mine.on('redirect', (status, _method, to) => {
+        if (r !== mine) return;
+        if (++hops > 8) { finish(new Error('too many redirects')); return; }
+        if (status !== 301 && status !== 308) permanent = false;
+        const sameOrigin = originOf(to) === originOf(current);
+        if (!sameOrigin && (req.method ?? 'GET') !== 'GET') { finish(new Error('the server redirected to another site')); return; }
+        finalUrl = to;
         touch();
+        if (sameOrigin) { current = to; mine.followRedirect(); return; }
+        // Another origin: a request of its own, with only the headers that origin may have; this one is dropped.
+        current = to;
+        open(to);
+        mine.abort();
       });
-      res.on('end', () => finish(null, {
-        status: res.statusCode,
-        text: Buffer.concat(chunks).toString('utf8'),
-        header: (n) => { const v = res.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v; },
-        finalUrl,
-        permanent: hops > 0 && permanent,
-      }));
-      res.on('error', (err) => finish(err));
-    });
-    r.on('error', (err) => finish(err));
-    if (req.body) r.write(req.body);
-    r.end();
+      mine.on('response', (res) => {
+        if (r !== mine) return;
+        const chunks: Buffer[] = [];
+        let received = 0;
+        touch();
+        if (Number(res.headers['content-length']) > cap) { finish(new Error('response too large')); return; }
+        res.on('data', (c) => {
+          received += c.length;
+          if (received > cap) { finish(new Error('response too large')); return; }
+          chunks.push(c);
+          touch();
+        });
+        res.on('end', () => finish(null, {
+          status: res.statusCode,
+          text: Buffer.concat(chunks).toString('utf8'),
+          header: (n) => { const v = res.headers[n.toLowerCase()]; return Array.isArray(v) ? v[0] : v; },
+          finalUrl,
+          permanent: hops > 0 && permanent,
+        }));
+        res.on('error', (err) => finish(err));
+      });
+      mine.on('error', (err) => { if (r === mine) finish(err); });
+      if (body) mine.write(body);
+      mine.end();
+    };
+    open(url, req.body);
   });
 }
 
@@ -320,7 +382,7 @@ async function embeddedChapters(file: string | null, url: string) {
   let requests = 0;
   return readEmbeddedChapters(async (o, n) => {
     if (++requests > 12) throw new Error('too many range requests');
-    const res = await net.fetch(url, { headers: { 'User-Agent': userAgent(), ...authFor(url), Range: `bytes=${o}-${o + n - 1}` } });
+    const res = await fetchFollowing(url, { headers: { Range: `bytes=${o}-${o + n - 1}` } });
     if (res.status !== 206) { await res.body?.cancel(); throw new Error('no range support'); }
     return new Uint8Array(await res.arrayBuffer());
   }, 0);
