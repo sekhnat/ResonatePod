@@ -16,10 +16,16 @@ const safe = (s: string) => {
 
 const EXT: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/mp4': 'mp4', 'video/x-m4v': 'm4v', 'video/quicktime': 'mov', 'video/webm': 'webm' };
 
+/** A job that can't succeed however often it is tried, as opposed to a network hiccup. */
+export class JobError extends Error {}
+
 export function targetPath(job: DownloadJob) {
-  const fromUrl = /\.([a-z0-9]{2,4})(?:$|[?#])/i.exec(new URL(job.url).pathname)?.[1];
+  let pathname: string;
+  try { pathname = new URL(job.url).pathname; } catch { throw new JobError('the episode has no valid download address'); }
+  const fromUrl = /\.([a-z0-9]{2,4})(?:$|[?#])/i.exec(pathname)?.[1];
   const ext = (fromUrl ?? EXT[job.mime] ?? 'mp3').toLowerCase();
-  const date = job.pubDate ? new Date(job.pubDate).toISOString().slice(0, 10) : 'undated';
+  const published = new Date(job.pubDate).getTime();
+  const date = job.pubDate && Number.isFinite(published) ? new Date(published).toISOString().slice(0, 10) : 'undated';
   return path.join(expandHome(job.folder), safe(job.showTitle), `${date} - ${safe(job.title)}.${ext}`);
 }
 
@@ -37,8 +43,8 @@ class HttpError extends Error {
   constructor(readonly status: number) { super(`HTTP ${status}`); }
 }
 
-/** Network errors, stalls, timeouts, rate limits and server errors are worth retrying; other HTTP errors are not. */
-const retryable = (err: unknown) => !(err instanceof HttpError) || err.status === 408 || err.status === 429 || err.status >= 500;
+/** Network errors, stalls, timeouts, rate limits and server errors are worth retrying; other HTTP errors and bad jobs are not. */
+const retryable = (err: unknown) => !(err instanceof JobError) && (!(err instanceof HttpError) || err.status === 408 || err.status === 429 || err.status >= 500);
 
 /**
  * Downloads episodes with a concurrency limit. Partial data goes to `<file>.part`;
@@ -83,7 +89,9 @@ export class DownloadManager extends EventEmitter {
       r.ctrl.abort('cancel');
     }
     const job = r?.job ?? w?.item.job;
-    if (job) fs.rm(targetPath(job) + '.part', { force: true }).catch(() => {});
+    if (job) {
+      try { fs.rm(targetPath(job) + '.part', { force: true }).catch(() => {}); } catch { /* no usable path, so no part file */ }
+    }
     this.pump();
   }
 
