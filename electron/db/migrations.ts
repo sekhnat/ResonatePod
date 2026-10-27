@@ -17,10 +17,19 @@ const steps: ((db: Database.Database) => void)[] = [
       guid        TEXT NOT NULL,
       pub_date    INTEGER NOT NULL,
       data        TEXT NOT NULL,
-      description TEXT,
       PRIMARY KEY (show_id, guid)
     ) WITHOUT ROWID;
     CREATE INDEX episodes_newest ON episodes (show_id, pub_date DESC, guid);
+    -- Show notes are large and read one episode at a time, so they are kept out of the episode rows (reading the
+    -- library at start-up never walks past them), and in an ordinary rowid table: a row this size in a WITHOUT ROWID
+    -- table spills into overflow pages and wastes most of each.
+    CREATE TABLE notes (
+      id      INTEGER PRIMARY KEY,
+      show_id TEXT NOT NULL,
+      guid    TEXT NOT NULL,
+      text    TEXT NOT NULL,
+      UNIQUE (show_id, guid)
+    );
     CREATE TABLE ep_state (
       key         TEXT PRIMARY KEY,
       played      INTEGER NOT NULL,
