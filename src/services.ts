@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow';
 import { downloadsBlocked, epInfo, flushSave, getEp, sleepLabel, useStore, type State } from './store';
 import { dlSummary } from './model';
 import { platform } from './platform';
@@ -38,7 +39,15 @@ export function startServices() {
     const sig = JSON.stringify(tray);
     if (sig !== traySig) { traySig = sig; platform.updateTray(tray); }
   };
-  useStore.subscribe(sync);
+  // What sync() reads, and no more: playback position, toasts and screen changes don't run it.
+  useStore.subscribe(
+    (s) => ({
+      dlPaused: s.dlPaused, metered: s.metered, tg: s.tg, sv: s.sv, folder: s.folder, shows: s.shows, cur: s.cur, playing: s.playing,
+      speed: s.speed, sleep: s.sleep, queue: s.queue, dl: s.dl,
+    }),
+    () => sync(st()),
+    { equalityFn: shallow },
+  );
   sync(st());
 
   platform.onTrayAction((a) => {

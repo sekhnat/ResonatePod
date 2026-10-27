@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow';
 import { epInfo, getEp, setPlayer, trimOn, useStore, type State } from '../store';
 import { platform } from '../platform';
 import { getPlayhead } from '../playhead';
@@ -207,7 +208,12 @@ export function startEngine() {
   audio.addEventListener('play', startAnalyser);
   for (const ev of ['pause', 'ended', 'emptied']) audio.addEventListener(ev, stopAnalyser);
 
-  useStore.subscribe(apply);
+  // Only what apply() acts on, so the rest of the store changing (progress, toasts, the screen) doesn't wake it.
+  useStore.subscribe(
+    (s) => ({ hydrated: s.hydrated, cur: s.cur, shows: s.shows, file: s.cur ? s.eps[s.cur]?.file : undefined, playing: s.playing, speed: s.speed, volume: s.volume, muted: s.muted }),
+    () => apply(st()),
+    { equalityFn: shallow },
+  );
   apply(st());
   return audio;
 }
