@@ -40,7 +40,14 @@
   },
   "main": "dist-electron/main.cjs",
   "author": "sekhnat <221756436+sekhnat@users.noreply.github.com>",
-  "homepage": "https://github.com/sekhnat/Resonate",
+  "homepage": "https://github.com/sekhnat/ResonatePod",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sekhnat/ResonatePod.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sekhnat/ResonatePod/issues"
+  },
   "build": {
     "appId": "io.github.sekhnat.resonate",
     "productName": "Resonate",
