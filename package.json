@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build && node scripts/build-electron.mjs",
     "start": "electron .",
     "dist": "npm run build && electron-builder --linux AppImage deb",
+    "dist:update-info": "node scripts/appimage-update.mjs release/Resonate-$npm_package_version.AppImage",
     "test": "vitest run && npm run test:db",
     "test:coverage": "vitest run --coverage",
     "test:db": "ELECTRON_RUN_AS_NODE=1 electron node_modules/vitest/vitest.mjs run --config vitest.db.config.ts",
