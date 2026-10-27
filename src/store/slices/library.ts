@@ -1,6 +1,6 @@
 import { cadence } from '../../../shared/feed';
 import { parseFeedAsync } from '../../feed-parse';
-import { epKey, hueFor, sameEpisode, type Episode, type Show } from '../../data';
+import { epKey, hueFor, pool, sameEpisode, type Episode, type Show } from '../../data';
 import { resolveFeedUrl } from '../../lib/directory';
 import { platform } from '../../platform';
 import { setPlayhead } from '../../playhead';
@@ -60,60 +60,56 @@ export const createLibrarySlice: Slice<'markPlayed' | 'markAllPlayed' | 'refresh
         let needAuth = 0;
         const moved: string[] = [];
         const shows = get().shows;
-        const work = [...shows];
-        const worker = async () => {
-          for (let sh = work.shift(); sh; sh = work.shift()) {
-            try {
-              const headers: Record<string, string> = {};
-              if (sh.etag) headers['If-None-Match'] = sh.etag;
-              if (sh.lastModified) headers['If-Modified-Since'] = sh.lastModified;
-              const res = await platform.http(sh.feedUrl, { headers });
-              if (res.status === 401) { needAuth++; continue; }
-              if (res.status === 304) continue;
-              if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
-              const { show: upd, newFeedUrl, notes } = await showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
-              const s = get();
-              const live = findShow(s, sh.id);
-              if (!live) continue;
-              // Follow the feed when it has moved: a permanent redirect, or itunes:new-feed-url.
-              const target = res.movedTo ?? newFeedUrl;
-              if (target && !s.shows.some((x) => x.feedUrl === target)) {
-                upd.feedUrl = target;
-                // A validator from the old address means nothing to the new one.
-                if (!res.movedTo) { upd.etag = undefined; upd.lastModified = undefined; }
-                moved.push(upd.title);
-              }
-              const prev = new Map(live.eps.map((e) => [e.guid, e]));
-              const added = upd.eps.filter((e) => !prev.has(e.guid));
-              fresh += added.length;
-              const eps = added.length ? { ...s.eps } : s.eps;
-              for (const e of added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
-              // Keep durations the player measured when the feed doesn't carry one, and the very same object for an
-              // episode that didn't change, so what is cached per episode (and per list) stays valid across refreshes.
-              const current: Episode[] = upd.eps.map((e) => {
-                const old = prev.get(e.guid);
-                const next = { ...e, duration: e.duration || old?.duration || 0 };
-                if (old && sameEpisode(old, next)) return old;
-                holdNotes(sh.id, e.guid, notes.get(e.guid)); // a new or changed episode's notes are saved with it
-                return next;
-              });
-              // Feeds often list only their latest episodes. One the feed has dropped stays while anything refers to it
-              // (a downloaded file, play history, the queue, the playing episode), so those keep resolving.
-              const listed = new Set(upd.eps.map((e) => e.guid));
-              const dropped = live.eps.filter((e) => {
-                if (listed.has(e.guid)) return false;
-                const key = epKey(sh.id, e.guid);
-                return key in s.eps || s.cur === key || s.queue.includes(key) || s.dlPending.includes(key) || dlByKey(s.dl).has(key);
-              });
-              const merged = dropped.length ? [...current, ...dropped].sort((a, b) => b.pubDate - a.pubDate) : current;
-              const unchanged = merged.length === live.eps.length && merged.every((e, i) => e === live.eps[i]);
-              set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: unchanged ? x.eps : merged } : x)) });
-            } catch {
-              failed++;
+        await pool(shows, 4, async (sh) => {
+          try {
+            const headers: Record<string, string> = {};
+            if (sh.etag) headers['If-None-Match'] = sh.etag;
+            if (sh.lastModified) headers['If-Modified-Since'] = sh.lastModified;
+            const res = await platform.http(sh.feedUrl, { headers });
+            if (res.status === 401) { needAuth++; return; }
+            if (res.status === 304) return;
+            if (res.status !== 200) throw new Error(`HTTP ${res.status}`);
+            const { show: upd, newFeedUrl, notes } = await showFromFeed(sh.feedUrl, res.text, sh.id, res.etag, res.lastModified);
+            const s = get();
+            const live = findShow(s, sh.id);
+            if (!live) return;
+            // Follow the feed when it has moved: a permanent redirect, or itunes:new-feed-url.
+            const target = res.movedTo ?? newFeedUrl;
+            if (target && !s.shows.some((x) => x.feedUrl === target)) {
+              upd.feedUrl = target;
+              // A validator from the old address means nothing to the new one.
+              if (!res.movedTo) { upd.etag = undefined; upd.lastModified = undefined; }
+              moved.push(upd.title);
             }
+            const prev = new Map(live.eps.map((e) => [e.guid, e]));
+            const added = upd.eps.filter((e) => !prev.has(e.guid));
+            fresh += added.length;
+            const eps = added.length ? { ...s.eps } : s.eps;
+            for (const e of added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
+            // Keep durations the player measured when the feed doesn't carry one, and the very same object for an
+            // episode that didn't change, so what is cached per episode (and per list) stays valid across refreshes.
+            const current: Episode[] = upd.eps.map((e) => {
+              const old = prev.get(e.guid);
+              const next = { ...e, duration: e.duration || old?.duration || 0 };
+              if (old && sameEpisode(old, next)) return old;
+              holdNotes(sh.id, e.guid, notes.get(e.guid)); // a new or changed episode's notes are saved with it
+              return next;
+            });
+            // Feeds often list only their latest episodes. One the feed has dropped stays while anything refers to it
+            // (a downloaded file, play history, the queue, the playing episode), so those keep resolving.
+            const listed = new Set(upd.eps.map((e) => e.guid));
+            const dropped = live.eps.filter((e) => {
+              if (listed.has(e.guid)) return false;
+              const key = epKey(sh.id, e.guid);
+              return key in s.eps || s.cur === key || s.queue.includes(key) || s.dlPending.includes(key) || dlByKey(s.dl).has(key);
+            });
+            const merged = dropped.length ? [...current, ...dropped].sort((a, b) => b.pubDate - a.pubDate) : current;
+            const unchanged = merged.length === live.eps.length && merged.every((e, i) => e === live.eps[i]);
+            set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: unchanged ? x.eps : merged } : x)) });
+          } catch {
+            failed++;
           }
-        };
-        await Promise.all([worker(), worker(), worker(), worker()]);
+        });
         const s = get();
         const queued = s.shows.flatMap((sh) => autoDownloadKeys(s, sh.id));
         set({ refreshing: false, lastChecked: Date.now() });
@@ -183,9 +179,7 @@ export const createLibrarySlice: Slice<'markPlayed' | 'markAllPlayed' | 'refresh
     },
     importFeeds: async (feeds) => {
       let n = 0;
-      const work = [...feeds];
-      const worker = async () => { for (let f = work.shift(); f; f = work.shift()) if (await get().addFeed(f.xmlUrl, { quiet: true })) n++; };
-      await Promise.all([worker(), worker(), worker()]);
+      await pool(feeds, 3, async (f) => { if (await get().addFeed(f.xmlUrl, { quiet: true })) n++; });
       return n;
     },
     unsubscribe: (id, quiet) => {

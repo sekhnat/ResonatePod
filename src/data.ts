@@ -124,3 +124,10 @@ const WHOLE_EPISODE: Chapter[] = [{ t: 'Full episode', at: 0 }];
 
 export const chaptersFor = (ep: EpisodeInfo, meta?: EpisodeMeta): Chapter[] =>
   meta?.chapters?.length ? meta.chapters : ep.ep.inlineChapters?.length ? ep.ep.inlineChapters : WHOLE_EPISODE;
+
+/** Runs `fn` over `items`, in order, with at most `n` running at once; resolves when every item is done. */
+export async function pool<T>(items: readonly T[], n: number, fn: (item: T) => Promise<void>): Promise<void> {
+  const work = [...items];
+  const worker = async () => { while (work.length) await fn(work.shift() as T); };
+  await Promise.all(Array.from({ length: Math.min(n, work.length) }, worker));
+}
