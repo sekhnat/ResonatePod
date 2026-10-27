@@ -126,6 +126,8 @@ function BrowseGrid({ skip }: { skip: DirectoryResult[] }) {
       .then((data) => { if (live) setLoad({ state: 'ok', data }); })
       .catch((err: Error) => { if (live) setLoad({ state: 'error', message: err.message }); });
     return () => { live = false; };
+    // The grid is remounted (see its key) when the region, source or category changes, so only a retry reruns this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retry]);
   const shown = load.state === 'ok' ? load.data.filter((r) => !skip.some((x) => normalizeFeedUrl(x.feedUrl) === normalizeFeedUrl(r.feedUrl))) : [];
   // Everything in the chart is already suggested above.

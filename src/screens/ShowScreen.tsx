@@ -23,11 +23,12 @@ function ShowPage({ id }: { id: string }) {
   const { sh } = s;
   // The order of the list depends on the episodes, their played state, the playing one, the filter and the sort,
   // and on nothing else (not downloads, not the playback position), so it is built only when one of those changes.
+  const { eps, cur, filter, sort } = s;
   const keys = useMemo(() => {
     if (!sh) return [];
-    const items = sh.eps.map((e) => orderable(sh, e, getEp(s, epKey(sh.id, e.guid)), s.cur));
-    return applySort(applyFilter(items, s.filter), s.sort).map((r) => r.key);
-  }, [sh, s.eps, s.cur, s.filter, s.sort]);
+    const items = sh.eps.map((e) => orderable(sh, e, getEp({ eps }, epKey(sh.id, e.guid)), cur));
+    return applySort(applyFilter(items, filter), sort).map((r) => r.key);
+  }, [sh, eps, cur, filter, sort]);
   if (!sh) return null;
 
   return (
