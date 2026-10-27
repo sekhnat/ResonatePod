@@ -44,6 +44,22 @@ export const fmt = (sec: number) => {
 
 export const epKey = (showId: string, guid: string) => `${showId}:${guid}`;
 
+/**
+ * The index of the last item that starts at or before `t`, in a list sorted by start time (chapters and timed
+ * transcript lines are); 0 when there is none, or the list is empty. A binary search, since the transcript
+ * is looked up four times a second in lists that can run to thousands of lines.
+ */
+export function lastAtOrBefore<T>(items: readonly T[], t: number, at: (item: T) => number): number {
+  let lo = 0;
+  let hi = items.length; // the first index that starts after `t`
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (at(items[mid]) <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  return Math.max(0, lo - 1);
+}
+
 const sameChapters = (a?: Chapter[], b?: Chapter[]) => a === b || (!!a && !!b && a.length === b.length && a.every((c, i) => c.at === b[i].at && c.t === b[i].t));
 
 /** Whether two parses of an episode say the same thing (every field, chapters compared by value). */

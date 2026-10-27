@@ -6,7 +6,7 @@ import { parseJsonChapters, parseTranscript } from '../shared/meta';
 import { GpodderClient, syncOnce, type EpisodeAction } from '../shared/gpodder';
 import type { DownloadEvent } from '../shared/types';
 import {
-  chaptersFor, epKey, episodeInfo, hueFor, parseKey, sameEpisode, type Episode, type EpisodeInfo, type EpisodeMeta, type Show,
+  chaptersFor, epKey, episodeInfo, hueFor, lastAtOrBefore, parseKey, sameEpisode, type Episode, type EpisodeInfo, type EpisodeMeta, type Show,
 } from './data';
 import type { OpmlFeed } from './lib/opml';
 import { defaultCountry, gpodderResult, resolveFeedUrl, type DirectoryResult, type SourceChoice } from './lib/directory';
@@ -295,9 +295,7 @@ const introFor = (s: Data, showId: string) => {
   return o === 'Off' ? 0 : parseInt(o, 10);
 };
 
-export function currentChapter(ch: { at: number }[], pos: number) {
-  return Math.max(0, ch.reduce((a, c, i) => (c.at <= pos ? i : a), 0));
-}
+export const currentChapter = (ch: { at: number }[], pos: number) => lastAtOrBefore(ch, pos, (c) => c.at);
 
 export const chaptersOf = (s: Pick<Ui, 'meta'>, info: EpisodeInfo) => chaptersFor(info, s.meta[info.key]);
 
