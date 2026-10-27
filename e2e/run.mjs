@@ -189,6 +189,11 @@ const waitFor = async (what, pred, ms = 10000) => {
   for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) if (pred()) return;
   throw new Error(`timed out waiting for ${what}`);
 };
+// page.waitForFunction evaluates a string in the page, which the page's Content-Security-Policy refuses; polling with evaluate is allowed.
+const until = async (fn, arg, { timeout = 30000 } = {}) => {
+  for (const end = Date.now() + timeout; Date.now() < end; await page.waitForTimeout(100)) if (await page.evaluate(fn, arg)) return;
+  throw new Error(`timed out waiting for ${fn}`);
+};
 const step = async (name, fn) => { process.stdout.write(`• ${name} … `); await fn(); console.log('ok'); };
 const shot = (name) => page.screenshot({ path: path.join(shots, `${name}.png`) });
 const time = () => page.locator('[aria-label="Seek"]').getAttribute('aria-valuenow').then(Number);
@@ -238,7 +243,7 @@ try {
     const original = await getSize();
     try {
       await setSize([1900, 1000]);
-      await page.waitForFunction(() => window.innerWidth >= 1800);
+      await until(() => window.innerWidth >= 1800);
       for (const name of ['Fixture FM', 'New episodes', 'Queue', 'Downloads']) {
         await page.getByRole('button', { name }).first().click();
         const { main, screen } = await page.evaluate(() => ({ main: document.querySelector('main').clientWidth, screen: document.querySelector('main > div').getBoundingClientRect().width }));
@@ -247,7 +252,7 @@ try {
       }
     } finally {
       await setSize(original);
-      await page.waitForFunction((w) => window.innerWidth <= w, original[0]);
+      await until((w) => window.innerWidth <= w, original[0]);
       await page.getByRole('button', { name: 'Fixture FM' }).first().click();
     }
   });
@@ -263,14 +268,14 @@ try {
 
   await step('play an episode: real audio advances, chapters and transcript load', async () => {
     await page.locator('.h-row', { hasText: 'Episode one' }).getByRole('button', { name: 'Play', exact: true }).click();
-    await page.waitForFunction(() => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) >= 2, null, { timeout: 8000 });
+    await until(() => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) >= 2, null, { timeout: 8000 });
     await page.getByText('Opening').first().waitFor();
     await page.getByText('Testing one two.').first().waitFor();
     await shot('03-playing');
   });
 
   await step('silence trim skips the pause', async () => {
-    await page.waitForFunction(() => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) >= 9, null, { timeout: 9000 });
+    await until(() => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) >= 9, null, { timeout: 9000 });
     await page.locator('button[title="Open Now playing"]').click();
     const tag = await page.getByText(/Silence trim on · saved/).textContent();
     assert.match(tag, /saved 0:0[1-9]/, tag);
@@ -337,7 +342,7 @@ try {
     await page.locator('.h-row', { hasText: 'Chaptered episode' }).getByRole('button', { name: 'Play', exact: true }).click();
     await page.getByText('Listener mail').first().waitFor();
     await page.getByText('Welcome to the members feed.').first().waitFor();
-    await page.waitForFunction(() => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) >= 1, null, { timeout: 8000 });
+    await until(() => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) >= 1, null, { timeout: 8000 });
     assert.ok(rangesFor['/p/chapters.mp3'].some((r) => r === 'bytes=0-9'), 'chapters read with a small Range request');
     await shot('09-embedded-chapters');
   });
@@ -345,7 +350,7 @@ try {
   await step('a video episode shows its picture', async () => {
     await page.locator('.h-row', { hasText: 'Video episode' }).getByRole('button', { name: 'Play', exact: true }).click();
     await page.locator('aside video').waitFor({ state: 'visible', timeout: 8000 });
-    await page.waitForFunction(() => { const v = document.querySelector('aside video'); return v && v.videoWidth === 160 && v.currentTime > 0.5; }, null, { timeout: 8000 });
+    await until(() => { const v = document.querySelector('aside video'); return v && v.videoWidth === 160 && v.currentTime > 0.5; }, null, { timeout: 8000 });
     await shot('10-video');
   });
 
@@ -378,7 +383,7 @@ try {
     await launch();
     await page.getByRole('heading', { name: 'New episodes' }).waitFor();
     assert.deepEqual(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize()), [1100, 720]);
-    await page.waitForFunction((t) => document.querySelector('button[title="Open Now playing"]')?.innerText === t, current);
+    await until((t) => document.querySelector('button[title="Open Now playing"]')?.innerText === t, current);
     assert.ok(Math.abs((await time()) - pos) <= 1, `position ${await time()} vs ${pos}`);
     const done = () => readdirSync(podcasts('Members Only')).find((f) => f.includes('Slow') && f.endsWith('.wav'));
     await waitFor('the slow download to finish', done, 15000);
@@ -401,7 +406,7 @@ try {
     await page.getByText('~/Media/Pods', { exact: true }).first().waitFor();
     const before = await time();
     await page.keyboard.press('Space');
-    await page.waitForFunction((t) => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) > t, before, { timeout: 8000 });
+    await until((t) => Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')) > t, before, { timeout: 8000 });
   });
 
   await step('the file bridge only touches the download folders', async () => {
@@ -427,7 +432,7 @@ try {
     // The folder is walked once at start-up and on demand, for the figure shown here; the limit uses tracked sizes.
     await page.getByText('Folder size', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Recalculate' }).click();
-    await page.waitForFunction(() => !document.body.innerText.includes('Not measured yet'));
+    await until(() => !document.body.innerText.includes('Not measured yet'));
     // The header shows the version from package.json.
     await page.getByText(`Resonate ${JSON.parse(readFileSync('package.json', 'utf8')).version}`, { exact: true }).waitFor();
     await shot('07-settings');
@@ -551,6 +556,22 @@ try {
     await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/huge.xml`);
     await page.keyboard.press('Enter');
     await page.getByText(/Couldn’t add that feed:.*response too large/).waitFor({ timeout: 15000 });
+  });
+
+  await step('the page refuses script it did not ship with', async () => {
+    // (page.evaluate itself is exempt from the policy, so eval isn't a fair probe; loading code the page didn't ship is.)
+    const outcome = await page.evaluate(async () => {
+      const script = document.createElement('script');
+      script.textContent = 'window.__injected = true';
+      document.head.appendChild(script);
+      const module = await import('data:text/javascript,export default 1').then(() => 'ran', () => 'blocked');
+      return { inline: window.__injected ? 'ran' : 'blocked', module };
+    });
+    assert.deepEqual(outcome, { inline: 'blocked', module: 'blocked' });
+    // Each refusal is logged as a console error; these are the ones this step asked for.
+    const refusals = () => errors.filter((e) => /Content Security Policy/.test(e));
+    await waitFor('the refusals to be logged', () => refusals().length >= 2);
+    errors.splice(0, errors.length, ...errors.filter((e) => !/Content Security Policy/.test(e)));
   });
 
   await step('a library saved by the previous version moves into the database, and the file is kept as a backup', async () => {
