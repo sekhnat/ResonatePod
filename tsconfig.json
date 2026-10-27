@@ -26,6 +26,7 @@
     "shared",
     "electron",
     "scripts/*.ts",
-    "e2e"
+    "e2e",
+    "test/perf"
   ]
 }
