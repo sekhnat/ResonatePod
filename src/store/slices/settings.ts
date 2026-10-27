@@ -1,9 +1,17 @@
 import { platform } from '../../platform';
 import type { Slice } from '../types';
 
-export const createSettingsSlice: Slice<'setOverride' | 'resetOverride' | 'setSort' | 'setToggle' | 'setSeg' | 'setPrefs' | 'setDirectory' | 'setPodcastIndexKey'> = (set) => {
+export const createSettingsSlice: Slice<'setOverride' | 'resetOverride' | 'setSort' | 'setToggle' | 'setSetting' | 'setPrefs' | 'setDirectory' | 'setPodcastIndexKey'> = (set) => {
   return {
-    setOverride: (showId, k, v) => set((s) => ({ ovr: { ...s.ovr, [showId]: { ...s.ovr[showId], [k]: v } } })),
+    setOverride: (showId, k, v) =>
+      set((s) => {
+        const mine = { ...s.ovr[showId], [k]: v };
+        if (v === undefined) delete mine[k];
+        const ovr = { ...s.ovr };
+        if (Object.keys(mine).length) ovr[showId] = mine;
+        else delete ovr[showId];
+        return { ovr };
+      }),
     resetOverride: (showId) =>
       set((s) => {
         const ovr = { ...s.ovr };
@@ -18,7 +26,7 @@ export const createSettingsSlice: Slice<'setOverride' | 'resetOverride' | 'setSo
         return { sorts };
       }),
     setToggle: (k) => set((s) => ({ tg: { ...s.tg, [k]: !s.tg[k] } })),
-    setSeg: (k, v) => set((s) => ({ sv: { ...s.sv, [k]: v } })),
+    setSetting: (k, v) => set((s) => ({ sv: { ...s.sv, [k]: v } })),
     setPrefs: (patch) => set(patch),
     setDirectory: (patch) => set((s) => ({ directory: { ...s.directory, ...patch } })),
     setPodcastIndexKey: async (key) => {

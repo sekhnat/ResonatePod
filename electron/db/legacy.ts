@@ -1,3 +1,4 @@
+import { upgradeOverrides, upgradeSettings } from '../../shared/settings';
 import type { EpisodeRecord, EpStateRecord, LibraryPatch, ShowRecord } from '../../shared/library';
 import type { LibraryDb } from './library';
 
@@ -51,6 +52,9 @@ export function importLegacyLibrary(db: LibraryDb, json: string): { shows: numbe
     states++;
   }
   for (const [key, value] of Object.entries(state)) if (!NOT_STORED.has(key)) patch.kv![key] = value;
+  // The library was saved with these as labels; the database holds them as numbers and names (schema step 2).
+  if ('sv' in patch.kv!) patch.kv!.sv = upgradeSettings(patch.kv!.sv);
+  if ('ovr' in patch.kv!) patch.kv!.ovr = upgradeOverrides(patch.kv!.ovr);
 
   db.patch(patch);
   return { shows: shows.length, episodes, states };

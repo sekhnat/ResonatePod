@@ -3,7 +3,7 @@ import { parseJsonChapters, parseTranscript } from '../../../shared/meta';
 import type { EpisodeInfo, EpisodeMeta } from '../../data';
 import { SMALL_BODY_BYTES, platform } from '../../platform';
 import { getPlayhead, setPlayhead } from '../../playhead';
-import { chaptersOf, currentChapter, epInfo, getEp, introFor, skipAmounts, sleepLabel, speedFor } from '../selectors';
+import { chaptersOf, currentChapter, epInfo, getEp, introFor, sleepLabel, speedFor } from '../selectors';
 import type { EpState, Slice } from '../types';
 
 /** The audio engine, which the store seeks through. */
@@ -85,8 +85,8 @@ export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack
       setPlayhead(p);
       player?.seek(p);
     },
-    skipBack: () => get().seek(getPlayhead() - skipAmounts(get().sv.skip)[0]),
-    skipFwd: () => get().seek(getPlayhead() + skipAmounts(get().sv.skip)[1]),
+    skipBack: () => get().seek(getPlayhead() - get().sv.skip.back),
+    skipFwd: () => get().seek(getPlayhead() + get().sv.skip.fwd),
     prevChapter: () => {
       const s = get();
       const cur = epInfo(s, s.cur);

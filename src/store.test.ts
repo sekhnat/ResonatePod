@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, getEp, sortFor, trackedBytes, useStore, withEp } from './store';
+import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, getEp, sortFor, trackedBytes, trimOn, useStore, withEp } from './store';
 import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
@@ -161,13 +161,48 @@ describe('subscribing and refreshing', () => {
   });
 
   it('applies per-show auto-download rules', () => {
-    st().setOverride('kernel-panic-hour', 'dl', 'Latest 1');
+    st().setOverride('kernel-panic-hour', 'dl', 1);
     expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([K42]);
-    st().setOverride('kernel-panic-hour', 'dl', 'Off');
+    st().setOverride('kernel-panic-hour', 'dl', 'off');
     expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([]);
     st().markPlayed(K42, true);
-    st().setOverride('kernel-panic-hour', 'dl', 'All');
+    st().setOverride('kernel-panic-hour', 'dl', 'all');
     expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([K41, K40]);
+  });
+
+  it('keeps a show\'s own choices until they are set back to the global ones', () => {
+    st().setOverride('kernel-panic-hour', 'speed', 1.5);
+    st().setOverride('kernel-panic-hour', 'trim', false); // an explicit "off" is a choice, not "global"
+    expect(st().ovr).toEqual({ 'kernel-panic-hour': { speed: 1.5, trim: false } });
+    expect(trimOn(st(), 'kernel-panic-hour')).toBe(false);
+    st().setOverride('kernel-panic-hour', 'speed', undefined);
+    expect(st().ovr).toEqual({ 'kernel-panic-hour': { trim: false } });
+    st().setOverride('kernel-panic-hour', 'trim', undefined);
+    expect(st().ovr).toEqual({});
+    expect(trimOn(st(), 'kernel-panic-hour')).toBe(st().tg.silence);
+  });
+
+  it('follows the global download rule until the show sets its own', () => {
+    st().setSetting('keep', 1);
+    expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([K42]);
+    st().setSetting('keep', 'all');
+    expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([K42, K41, K40]);
+    st().setOverride('kernel-panic-hour', 'dl', 'off');
+    expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([]);
+    st().setOverride('kernel-panic-hour', 'dl', undefined);
+    useStore.setState({ tg: { ...st().tg, auto: false } });
+    expect(autoDownloadKeys(st(), 'kernel-panic-hour')).toEqual([]);
+  });
+
+  it('skips by the amounts in the settings, and changes one setting at a time', () => {
+    st().setSetting('skip', { back: 10, fwd: 60 });
+    expect(st().sv).toMatchObject({ skip: { back: 10, fwd: 60 }, speed: 1.2, par: 2 });
+    st().play(K42);
+    st().seek(100);
+    st().skipFwd();
+    expect(getPlayhead()).toBe(160);
+    st().skipBack();
+    expect(getPlayhead()).toBe(150);
   });
 
   it('unsubscribes, stopping playback of that show', () => {
@@ -192,8 +227,8 @@ describe('playback', () => {
   });
 
   it('applies the intro skip and per-show speed', () => {
-    st().setOverride('kernel-panic-hour', 'intro', '30 s');
-    st().setOverride('kernel-panic-hour', 'speed', '1.5×');
+    st().setOverride('kernel-panic-hour', 'intro', 30);
+    st().setOverride('kernel-panic-hour', 'speed', 1.5);
     st().play(K40);
     expect(getPlayhead()).toBe(30);
     expect(st().speed).toBe(1.5);
@@ -296,9 +331,9 @@ describe('downloads and storage', () => {
       d: { played: false, pos: 0, inbox: false, file: '/d', fileBytes: 10 * 1024 ** 3 },
     };
     const base = { eps, cur: null, storageLimitGb: 100 };
-    expect(cleanupKeys({ ...base, sv: { ...st().sv, del: '1 week' } }, now)).toEqual(['a']);
-    expect(cleanupKeys({ ...base, sv: { ...st().sv, del: '1 day' } }, now)).toEqual(['a', 'b']);
-    expect(cleanupKeys({ ...base, storageLimitGb: 25, sv: { ...st().sv, del: 'Never' } }, now)).toEqual(['a', 'b']);
+    expect(cleanupKeys({ ...base, sv: { ...st().sv, del: 'week' } }, now)).toEqual(['a']);
+    expect(cleanupKeys({ ...base, sv: { ...st().sv, del: 'day' } }, now)).toEqual(['a', 'b']);
+    expect(cleanupKeys({ ...base, storageLimitGb: 25, sv: { ...st().sv, del: 'never' } }, now)).toEqual(['a', 'b']);
   });
 });
 

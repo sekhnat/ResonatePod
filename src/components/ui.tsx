@@ -28,19 +28,21 @@ export function Art({ bg, mono, img, size, font, radius = 6, weight = 600, style
   );
 }
 
-export function Seg<T extends string>({ options, value, onPick, style }: {
-  options: readonly T[]; value: T; onPick: (v: T) => void; style?: CSSProperties;
+/** A row of choices. Values can be anything; `format` makes the label (and tells which one is chosen), the value itself by default. */
+export function Seg<T = string>({ options, value, onPick, format = String, style }: {
+  options: readonly T[]; value: T; onPick: (v: T) => void; format?: (v: T) => string; style?: CSSProperties;
 }) {
   return (
     <div className="seg" role="radiogroup" style={style}>
       {options.map((o) => {
-        const on = o === value;
+        const label = format(o);
+        const on = label === format(value);
         return (
-          <span key={o} className="seg-opt" role="radio" aria-checked={on} tabIndex={0}
+          <span key={label} className="seg-opt" role="radio" aria-checked={on} tabIndex={0}
             onClick={() => onPick(o)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(o); } }}
             style={{ background: on ? 'var(--color-accent-800)' : 'transparent', color: on ? 'var(--color-accent-100)' : 'inherit', fontSize: 12, padding: '5px 10px' }}>
-            {o}
+            {label}
           </span>
         );
       })}

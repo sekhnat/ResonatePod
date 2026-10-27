@@ -79,7 +79,7 @@ export const createDownloadsSlice: Slice<'startDownload' | 'cancelDownload' | 'm
     },
     cleanupStorage: async (opts = {}) => {
       const s = get();
-      const keys = cleanupKeys({ ...s, sv: s.tg.deletePlayed ? s.sv : { ...s.sv, del: 'Never' } });
+      const keys = cleanupKeys({ ...s, sv: s.tg.deletePlayed ? s.sv : { ...s.sv, del: 'never' } });
       for (const k of keys) await get().deleteFile(k, true);
       if (keys.length) s.toast(`Freed space: removed ${keys.length} played episode${keys.length > 1 ? 's' : ''}`);
       if (!opts.quiet && trackedBytes(get().eps) > s.storageLimitGb * GB) s.toast('Storage limit reached — delete episodes or raise the limit in Preferences');

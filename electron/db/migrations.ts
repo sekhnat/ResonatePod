@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { upgradeOverrides, upgradeSettings } from '../../shared/settings';
 
 /**
  * The schema, one step per version (PRAGMA user_version is the number of steps already applied). Steps are only
@@ -45,6 +46,16 @@ const steps: ((db: Database.Database) => void)[] = [
       value TEXT NOT NULL
     ) WITHOUT ROWID;
   `),
+  // 2: the preferences with a few fixed choices, and each show's overrides, as numbers and names instead of the labels
+  // the settings screen showed ("1.2×", "Latest 3"). A value that isn't JSON is left as it is.
+  (db) => {
+    const update = db.prepare('UPDATE kv SET value = ? WHERE key = ?');
+    for (const { key, value } of db.prepare("SELECT key, value FROM kv WHERE key IN ('sv', 'ovr')").all() as { key: string; value: string }[]) {
+      let saved: unknown;
+      try { saved = JSON.parse(value); } catch { continue; }
+      update.run(JSON.stringify(key === 'sv' ? upgradeSettings(saved) : upgradeOverrides(saved)), key);
+    }
+  },
 ];
 
 export const SCHEMA_VERSION = steps.length;

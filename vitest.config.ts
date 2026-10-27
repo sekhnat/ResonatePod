@@ -12,8 +12,8 @@ export default defineConfig({
       include: ['shared/**', 'src/store/**', 'src/services/feeds.ts', 'src/services/sync.ts', 'src/persistence.ts', 'src/model.ts', 'src/data.ts', 'src/notes.ts', 'src/feed-parse.ts'],
       exclude: ['**/*.test.*', 'shared/types.ts', 'shared/library.ts'],
       reporter: ['text-summary', 'text'],
-      // Measured when added (93.7% of statements and lines, 85.3% of branches, 86.9% of functions), less two points.
-      thresholds: { statements: 91, lines: 91, branches: 83, functions: 84 },
+      // Measured after the store was split and the services added (95.6% of statements and lines, 87.8% of branches, 92.3% of functions), less two points.
+      thresholds: { statements: 93, lines: 93, branches: 85, functions: 90 },
     },
   },
 });

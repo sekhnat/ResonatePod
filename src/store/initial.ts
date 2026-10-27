@@ -1,3 +1,4 @@
+import { upgradeSettings } from '../../shared/settings';
 import { defaultCountry } from '../lib/directory';
 import type { Data, Ui } from './types';
 
@@ -18,7 +19,7 @@ export const initialData: Data = {
   ovr: {},
   sorts: {},
   tg: { auto: true, metered: true, silence: true, notify: false, deletePlayed: true, autostart: false },
-  sv: { keep: '3', par: '2', speed: '1.2×', del: '1 week', skip: '15 / 30 s' },
+  sv: upgradeSettings(undefined),
   folder: '~/Podcasts',
   storageLimitGb: 40,
   sync: { server: '', user: '', device: '', subsSince: 0, actionsSince: 0, known: [], pending: [], lastSynced: 0 },

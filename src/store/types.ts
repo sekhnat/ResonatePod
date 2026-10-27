@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { EpisodeAction } from '../../shared/gpodder';
+import type { Override, Settings } from '../../shared/settings';
 import type { DownloadEvent } from '../../shared/types';
 import type { EpisodeMeta, Show } from '../data';
 import type { DirectoryResult, SourceChoice } from '../lib/directory';
@@ -35,7 +36,7 @@ export interface ActiveDl {
   error?: string;
 }
 export interface DoneDl { key: string; when: number }
-export interface Override { dl?: string; speed?: string; trim?: string; intro?: string }
+export type { Override, Settings };
 export type Sleep =
   | { mode: 'off' }
   | { mode: 'timer'; minutes: number; remaining: number }
@@ -51,7 +52,6 @@ export interface DirectoryPrefs {
 }
 export interface Toast { id: number; text: string }
 export interface Toggles { auto: boolean; metered: boolean; silence: boolean; notify: boolean; deletePlayed: boolean; autostart: boolean }
-export interface SegValues { keep: string; par: string; speed: string; del: string; skip: string }
 export interface SyncState {
   server: string;
   user: string;
@@ -79,7 +79,7 @@ export interface Data {
   /** Episode sort per show id (and INBOX_SORT); absent means newest first. */
   sorts: Record<string, Sort>;
   tg: Toggles;
-  sv: SegValues;
+  sv: Settings;
   folder: string;
   storageLimitGb: number;
   sync: SyncState;
@@ -177,11 +177,12 @@ export interface Actions {
   importFeeds(feeds: OpmlFeed[]): Promise<number>;
   unsubscribe(id: string, quiet?: boolean): void;
 
-  setOverride(showId: string, k: keyof Override, v: string): void;
+  /** Sets one of a show's own choices; undefined goes back to following the global setting. */
+  setOverride<K extends keyof Override>(showId: string, k: K, v: Override[K] | undefined): void;
   resetOverride(showId: string): void;
   setSort(scope: string, sort: Sort): void;
   setToggle(k: keyof Toggles): void;
-  setSeg(k: keyof SegValues, v: string): void;
+  setSetting<K extends keyof Settings>(k: K, v: Settings[K]): void;
   setPrefs(patch: Partial<Pick<Data, 'folder' | 'storageLimitGb'>>): void;
 
   setDirectory(patch: Partial<DirectoryPrefs>): void;
