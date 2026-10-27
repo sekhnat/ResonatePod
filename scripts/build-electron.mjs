@@ -9,7 +9,8 @@ const options = {
   platform: 'node',
   format: 'cjs',
   target: 'node20',
-  external: ['electron'],
+  // better-sqlite3 is a native module: it is loaded from node_modules (unpacked from the asar), not bundled.
+  external: ['electron', 'better-sqlite3'],
   sourcemap: true,
   logLevel: 'info',
 };
