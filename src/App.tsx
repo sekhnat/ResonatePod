@@ -26,8 +26,6 @@ const SCREENS: Record<Screen, () => JSX.Element | null> = {
   downloads: DownloadsScreen, discover: DiscoverScreen, settings: SettingsScreen,
 };
 
-let started = false;
-
 export default function App() {
   const { hydrated, screen, noShows, hasCur, npOpen, npFull, cfgOpen, palette, toasts, dismissToast } = useStore(useShallow((s) => ({
     hydrated: s.hydrated, screen: s.screen, noShows: !s.shows.length, hasCur: !!s.cur, npOpen: s.npOpen, npFull: s.npFull,
@@ -37,7 +35,7 @@ export default function App() {
   const Main = empty ? WelcomeScreen : SCREENS[screen];
 
   useEffect(() => {
-    if (hydrated && !started) { started = true; startServices(); }
+    if (hydrated) startServices();
   }, [hydrated]);
 
   useEffect(() => {

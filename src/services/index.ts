@@ -1,14 +1,17 @@
 import { shallow } from 'zustand/shallow';
-import { downloadsBlocked, epInfo, getEp, sleepLabel, useStore, type State } from './store';
-import { flushEpisodeState, flushSave } from './persistence';
-import { dlSummary } from './model';
-import { platform } from './platform';
-import { startEngine } from './audio/engine';
+import { downloadsBlocked, epInfo, getEp, sleepLabel, useStore, type State } from '../store';
+import { flushEpisodeState, flushSave } from '../persistence';
+import { dlSummary } from '../model';
+import { platform } from '../platform';
+import { startEngine } from '../audio/engine';
 
 const HOUR = 3600000;
+let started = false;
 
-/** Wires the store to the OS: downloads, tray, metered network, timers. Call once after hydration. */
+/** Wires the store to the OS: downloads, tray, metered network, timers. Call after hydration; later calls do nothing. */
 export function startServices() {
+  if (started) return;
+  started = true;
   const st = () => useStore.getState();
   startEngine();
 
