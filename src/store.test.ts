@@ -351,6 +351,21 @@ describe('persistence', () => {
     expect(written.state.eps[K42].pos).toBe(19);
     save.mockRestore();
   });
+
+  it('keeps silence-trim savings in memory until the checkpoint', async () => {
+    await flushSave();
+    const save = vi.spyOn(platform, 'saveLibrary').mockResolvedValue();
+    for (let i = 0; i < 10; i++) st().addTrimSaved(1.5);
+    await flushSave();
+    expect(save).not.toHaveBeenCalled();
+    expect(st().trimSaved + st().trimPending).toBe(15);
+    st().checkpoint();
+    await flushSave();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(save.mock.calls[0][0]).state.trimSaved).toBe(15);
+    expect(st().trimPending).toBe(0);
+    save.mockRestore();
+  });
 });
 
 describe('embedded chapters', () => {

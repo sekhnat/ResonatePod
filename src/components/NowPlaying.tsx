@@ -145,7 +145,7 @@ export function NowPlayingFull() {
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <span className="tag tag-accent">{s.speed}× speed</span>
-          <span className="tag tag-neutral">{trim ? `Silence trim on · saved ${fmt(s.trimSaved)}` : 'Silence trim off'}</span>
+          <span className="tag tag-neutral">{trim ? `Silence trim on · saved ${fmt(s.trimSaved + s.trimPending)}` : 'Silence trim off'}</span>
           <span className="tag tag-neutral">Sleep: {sleepLabel(s.sleep).toLowerCase()}</span>
         </div>
       </div>
