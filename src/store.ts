@@ -108,6 +108,8 @@ interface Ui {
   /** Feed that needs a username and password (the show, when already subscribed). */
   authFor: { url: string; showId?: string } | null;
   metered: boolean | null;
+  /** Silence-trim time saved since the last checkpoint; kept out of the persisted data so it doesn't trigger a save every second. */
+  trimPending: number;
   screen: Screen;
   history: { screen: Screen; showId: string }[];
   showId: string;
@@ -377,6 +379,7 @@ const initialUi: Ui = {
   pendingMove: null,
   authFor: null,
   metered: null,
+  trimPending: 0,
   screen: 'inbox',
   history: [],
   showId: '',
@@ -579,7 +582,7 @@ export const useStore = create<State>()(
           set({ playing: false });
           get().toast(`Can’t play this episode: ${message}`);
         },
-        addTrimSaved: (sec) => set((s) => ({ trimSaved: s.trimSaved + sec })),
+        addTrimSaved: (sec) => set((s) => ({ trimPending: s.trimPending + sec })),
         loadMeta: async (key) => {
           const s = get();
           const info = epInfo(s, key);
@@ -616,6 +619,7 @@ export const useStore = create<State>()(
         },
         checkpoint: () => {
           const s = get();
+          if (s.trimPending > 0) set({ trimSaved: s.trimSaved + s.trimPending, trimPending: 0 });
           if (s.cur && Math.abs(getEp(s, s.cur).pos - s.pos) >= 1) set({ eps: saveCurPos() });
         },
         moveDownloads: async (from, to) => {
