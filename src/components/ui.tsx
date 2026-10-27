@@ -13,13 +13,13 @@ export function SortSelect({ value, onPick }: { value: Sort; onPick: (v: Sort) =
 }
 
 /** Artwork tile: the feed's image, or a monogram placeholder when there is none (or it fails to load). */
-export function Art({ bg, mono, img, size, font, radius = 6, weight = 600, style, children }: {
-  bg: string; mono: string; img?: string; size: number | string; font: number; radius?: number | string; weight?: number; style?: CSSProperties; children?: ReactNode;
+export function Art({ bg, mono, img, size, font, radius = 6, weight = 600, className, style, children }: {
+  bg: string; mono: string; img?: string; size: number | string; font: number; radius?: number | string; weight?: number; className?: string; style?: CSSProperties; children?: ReactNode;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   const showImg = img && failed !== img;
   return (
-    <span className="art" style={{ width: size, height: size, borderRadius: radius, background: bg, fontSize: font, fontWeight: weight, ...style }}>
+    <span className={className ? `art ${className}` : 'art'} style={{ width: size, height: size, borderRadius: radius, background: bg, fontSize: font, fontWeight: weight, ...style }}>
       {showImg ? <img className="art-img" src={img} alt="" loading="lazy" onError={() => setFailed(img)} /> : mono}
       {children}
     </span>
