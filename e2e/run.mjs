@@ -2,7 +2,7 @@
 // Run with `npm run test:e2e` (needs a display; use `xvfb-run -a` on headless Linux).
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -172,11 +172,11 @@ const packaged = process.env.E2E_APP;
 const errors = [];
 let app;
 let page;
-async function launch() {
+async function launch(userData = path.join(home, 'config')) {
   app = await electron.launch({
     executablePath: packaged ? path.resolve(packaged) : electronPath,
     args: packaged ? ['--no-sandbox'] : ['.', '--no-sandbox'],
-    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: path.join(home, 'config'), XDG_CURRENT_DESKTOP: 'KDE', RESONATE_HTTP_TIMEOUT_MS: '2000',
+    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: path.join(home, '.config'), RESONATE_USER_DATA: userData, XDG_CURRENT_DESKTOP: 'KDE', RESONATE_HTTP_TIMEOUT_MS: '2000',
       RESONATE_URL_REWRITE: JSON.stringify({ 'https://itunes.apple.com': `${base}/apple`, 'https://gpodder.net': `${base}/gpodder`, 'https://api.fyyd.de': `${base}/fyyd` }) },
   });
   page = await app.firstWindow();
@@ -545,6 +545,28 @@ try {
     await page.getByPlaceholder('Search podcasts, or paste an RSS feed URL').fill(`${base}/huge.xml`);
     await page.keyboard.press('Enter');
     await page.getByText(/Couldn’t add that feed:.*response too large/).waitFor({ timeout: 15000 });
+  });
+
+  await step('a library saved by the previous version moves into the database, and the file is kept as a backup', async () => {
+    await app.close();
+    const old = path.join(home, 'old-config');
+    mkdirSync(old, { recursive: true });
+    const episode = (guid, title, days) => ({ guid, title, pubDate: Date.now() - days * 864e5, duration: 120, enclosureUrl: `${base}/ep2.wav`, enclosureType: 'audio/wav', sizeBytes: 1, description: `Notes for ${title}.` });
+    writeFileSync(path.join(old, 'library.json'), JSON.stringify({ version: 2, state: {
+      shows: [{ id: 'legacy-fm', title: 'Legacy FM', author: 'Old Version', hue: 200, cat: 'Podcast', freq: 'Weekly', desc: 'Saved before the database.', feedUrl: `${base}/legacy.xml`, subscribedAt: 1,
+        eps: [episode('l2', 'Legacy two', 1), episode('l1', 'Legacy one', 8)] }],
+      eps: { 'legacy-fm:l2': { played: false, pos: 0, inbox: true }, 'legacy-fm:l1': { played: true, pos: 0, inbox: false, playedAt: 5 }, 'legacy-fm:gone': { played: false, pos: 0, inbox: false } },
+      speed: 1.5, folder: '~/Podcasts', storageLimitGb: 40, usedBytes: 1, lastChecked: Date.now(), tg: { auto: false },
+    } }));
+    await launch(old);
+    await page.getByRole('heading', { name: 'New episodes' }).waitFor();
+    await page.getByText('Legacy two').waitFor();
+    await page.locator('nav').getByRole('button', { name: 'Legacy FM' }).click();
+    await page.getByText('Legacy one').waitFor();
+    assert.ok(existsSync(path.join(old, 'library.db')), 'the database is created');
+    assert.ok(existsSync(path.join(old, 'library.json.bak')), 'the old file is kept as a backup');
+    assert.ok(!existsSync(path.join(old, 'library.json')), 'and is no longer read');
+    await shot('18-imported');
   });
 
   assert.deepEqual(errors.filter((e) => !/itunes\.apple\.com|ERR_NAME|ERR_TUNNEL|ERR_PROXY/.test(e)), [], 'console errors');

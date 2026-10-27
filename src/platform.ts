@@ -1,6 +1,8 @@
+import type { LibraryPatch, LibrarySnapshot } from '../shared/library';
 import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayAction, TrayState } from '../shared/types';
 import type { ResonateApi } from '../electron/preload';
 import { downloadText } from './lib/opml';
+import { MemoryLibrary, type MemoryDump } from './lib/memory-library';
 
 declare global {
   interface Window { resonate?: ResonateApi }
@@ -16,8 +18,12 @@ export interface Platform {
   desktop: 'KDE' | 'GNOME';
   hostname: string;
   http(url: string, req?: HttpRequest): Promise<HttpResponse>;
-  loadLibrary(): Promise<string | null>;
-  saveLibrary(json: string): Promise<void>;
+  /** The saved library, read once at start-up (show notes are left out; see libNotes). */
+  libLoad(): Promise<LibrarySnapshot>;
+  /** Saves what changed, all together or not at all. */
+  libPatch(patch: LibraryPatch): Promise<void>;
+  /** The show notes of one episode. */
+  libNotes(show: string, guid: string): Promise<string>;
   mediaUrl(file: string | undefined, url: string): string;
   /** Whether media URLs are same-origin enough for Web Audio analysis (silence trim). */
   canAnalyse: boolean;
@@ -66,8 +72,9 @@ function electronPlatform(api: ResonateApi): Platform {
     desktop: api.env.desktop,
     hostname: api.env.hostname,
     http: api.http,
-    loadLibrary: api.loadLibrary,
-    saveLibrary: api.saveLibrary,
+    libLoad: api.libLoad,
+    libPatch: api.libPatch,
+    libNotes: api.libNotes,
     mediaUrl: (file, url) => (file ? `resonate-media://file/${encodeURIComponent(file)}` : `resonate-media://remote/${encodeURIComponent(url)}`),
     canAnalyse: true,
     download: {
@@ -101,7 +108,11 @@ function electronPlatform(api: ResonateApi): Platform {
   };
 }
 
+const LIBRARY_KEY = 'resonate-library-v2';
+
 function browserPlatform(): Platform {
+  // The browser build keeps the library in memory and saves a copy to localStorage.
+  const library = new MemoryLibrary((() => { try { return JSON.parse(LS.get(LIBRARY_KEY) ?? 'null') as MemoryDump | null; } catch { return null; } })());
   const auth = new Map<string, string>();
   const origin = (url: string) => { try { return new URL(url).origin; } catch { return ''; } };
   return {
@@ -113,8 +124,9 @@ function browserPlatform(): Platform {
       const res = await fetch(url, { method: req.method ?? 'GET', headers: { ...(a ? { Authorization: a } : {}), ...req.headers }, body: req.body, signal: AbortSignal.timeout(60_000) });
       return { status: res.status, text: await res.text(), etag: res.headers.get('etag') ?? undefined, lastModified: res.headers.get('last-modified') ?? undefined };
     },
-    loadLibrary: async () => LS.get('resonate-library'),
-    saveLibrary: async (json) => LS.set('resonate-library', json),
+    libLoad: async () => library.load(),
+    libPatch: async (patch) => { library.patch(patch); LS.set(LIBRARY_KEY, JSON.stringify(library.dump())); },
+    libNotes: async (show, guid) => library.notes(show, guid),
     mediaUrl: (_file, url) => url,
     canAnalyse: false,
     download: { start() {}, cancel() {}, setPaused() {}, setConcurrency() {}, onEvent: () => () => {} },

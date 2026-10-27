@@ -125,11 +125,13 @@ Everything lives in `~/.config/Resonate/`:
 
 | File | Contents |
 | --- | --- |
-| `library.json` | Subscriptions, episode state, queue, preferences and per-show settings |
+| `library.db` | Subscriptions, episodes and their show notes, episode state, queue, preferences and per-show settings (SQLite) |
 | `window.json` | Window size and position |
 | `secrets.json` | Encrypted sync password, feed logins and Podcast Index key |
+| `main-settings.json` | The download folders Resonate may read and write |
+| `library.json.bak` | Only if you used an earlier version: your library as it was before it moved into `library.db` |
 
-The library is written only when something in it changes (debounced). The playback position is
+Only what changes is written to the library, a moment after it changes. The playback position is
 saved every 30 seconds while playing, on pause, and on quit. Downloaded episodes stay in your
 download folder (`~/Podcasts` by default) when you unsubscribe.
 

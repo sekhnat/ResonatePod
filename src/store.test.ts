@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, flushSave, getEp, sortFor, trackedBytes, useStore, withEp } from './store';
+import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, getEp, sortFor, trackedBytes, useStore, withEp } from './store';
 import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
@@ -625,42 +625,6 @@ describe('epInfo', () => {
     expect(epInfo(st(), K42)!.date).toBe('Today');
     vi.setSystemTime(new Date(2026, 9, 27, 12));
     expect(epInfo(st(), K42)!.date).toBe('Yesterday');
-  });
-});
-
-describe('persistence', () => {
-  it('skips writes when only playback position, progress or UI state change', async () => {
-    await flushSave();
-    const save = vi.spyOn(platform, 'saveLibrary').mockResolvedValue();
-    st().play(K42);
-    await flushSave();
-    save.mockClear();
-    for (let t = 1; t < 20; t++) st().onTime(t);
-    useStore.setState({ dl: [{ key: K41, received: 5, total: 10, speed: 1 }], screen: 'queue' });
-    await flushSave();
-    expect(save).not.toHaveBeenCalled();
-    st().checkpoint();
-    await flushSave();
-    expect(save).toHaveBeenCalledTimes(1);
-    const written = JSON.parse(save.mock.calls[0][0]);
-    expect(written.state.pos).toBeUndefined();
-    expect(written.state.eps[K42].pos).toBe(19);
-    save.mockRestore();
-  });
-
-  it('keeps silence-trim savings in memory until the checkpoint', async () => {
-    await flushSave();
-    const save = vi.spyOn(platform, 'saveLibrary').mockResolvedValue();
-    for (let i = 0; i < 10; i++) st().addTrimSaved(1.5);
-    await flushSave();
-    expect(save).not.toHaveBeenCalled();
-    expect(st().trimSaved + st().trimPending).toBe(15);
-    st().checkpoint();
-    await flushSave();
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(save.mock.calls[0][0]).state.trimSaved).toBe(15);
-    expect(st().trimPending).toBe(0);
-    save.mockRestore();
   });
 });
 

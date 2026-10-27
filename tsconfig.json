@@ -27,6 +27,7 @@
     "electron",
     "scripts/*.ts",
     "e2e",
-    "test/perf"
+    "test/perf",
+    "test/*.ts"
   ]
 }
