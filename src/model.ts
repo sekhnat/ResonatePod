@@ -1,4 +1,5 @@
 import { art, epKey, fmt, mono, type Episode, type Show } from './data';
+import { dlRuleLabel } from './settings-labels';
 import { dlByKey, downloadsBlocked, epInfo, findShow, getEp, ruleFor, type EpState, type Filter, type Sort, type State } from './store';
 
 export type EpStatus = 'cloud' | 'downloaded' | 'played' | 'downloading';
@@ -177,9 +178,8 @@ export const totalUnplayed = perLibrary((s) => s.shows.reduce((a, sh) => a + unp
 
 export function ruleLabel(s: State, showId: string) {
   const r = ruleFor(s, showId);
-  if (r.value === 'Off') return r.global ? 'Auto-download off (global)' : 'Auto-download off';
-  if (r.global) return r.value === 'All' ? 'Auto-download all (global)' : `Auto-download ${r.value.toLowerCase()} (global)`;
-  return r.value === 'All' ? 'Auto-download all' : `Auto-download ${r.value.toLowerCase()}`;
+  const what = dlRuleLabel(r.value).toLowerCase();
+  return `Auto-download ${what}${r.global ? ' (global)' : ''}`;
 }
 
 const MB = 1048576;

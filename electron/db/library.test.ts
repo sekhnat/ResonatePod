@@ -32,6 +32,38 @@ describe('the database file', () => {
     again.close();
   });
 
+  it('upgrades settings saved as labels when it moves a version 1 database to 2', () => {
+    const file = path.join(dir, 'library.db');
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE shows (id TEXT PRIMARY KEY, ord INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE TABLE episodes (show_id TEXT NOT NULL, guid TEXT NOT NULL, pub_date INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (show_id, guid)) WITHOUT ROWID;
+      CREATE TABLE notes (id INTEGER PRIMARY KEY, show_id TEXT NOT NULL, guid TEXT NOT NULL, text TEXT NOT NULL, UNIQUE (show_id, guid));
+      CREATE TABLE ep_state (key TEXT PRIMARY KEY, played INTEGER NOT NULL, pos REAL NOT NULL, inbox INTEGER NOT NULL, file TEXT, file_bytes INTEGER, played_at INTEGER, last_played INTEGER) WITHOUT ROWID;
+      CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+      PRAGMA user_version = 1;
+    `);
+    const put = raw.prepare('INSERT INTO kv (key, value) VALUES (?, ?)');
+    put.run('sv', JSON.stringify({ keep: '5', par: '1', speed: '2×', del: '1 day', skip: '10 / 30 s' }));
+    put.run('ovr', JSON.stringify({ a: { dl: 'Latest 1', speed: 'Global', trim: 'On', intro: 'Off' }, b: { dl: 'Global' } }));
+    put.run('folder', JSON.stringify('~/Podcasts'));
+    raw.close();
+
+    const lib = new LibraryDb(file);
+    expect(lib.load().kv).toEqual({
+      sv: { keep: 5, par: 1, speed: 2, del: 'day', skip: { back: 10, fwd: 30 } },
+      ovr: { a: { dl: 1, trim: true } },
+      folder: '~/Podcasts',
+    });
+    lib.close();
+    const check = new Database(file);
+    expect(check.pragma('user_version', { simple: true })).toBe(2);
+    check.close();
+    const again = new LibraryDb(file); // already upgraded: opening it again changes nothing
+    expect(again.load().kv.sv).toEqual({ keep: 5, par: 1, speed: 2, del: 'day', skip: { back: 10, fwd: 30 } });
+    again.close();
+  });
+
   it('refuses a database from a newer version rather than touching it', () => {
     const file = path.join(dir, 'library.db');
     const raw = new Database(file);

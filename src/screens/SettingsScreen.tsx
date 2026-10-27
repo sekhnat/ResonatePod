@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { trackedBytes, useStore, type SegValues, type Toggles } from '../store';
+import { trackedBytes, useStore, type Settings, type Toggles } from '../store';
+import { delLabel, keepLabel, skipLabel, speedLabel } from '../settings-labels';
 import { Seg, Toggle, h1Style } from '../components/ui';
 import { platform } from '../platform';
 import { clockLabel } from '../model';
@@ -9,14 +10,13 @@ import { CountrySelect, SourceSelect } from '../components/DirectoryCard';
 
 type Row = { label: string; hint?: string } & (
   | { kind: 'toggle'; k: keyof Toggles }
-  | { kind: 'seg'; k: keyof SegValues; opts: string[] }
   | { kind: 'value'; value: string; action: string; run: () => void }
   | { kind: 'node'; node: ReactNode }
 );
 
 export function SettingsScreen() {
   const s = useStore(useShallow((s) => ({
-    directory: s.directory, eps: s.eps, folder: s.folder, set: s.set, setPrefs: s.setPrefs, setSeg: s.setSeg, setToggle: s.setToggle,
+    directory: s.directory, eps: s.eps, folder: s.folder, set: s.set, setPrefs: s.setPrefs, setSetting: s.setSetting, setToggle: s.setToggle,
     shows: s.shows, storageLimitGb: s.storageLimitGb, sv: s.sv, sync: s.sync, syncing: s.syncing, tg: s.tg, toast: s.toast,
     folderBytes: s.folderBytes, updateUsage: s.updateUsage,
   })));
@@ -30,24 +30,26 @@ export function SettingsScreen() {
     if (Object.values(s.eps).some((e) => e.file)) s.set({ dialog: 'move', pendingMove: { from, to: folder } });
     else s.toast(`New downloads will be saved to ${folder}`);
   };
+  const seg = <K extends keyof Settings>(k: K, options: Settings[K][], format?: (v: Settings[K]) => string) =>
+    <Seg options={options} value={s.sv[k]} format={format} onPick={(v) => s.setSetting(k, v)} />;
   const usedGb = (trackedBytes(s.eps) / 1024 ** 3).toFixed(1);
   const groups: { title: string; rows: Row[] }[] = [
     { title: 'Downloads', rows: [
       { label: 'Download new episodes automatically', hint: 'Applies to shows without their own rule', kind: 'toggle', k: 'auto' },
-      { label: 'Keep latest per show', kind: 'seg', k: 'keep', opts: ['1', '3', '5', 'All'] },
+      { label: 'Keep latest per show', kind: 'node', node: seg('keep', [1, 3, 5, 'all'], keepLabel) },
       { label: 'Pause on metered connections', hint: 'Uses NetworkManager connection state', kind: 'toggle', k: 'metered' },
-      { label: 'Simultaneous downloads', kind: 'seg', k: 'par', opts: ['1', '2', '4'] },
+      { label: 'Simultaneous downloads', kind: 'node', node: seg('par', [1, 2, 4]) },
     ] },
     { title: 'Storage', rows: [
       { label: 'Download folder', hint: platform.isDesktop ? 'One sub-folder per show' : 'Downloads need the desktop app', kind: 'value', value: s.folder, action: 'Change…', run: () => void changeFolder() },
-      { label: 'Delete played episodes', hint: 'Downloaded files only; the episode stays in your library', kind: 'seg', k: 'del', opts: ['Never', '1 day', '1 week'] },
+      { label: 'Delete played episodes', hint: 'Downloaded files only; the episode stays in your library', kind: 'node', node: seg('del', ['never', 'day', 'week'], delLabel) },
       { label: 'Storage limit', hint: `${usedGb} GB of downloaded episodes · oldest played files are removed first`, kind: 'value', value: `${s.storageLimitGb} GB`, action: 'Edit', run: () => s.set({ dialog: 'storage' }) },
       ...(platform.isDesktop ? [{ label: 'Folder size', hint: 'Everything in the folder, including files Resonate no longer tracks; the limit doesn’t count those', kind: 'value', value: s.folderBytes == null ? 'Not measured yet' : `${(s.folderBytes / 1024 ** 3).toFixed(1)} GB`, action: 'Recalculate', run: () => void s.updateUsage() } as Row] : []),
     ] },
     { title: 'Playback', rows: [
-      { label: 'Default speed', kind: 'seg', k: 'speed', opts: ['1×', '1.2×', '1.5×', '2×'] },
+      { label: 'Default speed', kind: 'node', node: seg('speed', [1, 1.2, 1.5, 2], speedLabel) },
       { label: 'Trim silence', hint: 'Shortens pauses without changing pitch', kind: 'toggle', k: 'silence' },
-      { label: 'Skip back / forward', kind: 'seg', k: 'skip', opts: ['10 / 30 s', '15 / 30 s', '30 / 60 s'] },
+      { label: 'Skip back / forward', kind: 'node', node: seg('skip', [{ back: 10, fwd: 30 }, { back: 15, fwd: 30 }, { back: 30, fwd: 60 }], skipLabel) },
       { label: 'Notify on new episodes', kind: 'toggle', k: 'notify' },
     ] },
     ...(platform.isDesktop ? [{ title: 'Desktop', rows: [
@@ -67,7 +69,6 @@ export function SettingsScreen() {
 
   const control = (r: Row): ReactNode => {
     if (r.kind === 'toggle') return <Toggle on={s.tg[r.k]} onToggle={() => s.setToggle(r.k)} label={r.label} />;
-    if (r.kind === 'seg') return <Seg options={r.opts} value={s.sv[r.k]} onPick={(v) => s.setSeg(r.k, v)} />;
     if (r.kind === 'node') return r.node;
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

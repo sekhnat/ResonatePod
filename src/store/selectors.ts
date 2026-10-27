@@ -1,16 +1,12 @@
 import { fileStem, safeName } from '../../shared/filename';
 import { chaptersFor, epKey, episodeInfo, lastAtOrBefore, parseKey, type Episode, type EpisodeInfo, type Show } from '../data';
+import type { DlRule } from '../../shared/settings';
 import type { ActiveDl, Data, EpState, Sleep, State, Sort, Ui } from './types';
 
 export const sortFor = (s: State, scope: string): Sort => s.sorts[scope] ?? 'Newest first';
 
 // ---------- helpers ----------
 
-export const parseSpeed = (s: string) => parseFloat(s.replace('×', ''));
-export const skipAmounts = (skip: string): [number, number] => {
-  const [b, f] = skip.replace(' s', '').split('/').map((x) => parseInt(x, 10));
-  return [b, f];
-};
 const DAY = 86400000;
 export const GB = 1024 ** 3;
 
@@ -81,26 +77,17 @@ export const withEp = (eps: Data['eps'], key: string, st: EpState): Data['eps'] 
   return next;
 };
 
-export const ruleFor = (s: Pick<Data, 'ovr' | 'tg' | 'sv'>, showId: string) => {
-  const o = s.ovr[showId]?.dl ?? 'Global';
-  if (o !== 'Global') return { value: o, global: false };
-  return { value: s.tg.auto ? (s.sv.keep === 'All' ? 'All' : `Latest ${s.sv.keep}`) : 'Off', global: true };
+export const ruleFor = (s: Pick<Data, 'ovr' | 'tg' | 'sv'>, showId: string): { value: DlRule; global: boolean } => {
+  const o = s.ovr[showId]?.dl;
+  if (o !== undefined) return { value: o, global: false };
+  return { value: s.tg.auto ? s.sv.keep : 'off', global: true };
 };
 
-export const trimOn = (s: Pick<Data, 'ovr' | 'tg'>, showId: string) => {
-  const o = s.ovr[showId]?.trim ?? 'Global';
-  return o === 'Global' ? s.tg.silence : o === 'On';
-};
+export const trimOn = (s: Pick<Data, 'ovr' | 'tg'>, showId: string) => s.ovr[showId]?.trim ?? s.tg.silence;
 
-export const speedFor = (s: Data, showId: string) => {
-  const o = s.ovr[showId]?.speed ?? 'Global';
-  return parseSpeed(o === 'Global' ? s.sv.speed : o);
-};
+export const speedFor = (s: Data, showId: string) => s.ovr[showId]?.speed ?? s.sv.speed;
 
-export const introFor = (s: Data, showId: string) => {
-  const o = s.ovr[showId]?.intro ?? 'Off';
-  return o === 'Off' ? 0 : parseInt(o, 10);
-};
+export const introFor = (s: Data, showId: string) => s.ovr[showId]?.intro ?? 0;
 
 export const currentChapter = (ch: { at: number }[], pos: number) => lastAtOrBefore(ch, pos, (c) => c.at);
 
@@ -142,8 +129,8 @@ export function autoDownloadKeys(s: Pick<Data, 'shows' | 'eps' | 'ovr' | 'tg' | 
   const show = findShow(s, showId);
   if (!show) return [];
   const rule = ruleFor(s, showId).value;
-  if (rule === 'Off') return [];
-  const n = rule === 'All' ? show.eps.length : parseInt(rule.replace('Latest ', ''), 10);
+  if (rule === 'off') return [];
+  const n = rule === 'all' ? show.eps.length : rule;
   const downloading = dlByKey(s.dl);
   return show.eps.slice(0, n).map((e) => epKey(showId, e.guid)).filter((k) => {
     const st = getEp(s, k);
@@ -174,7 +161,7 @@ export function cleanupKeys(s: Pick<Data, 'eps' | 'sv' | 'storageLimitGb' | 'cur
     .filter(([k, e]) => e.file && e.played && k !== s.cur)
     .sort((a, b) => (a[1].playedAt ?? 0) - (b[1].playedAt ?? 0));
   const out = new Set<string>();
-  const maxAge = s.sv.del === '1 day' ? DAY : s.sv.del === '1 week' ? 7 * DAY : 0;
+  const maxAge = s.sv.del === 'day' ? DAY : s.sv.del === 'week' ? 7 * DAY : 0;
   if (maxAge) for (const [k, e] of played) if (now - (e.playedAt ?? now) > maxAge) out.add(k);
   let used = trackedBytes(s.eps) - [...out].reduce((a, k) => a + (s.eps[k].fileBytes ?? 0), 0);
   const limit = s.storageLimitGb * GB;

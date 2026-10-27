@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { art, mono } from '../data';
 import { trackedBytes, useStore, type Override } from '../store';
+import { dlRuleLabel, introLabel, keepLabel, onOff, orGlobal, speedLabel } from '../settings-labels';
 import { platform } from '../platform';
 import { APP_VERSION } from '../version';
 import { Seg } from './ui';
@@ -23,12 +24,20 @@ export function ShowSettingsDialog() {
   if (!sh) return null;
   const close = () => s.set({ cfgOpen: false });
   const ovr = s.ovr[sh.id] ?? {};
-  const rows: [keyof Override, string, string[], string][] = [
-    ['dl', 'Auto-download', ['Global', 'Latest 1', 'Latest 3', 'All', 'Off'], s.tg.auto ? `Global: latest ${s.sv.keep}` : 'Global: off'],
-    ['speed', 'Playback speed', ['Global', '1×', '1.2×', '1.5×', '2×'], `Global: ${s.sv.speed}`],
-    ['trim', 'Trim silence', ['Global', 'On', 'Off'], s.tg.silence ? 'Global: on' : 'Global: off'],
-    ['intro', 'Skip intro', ['Off', '30 s', '60 s', '90 s'], 'Skips from start on every episode'],
-  ];
+  // One row of choices for one of the show's overrides; undefined is "follow the global setting".
+  const row = <K extends keyof Override>(k: K, label: string, hint: string, options: (Override[K] | undefined)[], format: (v: Override[K] | undefined) => string) => (
+    <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 13 }}>{label}</span>
+        <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{hint}</span>
+      </div>
+      <Seg options={options} value={ovr[k]} format={format} onPick={(v) => {
+        s.setOverride(sh.id, k, v);
+        // Speed and trim apply live when this show is playing.
+        if (k === 'speed' && s.cur?.startsWith(`${sh.id}:`)) s.setSpeed((v as Override['speed']) ?? s.sv.speed);
+      }} style={{ alignSelf: 'flex-start' }} />
+    </div>
+  );
   return (
     <Modal onClose={close} label={`${sh.title} settings`}>
       <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center' }}>
@@ -39,19 +48,10 @@ export function ShowSettingsDialog() {
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        {rows.map(([k, label, opts, hint]) => (
-          <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 13 }}>{label}</span>
-              <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{hint}</span>
-            </div>
-            <Seg options={opts} value={ovr[k] ?? opts[0]} onPick={(v) => {
-              s.setOverride(sh.id, k, v);
-              // Speed and trim apply live when this show is playing.
-              if (k === 'speed' && s.cur?.startsWith(`${sh.id}:`)) s.setSpeed(parseFloat((v === 'Global' ? s.sv.speed : v).replace('×', '')));
-            }} style={{ alignSelf: 'flex-start' }} />
-          </div>
-        ))}
+        {row('dl', 'Auto-download', s.tg.auto ? `Global: latest ${keepLabel(s.sv.keep)}` : 'Global: off', [undefined, 1, 3, 'all', 'off'], orGlobal(dlRuleLabel))}
+        {row('speed', 'Playback speed', `Global: ${speedLabel(s.sv.speed)}`, [undefined, 1, 1.2, 1.5, 2], orGlobal(speedLabel))}
+        {row('trim', 'Trim silence', s.tg.silence ? 'Global: on' : 'Global: off', [undefined, true, false], orGlobal(onOff))}
+        {row('intro', 'Skip intro', 'Skips from start on every episode', [undefined, 30, 60, 90], introLabel)}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>

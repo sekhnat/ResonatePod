@@ -231,6 +231,23 @@ describe('reading the library at start-up', () => {
     expect(st().volume).toBe(initial.volume); // not saved, so the default
   });
 
+  it('reads settings saved as labels by an earlier version, and as the numbers they are now', async () => {
+    useStore.setState({ ...initial, hydrated: false }, true);
+    const old = { ...snapshot(), kv: { sv: { keep: 'All', par: '4', speed: '1.5×', del: 'Never', skip: '30 / 60 s' }, ovr: { a: { dl: 'Latest 3', speed: 'Global', trim: 'Off', intro: '60 s' } } } };
+    const load = vi.spyOn(platform, 'libLoad').mockResolvedValue(old as never);
+    await hydrate();
+    expect(st().sv).toEqual({ keep: 'all', par: 4, speed: 1.5, del: 'never', skip: { back: 30, fwd: 60 } });
+    expect(st().ovr).toEqual({ a: { dl: 3, trim: false, intro: 60 } });
+    useStore.setState({ ...initial, hydrated: false }, true);
+    load.mockResolvedValue({ ...snapshot(), kv: { sv: st().sv, ovr: st().ovr } } as never);
+    await hydrate();
+    expect(st().sv).toEqual(initial.sv); // typed values are not changed by being read again
+    useStore.setState({ ...initial, hydrated: false }, true);
+    load.mockResolvedValue({ ...snapshot(), kv: { sv: { speed: 2 } } } as never);
+    await hydrate();
+    expect(st().sv).toEqual({ ...initial.sv, speed: 2 }); // what a save lacks keeps its default
+  });
+
   it('does not save what it just read, and saves what changes after', async () => {
     vi.spyOn(platform, 'libLoad').mockResolvedValue(snapshot() as never);
     await hydrate();

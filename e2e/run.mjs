@@ -648,6 +648,9 @@ try {
         eps: [episode('l2', 'Legacy two', 1), episode('l1', 'Legacy one', 8)] }],
       eps: { 'legacy-fm:l2': { played: false, pos: 0, inbox: true }, 'legacy-fm:l1': { played: true, pos: 0, inbox: false, playedAt: 5 }, 'legacy-fm:gone': { played: false, pos: 0, inbox: false } },
       speed: 1.5, folder: '~/Podcasts', storageLimitGb: 40, usedBytes: 1, lastChecked: Date.now(), tg: { auto: false },
+      // Choices were saved as the labels the screens show; they are numbers and names in the database.
+      sv: { keep: 'All', par: '4', speed: '1.5×', del: '1 day', skip: '30 / 60 s' },
+      ovr: { 'legacy-fm': { dl: 'Latest 1', speed: 'Global', trim: 'Off', intro: '30 s' } },
     } }));
     await launch(old);
     await page.getByRole('heading', { name: 'New episodes' }).waitFor();
@@ -657,6 +660,15 @@ try {
     // The show notes were stored with the episodes and are read back when a row is opened.
     await page.getByTitle('Show notes').last().click();
     await page.getByText('Notes for Legacy one.').waitFor();
+    // The saved choices are still the ones selected, in Preferences and in the show's own settings.
+    const chosen = (within) => page.evaluate((root) => [...document.querySelector(root).querySelectorAll('[role=radio][aria-checked=true]')].map((e) => e.textContent), within);
+    await page.getByTitle('Show settings').click();
+    await page.getByText('Overrides for this show').waitFor();
+    assert.deepEqual(await chosen('.dialog'), ['Latest 1', 'Global', 'Off', '30 s'], 'the show keeps its own choices');
+    await page.keyboard.press('Escape');
+    await page.locator('nav button', { hasText: 'Preferences' }).click();
+    await page.getByText('Sync server').waitFor();
+    assert.deepEqual(await chosen('main'), ['All', '4', '1 day', '1.5×', '30 / 60 s'], 'Preferences keep the saved choices');
     assert.ok(existsSync(path.join(old, 'library.db')), 'the database is created');
     assert.ok(existsSync(path.join(old, 'library.json.bak')), 'the old file is kept as a backup');
     assert.ok(!existsSync(path.join(old, 'library.json')), 'and is no longer read');

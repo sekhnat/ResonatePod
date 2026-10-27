@@ -17,7 +17,7 @@ export function startServices() {
 
   platform.download.onEvent((e) => st().onDownloadEvent(e));
   let blocked: boolean | null = null;
-  let par: string | null = null;
+  let par: number | null = null;
   let traySig = '';
   let folder: string | null = null;
   let autostart: boolean | null = null;
@@ -25,7 +25,7 @@ export function startServices() {
   const sync = (s: State) => {
     const b = downloadsBlocked(s);
     if (b !== blocked) { blocked = b; platform.download.setPaused(b); }
-    if (s.sv.par !== par) { par = s.sv.par; platform.download.setConcurrency(parseInt(par, 10)); }
+    if (s.sv.par !== par) { par = s.sv.par; platform.download.setConcurrency(par); }
     if (s.folder !== folder) { folder = s.folder; void s.updateUsage(); }
     // Applied at every launch too, so the autostart entry follows the app if it moves.
     if (s.tg.autostart !== autostart) { autostart = s.tg.autostart; void platform.setAutostart(autostart).catch(() => {}); }

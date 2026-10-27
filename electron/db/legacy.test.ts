@@ -37,7 +37,10 @@ describe('importing the old JSON library', () => {
     expect(lib.shows[0].eps[0]).not.toHaveProperty('description');
     expect(db.notes('kp', 'kp:2')).toBe(notes);
     expect(lib.epState).toEqual({ 'kp:kp:2': { played: false, pos: 0, inbox: true }, 'kp:kp:1': library.eps['kp:kp:1'] });
-    expect(lib.kv).toMatchObject({ cur: 'kp:kp:1', speed: 1.5, queue: ['kp:kp:2'], ovr: { kp: { speed: '1.2×' } }, folder: '~/Podcasts', trimSaved: 3, directory: { country: 'gb' } });
+    expect(lib.kv).toMatchObject({ cur: 'kp:kp:1', speed: 1.5, queue: ['kp:kp:2'], folder: '~/Podcasts', trimSaved: 3, directory: { country: 'gb' } });
+    // The labels the old version saved come in as numbers and names (a partial saved object gets the defaults for the rest).
+    expect(lib.kv.ovr).toEqual({ kp: { speed: 1.2 } });
+    expect(lib.kv.sv).toEqual({ keep: 3, par: 2, speed: 1.2, del: 'week', skip: { back: 15, fwd: 30 } });
     expect(lib.kv).not.toHaveProperty('usedBytes');
     expect(lib.kv).not.toHaveProperty('shows');
   });

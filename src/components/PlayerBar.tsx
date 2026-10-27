@@ -1,7 +1,7 @@
 import { useRef, type CSSProperties } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { art, fmt, mono, type Chapter } from '../data';
-import { currentChapter, skipAmounts, useStore, type Sleep } from '../store';
+import { currentChapter, useStore, type Sleep } from '../store';
 import { useChapters, useCurrent } from '../current';
 import { usePlayhead } from '../playhead';
 import { MenuItem } from './HeaderBar';
@@ -121,7 +121,7 @@ export function PlayerBar() {
   })));
   const cur = useCurrent();
   const ch = useChapters();
-  const [back, fwd] = skipAmounts(s.skip);
+  const { back, fwd } = s.skip;
   if (!cur) return <IdleBar />;
   const btn: CSSProperties = { color: 'var(--color-neutral-300)' };
 

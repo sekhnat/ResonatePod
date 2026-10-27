@@ -1,4 +1,5 @@
 import type { EpisodeRecord, LibraryPatch, ShowRecord } from '../shared/library';
+import { upgradeOverrides, upgradeSettings } from '../shared/settings';
 import type { Show } from './data';
 import { heldNotes, notesSaved } from './notes';
 import { platform } from './platform';
@@ -15,7 +16,7 @@ import { getEp, initialData, useStore, type Data, type State } from './store';
 /** The named settings stored beside the library. */
 const SETTINGS = (Object.keys(initialData) as (keyof Data)[]).filter((k) => k !== 'shows' && k !== 'eps');
 // Settings that gain fields as the app grows: what was saved is laid over the defaults, so a new field has its default.
-const MERGED: (keyof Data)[] = ['tg', 'sv', 'directory', 'sync'];
+const MERGED: (keyof Data)[] = ['tg', 'directory', 'sync'];
 
 type Saved = Pick<Data, 'shows' | 'eps'> & Record<string, unknown>;
 
@@ -184,7 +185,8 @@ export async function hydrate() {
   for (const k of SETTINGS) {
     if (!(k in snap.kv)) continue;
     const value = snap.kv[k];
-    settings[k] = MERGED.includes(k) && value && typeof value === 'object' ? { ...(initialData[k] as object), ...value } : value;
+    // The choices were once saved as labels ("1.2×"); upgradeSettings reads those and the numbers they are now.
+    settings[k] = k === 'sv' ? upgradeSettings(value) : k === 'ovr' ? upgradeOverrides(value) : MERGED.includes(k) && value && typeof value === 'object' ? { ...(initialData[k] as object), ...value } : value;
   }
   const shows = snap.shows as unknown as Show[];
   useStore.setState({ ...settings, shows, eps: snap.epState as Data['eps'], hydrated: true, showId: shows[0]?.id ?? '' });

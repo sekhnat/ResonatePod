@@ -5,6 +5,9 @@
  * saved by any version comes out the same.
  */
 
+/** How many of a show's latest episodes to keep downloaded: that many, all of them, or none. */
+export type DlRule = number | 'all' | 'off';
+
 export interface Settings {
   /** Episodes kept per show by the automatic download rule. */
   keep: number | 'all';
@@ -20,7 +23,7 @@ export interface Settings {
 
 /** What a show sets for itself. A field that is absent follows the setting above, or the global toggle. */
 export interface Override {
-  dl?: number | 'all' | 'off';
+  dl?: DlRule;
   speed?: number;
   trim?: boolean;
   /** Seconds skipped from the start of every episode. */
