@@ -77,6 +77,11 @@ export function RowMeta({ e, prefix = '' }: { e: EpisodeRow; prefix?: string }) 
   return <>{prefix}{sec >= 0 ? liveMeta(e, sec) : e.meta}</>;
 }
 
+/** An episode's state as an icon: not downloaded, downloading (spinning), downloaded or played. `wide` is the larger one in the show page's list. */
+export function StatusIcon({ e, wide }: { e: Pick<EpisodeRow, 'status' | 'stIcon' | 'stLabel'>; wide?: boolean }) {
+  return <i className={`${e.stIcon}${e.status === 'downloading' ? ' spin' : ''} ep-status st-${e.status}${wide ? ' wide' : ''}`} title={e.stLabel} />;
+}
+
 /** How far through an episode is shown, as a small bar: live for the playing one (in steps of half a percent), saved for the rest. */
 export function RowProgress({ e }: { e: EpisodeRow }) {
   const progress = usePlayhead((p) => (e.isCur && e.dur ? Math.round((p / e.dur) * 200) / 200 : e.progress));

@@ -4,11 +4,12 @@ import { dlByKey, downloadsBlocked, epInfo, findShow, getEp, ruleFor, type EpSta
 
 export type EpStatus = 'cloud' | 'downloaded' | 'played' | 'downloading';
 
-const STATUS: Record<EpStatus, [icon: string, color: string, label: string]> = {
-  cloud: ['ph ph-cloud', 'var(--color-neutral-600)', 'Not downloaded'],
-  downloaded: ['ph-fill ph-check-circle', 'var(--color-neutral-400)', 'Downloaded'],
-  played: ['ph ph-check', 'var(--color-neutral-700)', 'Played'],
-  downloading: ['ph ph-circle-notch', 'var(--color-accent)', 'Downloading'],
+// The icon and label for each state; the colour is the .st-<state> class.
+const STATUS: Record<EpStatus, [icon: string, label: string]> = {
+  cloud: ['ph ph-cloud', 'Not downloaded'],
+  downloaded: ['ph-fill ph-check-circle', 'Downloaded'],
+  played: ['ph ph-check', 'Played'],
+  downloading: ['ph ph-circle-notch', 'Downloading'],
 };
 
 export interface EpisodeRow {
@@ -31,7 +32,6 @@ export interface EpisodeRow {
   dur: number;
   status: EpStatus;
   stIcon: string;
-  stColor: string;
   stLabel: string;
   isNew: boolean;
   isCur: boolean;
@@ -56,7 +56,7 @@ export function episodeRow(s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'play
   const dlItem = dlByKey(s.dl).get(key);
   const played = st.played && !isCur;
   const status: EpStatus = dlItem && !dlItem.error ? 'downloading' : played ? 'played' : st.file ? 'downloaded' : 'cloud';
-  const [stIcon, stColor, stLabel] = STATUS[status];
+  const [stIcon, stLabel] = STATUS[status];
   const pos = st.pos;
   const head = [e.date];
   if (e.durMin) head.push(`${e.durMin} min`);
@@ -80,7 +80,7 @@ export function episodeRow(s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'play
     durMin: e.durMin,
     pubDate: e.ep.pubDate,
     dur: e.dur,
-    status, stIcon, stColor, stLabel,
+    status, stIcon, stLabel,
     isNew: st.inbox && !st.played,
     isCur,
     isPlaying: isCur && s.playing,
