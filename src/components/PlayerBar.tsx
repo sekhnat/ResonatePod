@@ -1,6 +1,8 @@
 import { useRef, type CSSProperties } from 'react';
-import { art, fmt, mono } from '../data';
+import { useShallow } from 'zustand/react/shallow';
+import { art, fmt, mono, type Chapter } from '../data';
 import { chaptersOf, currentChapter, epInfo, skipAmounts, useStore, type Sleep } from '../store';
+import { usePlayhead } from '../playhead';
 import { MenuItem } from './HeaderBar';
 import { Art, GhostIcon, useOutside } from './ui';
 
@@ -22,19 +24,29 @@ export function useScrub(onFrac: (f: number) => void) {
   return { ref, onPointerDown };
 }
 
+const NO_CHAPTERS: Chapter[] = [];
+
+/** The episode playing now. The same object until that episode or its show changes, so it is cheap to select. */
+export const useCurrent = () => useStore((s) => epInfo(s, s.cur));
+
+/** Its chapters: the same array until they load or the episode changes. */
+export const useChapters = () => useStore((s) => { const cur = epInfo(s, s.cur); return cur ? chaptersOf(s, cur) : NO_CHAPTERS; });
+
 export function SeekBar({ height = 14, thumb = true, ticks = true, glow = true, style }: { height?: number; thumb?: boolean; ticks?: boolean; glow?: boolean; style?: CSSProperties }) {
-  const s = useStore();
-  const cur = epInfo(s, s.cur);
-  const scrub = useScrub((f) => cur && cur.dur && s.seek(f * cur.dur));
+  const cur = useCurrent();
+  const chapters = useChapters();
+  const pos = usePlayhead((p) => p);
+  const { seek, skipBack, skipFwd } = useStore(useShallow((s) => ({ seek: s.seek, skipBack: s.skipBack, skipFwd: s.skipFwd })));
+  const scrub = useScrub((f) => cur && cur.dur && seek(f * cur.dur));
   if (!cur) return null;
-  const pct = `${cur.dur ? Math.min(100, (s.pos / cur.dur) * 100).toFixed(2) : 0}%`;
+  const pct = `${cur.dur ? Math.min(100, (pos / cur.dur) * 100).toFixed(2) : 0}%`;
   return (
-    <div ref={scrub.ref} onPointerDown={scrub.onPointerDown} role="slider" aria-label="Seek" aria-valuemin={0} aria-valuemax={Math.round(cur.dur)} aria-valuenow={Math.round(s.pos)} aria-valuetext={fmt(s.pos)} tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.stopPropagation(); s.skipBack(); } if (e.key === 'ArrowRight') { e.stopPropagation(); s.skipFwd(); } }}
+    <div ref={scrub.ref} onPointerDown={scrub.onPointerDown} role="slider" aria-label="Seek" aria-valuemin={0} aria-valuemax={Math.round(cur.dur)} aria-valuenow={Math.round(pos)} aria-valuetext={fmt(pos)} tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.stopPropagation(); skipBack(); } if (e.key === 'ArrowRight') { e.stopPropagation(); skipFwd(); } }}
       style={{ flex: 1, height, display: 'flex', alignItems: 'center', position: 'relative', cursor: 'pointer', touchAction: 'none', ...style }}>
       <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, background: 'var(--color-neutral-800)' }} />
       <div style={{ position: 'absolute', left: 0, width: pct, height: 4, borderRadius: 2, background: 'var(--color-accent)', boxShadow: glow ? '0 0 8px color-mix(in srgb,var(--color-accent) 60%,transparent)' : undefined }} />
-      {ticks && !!cur.dur && chaptersOf(s, cur).slice(1).map((c) => (
+      {ticks && !!cur.dur && chapters.slice(1).map((c) => (
         <span key={`${c.at}-${c.t}`} style={{ position: 'absolute', left: `${(c.at / cur.dur) * 100}%`, width: 2, height: 8, borderRadius: 1, background: 'var(--color-bg)' }} />
       ))}
       {thumb && <span style={{ position: 'absolute', left: pct, width: 10, height: 10, marginLeft: -5, borderRadius: '50%', background: 'var(--color-accent-200)' }} />}
@@ -53,7 +65,7 @@ const SLEEP_OPTIONS: [string, Sleep][] = [
 
 /** Moon button + its menu. `placement` positions the menu relative to the button. */
 export function SleepButton({ id, size = 32, iconSize = 16, placement }: { id: 'sleep-bar'; size?: number; iconSize?: number; placement: CSSProperties }) {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ menu: s.menu, sleep: s.sleep, set: s.set, setSleep: s.setSleep })));
   const open = s.menu === id;
   const ref = useOutside<HTMLDivElement>(open, () => s.set({ menu: null }), `[data-sleep="${id}"] > button`);
   const active = s.sleep.mode !== 'off';
@@ -74,7 +86,7 @@ export function SleepButton({ id, size = 32, iconSize = 16, placement }: { id: '
 }
 
 function Volume() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ muted: s.muted, volume: s.volume, setVolume: s.setVolume, toggleMute: s.toggleMute })));
   const scrub = useScrub((f) => s.setVolume(f));
   const v = s.muted ? 0 : s.volume;
   return (
@@ -94,13 +106,30 @@ function Volume() {
   );
 }
 
+/** The time played, redrawn once a second rather than on every position update. */
+function Elapsed() {
+  return <>{usePlayhead((p) => fmt(p))}</>;
+}
+
+function Remaining({ dur, speed }: { dur: number; speed: number }) {
+  return <>{usePlayhead((p) => (dur ? `-${fmt((dur - p) / speed)}` : '--:--'))}</>;
+}
+
+/** The title of the chapter playing, which changes a few times an episode. */
+function ChapterName({ chapters }: { chapters: Chapter[] }) {
+  return <>{chapters[usePlayhead((p) => currentChapter(chapters, p))].t}</>;
+}
+
 export function PlayerBar() {
-  const s = useStore();
-  const cur = epInfo(s, s.cur);
-  const [back, fwd] = skipAmounts(s.sv.skip);
+  const s = useStore(useShallow((s) => ({
+    playing: s.playing, speed: s.speed, skip: s.sv.skip, npOpen: s.npOpen, screen: s.screen,
+    set: s.set, go: s.go, prevChapter: s.prevChapter, nextChapter: s.nextChapter, skipBack: s.skipBack, skipFwd: s.skipFwd,
+    togglePlay: s.togglePlay, cycleSpeed: s.cycleSpeed,
+  })));
+  const cur = useCurrent();
+  const ch = useChapters();
+  const [back, fwd] = skipAmounts(s.skip);
   if (!cur) return <IdleBar />;
-  const ch = chaptersOf(s, cur);
-  const ci = currentChapter(ch, s.pos);
   const btn: CSSProperties = { color: 'var(--color-neutral-300)' };
 
   return (
@@ -110,7 +139,7 @@ export function PlayerBar() {
         <Art bg={art(cur.show.hue)} mono={mono(cur.show.title)} img={cur.ep.imageUrl ?? cur.show.imageUrl} size={48} font={14} />
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.title}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--color-neutral-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.show.title} · {ch[ci].t}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--color-neutral-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cur.show.title} · <ChapterName chapters={ch} /></span>
         </div>
       </button>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -124,9 +153,9 @@ export function PlayerBar() {
           <GhostIcon icon="ph ph-skip-forward" title="Next chapter" size={30} style={btn} onClick={s.nextChapter} />
         </div>
         <div style={{ width: '100%', maxWidth: 560, display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--color-neutral-400)', fontVariantNumeric: 'tabular-nums' }}>
-          <span style={{ width: 44, textAlign: 'right' }}>{fmt(s.pos)}</span>
+          <span style={{ width: 44, textAlign: 'right' }}><Elapsed /></span>
           <SeekBar />
-          <span style={{ width: 44 }}>{cur.dur ? `-${fmt((cur.dur - s.pos) / s.speed)}` : '--:--'}</span>
+          <span style={{ width: 44 }}><Remaining dur={cur.dur} speed={s.speed} /></span>
         </div>
       </div>
       <div style={{ width: 270, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
@@ -142,12 +171,12 @@ export function PlayerBar() {
 
 /** Shown before anything has been played. */
 function IdleBar() {
-  const s = useStore();
+  const s = useStore(useShallow((s) => ({ first: s.queue[0], play: s.play })));
   return (
     <div style={{ height: 78, flex: 'none', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', padding: '0 var(--space-6)', background: 'var(--color-surface)', boxShadow: '0 -1px 0 var(--color-neutral-900)', color: 'var(--color-neutral-500)', fontSize: 12.5 }}>
       <span style={{ width: 48, height: 48, borderRadius: 6, background: 'var(--color-neutral-900)', display: 'grid', placeItems: 'center' }}><i className="ph ph-waveform" style={{ fontSize: 20 }} /></span>
-      <span style={{ flex: 1 }}>Nothing playing. Pick an episode{s.queue.length ? ', or start your queue' : ''}.</span>
-      {s.queue.length > 0 && <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => s.play(s.queue[0])}><i className="ph-fill ph-play" />Play queue</button>}
+      <span style={{ flex: 1 }}>Nothing playing. Pick an episode{s.first ? ', or start your queue' : ''}.</span>
+      {s.first && <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => s.play(s.first)}><i className="ph-fill ph-play" />Play queue</button>}
     </div>
   );
 }

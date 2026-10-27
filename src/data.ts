@@ -103,5 +103,8 @@ export interface EpisodeMeta {
   transcriptTimed?: boolean;
 }
 
+// One shared array, so asking for the chapters of an episode without any returns the same value every time.
+const WHOLE_EPISODE: Chapter[] = [{ t: 'Full episode', at: 0 }];
+
 export const chaptersFor = (ep: EpisodeInfo, meta?: EpisodeMeta): Chapter[] =>
-  meta?.chapters?.length ? meta.chapters : ep.ep.inlineChapters?.length ? ep.ep.inlineChapters : [{ t: 'Full episode', at: 0 }];
+  meta?.chapters?.length ? meta.chapters : ep.ep.inlineChapters?.length ? ep.ep.inlineChapters : WHOLE_EPISODE;
