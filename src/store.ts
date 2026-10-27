@@ -548,7 +548,8 @@ export const useStore = create<State>()(
           const ci = currentChapter(ch, s.pos);
           if (ci < ch.length - 1) get().seek(ch[ci + 1].at);
         },
-        cycleSpeed: () => set((s) => ({ speed: SPEEDS[(SPEEDS.indexOf(s.speed) + 1) % SPEEDS.length] })),
+        // The next faster preset from wherever the speed is now (a show can set one that isn't a preset), wrapping to the slowest.
+        cycleSpeed: () => set((s) => ({ speed: SPEEDS.find((p) => p > s.speed + 1e-9) ?? SPEEDS[0] })),
         setSpeed: (speed) => set({ speed, palette: false }),
         setVolume: (v) => set({ volume: Math.max(0, Math.min(1, v)), muted: false }),
         toggleMute: () => set((s) => ({ muted: !s.muted })),
