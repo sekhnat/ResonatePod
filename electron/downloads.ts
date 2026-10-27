@@ -36,8 +36,22 @@ class HttpError extends Error {
   constructor(readonly status: number) { super(`HTTP ${status}`); }
 }
 
-/** Network errors, stalls, timeouts, rate limits and server errors are worth retrying; other HTTP errors and bad jobs are not. */
-const retryable = (err: unknown) => !(err instanceof JobError) && (!(err instanceof HttpError) || err.status === 408 || err.status === 429 || err.status >= 500);
+// Trying again won't free disk space or make a folder writable.
+const DISK_CODES = new Set(['ENOSPC', 'EDQUOT', 'EACCES', 'EPERM', 'EROFS', 'EISDIR', 'ENOTDIR', 'ENAMETOOLONG']);
+const codeOf = (err: unknown) => (err as NodeJS.ErrnoException | undefined)?.code ?? '';
+
+/** Network errors, stalls, timeouts, rate limits and server errors are worth retrying; other HTTP errors, bad jobs and disk problems are not. */
+export const retryable = (err: unknown) =>
+  !(err instanceof JobError) && !DISK_CODES.has(codeOf(err)) && (!(err instanceof HttpError) || err.status === 408 || err.status === 429 || err.status >= 500);
+
+/** What to tell the user about a failed download. */
+export function failureMessage(err: unknown): string {
+  switch (codeOf(err)) {
+    case 'ENOSPC': case 'EDQUOT': return 'there’s no space left for the download';
+    case 'EACCES': case 'EPERM': case 'EROFS': return 'the download folder can’t be written to';
+    default: return (err as Error).message;
+  }
+}
 
 /**
  * Downloads episodes with a concurrency limit. Partial data goes to `<file>.part`;
@@ -131,7 +145,7 @@ export class DownloadManager extends EventEmitter {
     if (r.ctrl.signal.aborted && !stalled) return; // paused or cancelled
     if (this.running.get(r.job.key) !== r) return;
     this.running.delete(r.job.key);
-    const message = stalled ? 'the connection stalled' : (err as Error).message;
+    const message = stalled ? 'the connection stalled' : failureMessage(err);
     const delay = this.retryDelays[r.attempt];
     if (retryable(err) && delay != null) {
       const item = { job: r.job, attempt: r.attempt + 1 };
@@ -168,24 +182,33 @@ export class DownloadManager extends EventEmitter {
       const total = fromRange || (len ? len + received : 0);
       this.emitEvent({ type: 'progress', key: r.job.key, received, total, speed: 0 });
       const out = createWriteStream(part, { flags: resumed ? 'a' : 'w' });
+      // A full disk or an unwritable folder surfaces as a stream error; without a listener it would take the app down.
+      // It can arrive after the last read, so it is remembered as well as raced against the reads.
+      const write: { error?: Error } = {};
+      const writeFailed = new Promise<never>((_, reject) => out.on('error', (err) => { write.error ??= err; reject(err); }));
+      writeFailed.catch(() => {});
       const reader = res.body!.getReader();
       let lastEmit = 0;
       let window = { t: Date.now(), bytes: received };
       let speed = 0;
       try {
         for (;;) {
-          const { done, value } = await reader.read();
+          const { done, value } = await Promise.race([reader.read(), writeFailed]);
           if (done) break;
-          if (!out.write(value)) await new Promise((ok) => out.once('drain', ok));
+          if (!out.write(value)) await Promise.race([new Promise((ok) => out.once('drain', ok)), writeFailed]);
           received += value.byteLength;
           const now = Date.now();
           lastData = now;
           if (now - window.t >= 1000) { speed = ((received - window.bytes) * 1000) / (now - window.t); window = { t: now, bytes: received }; }
           if (now - lastEmit > 250) { lastEmit = now; this.emitEvent({ type: 'progress', key: r.job.key, received, total, speed }); }
         }
+      } catch (err) {
+        reader.cancel().catch(() => {});
+        throw err;
       } finally {
         await new Promise<void>((ok) => out.end(ok));
       }
+      if (write.error) throw write.error;
       if (r.ctrl.signal.aborted) return;
       if (total && received < total) throw new Error('the connection closed early');
       await fs.rename(part, dest);
