@@ -86,6 +86,31 @@ describe('subscribing and refreshing', () => {
     expect(after.eps[2]).toBe(before.eps[2]);
   });
 
+  it('keeps episodes the feed has dropped while something refers to them, and lets the rest go', async () => {
+    // The feed now lists only a new episode. 40 was downloaded and 42 is new (in the inbox); 41 has nothing recorded.
+    st().onDownloadEvent({ type: 'done', key: K40, path: '/p/40.mp3', bytes: 10 });
+    feedBody = feed.replace(/<item>[\s\S]*?<\/item>/g, '').replace('</channel>', `${NEW_ITEM}</channel>`);
+    await st().refresh();
+    expect(st().shows[0].eps.map((e) => e.guid)).toEqual(['kp:ep:43', 'kp:ep:42', 'https://cdn.example/kp40.mp3']); // newest first; 41 is gone
+    expect(epInfo(st(), K40)?.title).toBeTruthy(); // the download still resolves
+    expect(getEp(st(), K40).file).toBe('/p/40.mp3');
+    expect(inboxKeys(st())).toContain(K42);
+  });
+
+  it('keeps a dropped episode that is queued', async () => {
+    useStore.setState({ queue: [K41] });
+    feedBody = feed.replace(/<item>[\s\S]*?<\/item>/g, '').replace('</channel>', `${NEW_ITEM}</channel>`);
+    await st().refresh();
+    expect(st().shows[0].eps.map((e) => e.guid)).toContain('https://kernelpanic.example/41');
+  });
+
+  it('keeps the dropped episode a download is in flight for', async () => {
+    useStore.setState({ dl: [{ key: K41, received: 1, total: 10, speed: 1 }] });
+    feedBody = feed.replace(/<item>[\s\S]*?<\/item>/g, '').replace('</channel>', `${NEW_ITEM}</channel>`);
+    await st().refresh();
+    expect(st().shows[0].eps.map((e) => e.guid)).toContain('https://kernelpanic.example/41');
+  });
+
   it('keeps a duration the player measured when the feed carries none', async () => {
     useStore.setState({ shows: st().shows.map((s) => ({ ...s, eps: s.eps.map((e) => (e.guid === 'https://cdn.example/kp40.mp3' ? { ...e, duration: 1234 } : e)) })) });
     feedBody = feed.replace('<itunes:duration>58:00</itunes:duration>', '');

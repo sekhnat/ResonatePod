@@ -865,11 +865,20 @@ export const useStore = create<State>()(
                   for (const e of added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
                   // Keep durations the player measured when the feed doesn't carry one, and the very same object for an
                   // episode that didn't change, so what is cached per episode (and per list) stays valid across refreshes.
-                  const merged: Episode[] = upd.eps.map((e) => {
+                  const current: Episode[] = upd.eps.map((e) => {
                     const old = prev.get(e.guid);
                     const next = { ...e, duration: e.duration || old?.duration || 0 };
                     return old && sameEpisode(old, next) ? old : next;
                   });
+                  // Feeds often list only their latest episodes. One the feed has dropped stays while anything refers to it
+                  // (a downloaded file, play history, the queue, the playing episode), so those keep resolving.
+                  const listed = new Set(upd.eps.map((e) => e.guid));
+                  const dropped = live.eps.filter((e) => {
+                    if (listed.has(e.guid)) return false;
+                    const key = epKey(sh.id, e.guid);
+                    return key in s.eps || s.cur === key || s.queue.includes(key) || s.dlPending.includes(key) || dlByKey(s.dl).has(key);
+                  });
+                  const merged = dropped.length ? [...current, ...dropped].sort((a, b) => b.pubDate - a.pubDate) : current;
                   const unchanged = merged.length === live.eps.length && merged.every((e, i) => e === live.eps[i]);
                   set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: unchanged ? x.eps : merged } : x)) });
                 } catch {
