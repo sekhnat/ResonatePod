@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { renameSync } from 'node:fs';
-import type { EpisodeRecord, EpStateRecord, LibraryPatch, LibrarySnapshot, LoadedShow, ShowRecord } from '../../shared/library';
+import type { EpisodeRecord, EpStateRecord, LibraryPatch, LibrarySnapshot, ShowRecord } from '../../shared/library';
 import { migrate, schemaVersion } from './migrations';
 
 interface EpStateRow { key: string; played: number; pos: number; inbox: number; file: string | null; fileBytes: number | null; playedAt: number | null; lastPlayed: number | null }
@@ -32,17 +32,28 @@ export class LibraryDb {
     return !this.db.prepare('SELECT 1 FROM shows LIMIT 1').get() && !this.db.prepare('SELECT 1 FROM kv LIMIT 1').get();
   }
 
-  load(): LibrarySnapshot {
-    const shows: LoadedShow[] = [];
-    const byId = new Map<string, LoadedShow>();
+  /**
+   * The whole library as one JSON string (see LibrarySnapshot). The rows already hold JSON, so they are joined, not
+   * parsed and built again: the window parses the string once. Sent as an object, the same data would be parsed here
+   * and then copied to the window object by object.
+   */
+  loadJson(): string {
+    const shows: { id: string; data: string }[] = [];
+    const byId = new Map<string, string[]>();
     for (const r of this.db.prepare('SELECT id, data FROM shows ORDER BY ord').all() as { id: string; data: string }[]) {
-      const show: LoadedShow = { ...JSON.parse(r.data), id: r.id, eps: [] };
-      shows.push(show);
-      byId.set(r.id, show);
+      shows.push(r);
+      byId.set(r.id, []);
     }
     for (const r of this.db.prepare('SELECT show_id, data FROM episodes ORDER BY show_id, pub_date DESC, guid').iterate() as Iterable<{ show_id: string; data: string }>) {
-      byId.get(r.show_id)?.eps.push(JSON.parse(r.data));
+      byId.get(r.show_id)?.push(r.data);
     }
+    // Each data column is a JSON object (JSON.stringify of the record without its id and episodes): reopen it
+    // before its closing brace and add the two keys that were left out. A key repeated later in an object wins.
+    const showsJson = shows.map(({ id, data }) => {
+      const open = data.slice(0, data.lastIndexOf('}')).trimEnd();
+      return `${open}${open.length > 1 ? ',' : ''}"id":${JSON.stringify(id)},"eps":[${byId.get(id)!.join(',')}]}`;
+    });
+
     const epState: Record<string, EpStateRecord> = {};
     const states = this.db.prepare('SELECT key, played, pos, inbox, file, file_bytes AS fileBytes, played_at AS playedAt, last_played AS lastPlayed FROM ep_state');
     for (const r of states.iterate() as Iterable<EpStateRow>) {
@@ -53,9 +64,13 @@ export class LibraryDb {
       if (r.lastPlayed != null) st.lastPlayed = r.lastPlayed;
       epState[r.key] = st;
     }
-    const kv: Record<string, unknown> = {};
-    for (const r of this.db.prepare('SELECT key, value FROM kv').all() as { key: string; value: string }[]) kv[r.key] = JSON.parse(r.value);
-    return { shows, epState, kv };
+    const kv = (this.db.prepare('SELECT key, value FROM kv').all() as { key: string; value: string }[])
+      .map((r) => `${JSON.stringify(r.key)}:${r.value}`);
+    return `{"shows":[${showsJson.join(',')}],"epState":${JSON.stringify(epState)},"kv":{${kv.join(',')}}}`;
+  }
+
+  load(): LibrarySnapshot {
+    return JSON.parse(this.loadJson()) as LibrarySnapshot;
   }
 
   /** Show notes for one episode; empty when it has none. */

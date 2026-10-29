@@ -91,7 +91,7 @@ function electronPlatform(api: ResonateApi): Platform {
         api.http(url, req, id).then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
       });
     },
-    libLoad: api.libLoad,
+    libLoad: async () => JSON.parse(await api.libLoadJson()) as LibrarySnapshot,
     libPatch: api.libPatch,
     libNotes: api.libNotes,
     mediaUrl: (file, url) => (file ? `resonate-media://file/${encodeURIComponent(file)}` : `resonate-media://remote/${encodeURIComponent(url)}`),
