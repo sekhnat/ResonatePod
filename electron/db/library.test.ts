@@ -13,6 +13,36 @@ it('runs under Electron, whose ABI the database is built for', () => {
   expect(process.versions.electron).toBeTruthy();
 });
 
+describe('loadJson', () => {
+  it('is the library as JSON text, whatever the records hold', () => {
+    const db = new LibraryDb(':memory:');
+    const tricky = 'He said "hi" \\ \n\t \u2028 \u{1F3A7} é';
+    db.patch({
+      shows: { upsert: [{ id: 'bare' } as never, { id: 'a"b', title: tricky, hue: 0 }, { id: 'empty', title: '' }] },
+      episodes: { upsert: [{ show: 'a"b', ep: { guid: 'g"1', pubDate: 5, title: tricky, duration: 1, enclosureUrl: 'https://x/y.mp3' } }] },
+      epState: { upsert: { 'a"b:g"1': { played: true, pos: 2.5, inbox: false, file: '/p/é.mp3' } } },
+      kv: { folder: '~/Podcasts', q: ['a"b:g"1'], tg: { auto: true }, n: 0, nothing: null },
+    });
+    const text = db.loadJson();
+    expect(typeof text).toBe('string');
+    const snap = JSON.parse(text);
+    expect(snap).toEqual(db.load());
+    expect(snap.shows.map((s: { id: string }) => s.id)).toEqual(['bare', 'a"b', 'empty']);
+    expect(snap.shows[0]).toEqual({ id: 'bare', eps: [] });
+    expect(snap.shows[1]).toMatchObject({ id: 'a"b', title: tricky });
+    expect(snap.shows[1].eps).toEqual([{ guid: 'g"1', pubDate: 5, title: tricky, duration: 1, enclosureUrl: 'https://x/y.mp3' }]);
+    expect(snap.epState['a"b:g"1']).toEqual({ played: true, pos: 2.5, inbox: false, file: '/p/é.mp3' });
+    expect(snap.kv).toEqual({ folder: '~/Podcasts', q: ['a"b:g"1'], tg: { auto: true }, n: 0, nothing: null });
+    db.close();
+  });
+
+  it('is an empty library when nothing was saved', () => {
+    const db = new LibraryDb(':memory:');
+    expect(JSON.parse(db.loadJson())).toEqual({ shows: [], epState: {}, kv: {} });
+    db.close();
+  });
+});
+
 describe('the database file', () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(path.join(tmpdir(), 'res-db-')); });

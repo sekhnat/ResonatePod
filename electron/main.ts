@@ -473,8 +473,8 @@ function registerIpc() {
   ipcMain.handle('autostart:set', (_e, on: boolean) => setAutostart(on));
 
   ipcMain.handle('lib:load', () => {
-    const snapshot = library!.load();
-    console.log(`Library loaded for the window ${Math.round(process.uptime() * 1000)} ms after launch`);
+    const snapshot = library!.loadJson(); // a string: the window parses it, instead of an object graph being copied to it
+    console.log(`Library read for the window ${Math.round(process.uptime() * 1000)} ms after launch`);
     return snapshot;
   });
   ipcMain.handle('lib:patch', (_e, patch: LibraryPatch) => library!.patch(patch));

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Chapter, DownloadMessage, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
-import type { LibraryPatch, LibrarySnapshot } from '../shared/library';
+import type { LibraryPatch } from '../shared/library';
 
 const env = ipcRenderer.sendSync('env') as { desktop: 'KDE' | 'GNOME'; hostname: string };
 
@@ -9,7 +9,8 @@ const api = {
   /** `id` names the request so cancelHttp can stop it. */
   http: (url: string, req?: HttpRequest, id?: string): Promise<HttpResponse> => ipcRenderer.invoke('http', url, req, id),
   cancelHttp: (id: string) => ipcRenderer.send('http:cancel', id),
-  libLoad: (): Promise<LibrarySnapshot> => ipcRenderer.invoke('lib:load'),
+  /** The library as JSON text, which the page parses itself: an object would be copied across object by object. */
+  libLoadJson: (): Promise<string> => ipcRenderer.invoke('lib:load'),
   libPatch: (patch: LibraryPatch): Promise<void> => ipcRenderer.invoke('lib:patch', patch),
   libNotes: (show: string, guid: string): Promise<string> => ipcRenderer.invoke('lib:notes', show, guid),
   download: {
