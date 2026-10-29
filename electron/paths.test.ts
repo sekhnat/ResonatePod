@@ -76,6 +76,25 @@ describe('DownloadRoots', () => {
     expect(await roots.resolve(path.join(media, 'a.mp3'))).toBe(path.join(media, 'a.mp3'));
     expect(JSON.parse(readFileSync(settings(), 'utf8')).downloadRoots).toEqual([pods, media]);
   });
+
+  it('makes resolve() and add() wait for a load that is still running', async () => {
+    const roots = new DownloadRoots(settings(), pods);
+    let adopted!: (r: string[]) => void;
+    const adopting = new Promise<string[]>((r) => { adopted = r; });
+    const loading = roots.load(() => adopting);
+    const media = path.join(tmp, 'media');
+    const early = roots.resolve(path.join(media, 'a.mp3')); // asked before the list exists
+    adopted([media]);
+    await loading;
+    expect(await early).toBe(path.join(media, 'a.mp3'));
+    expect(await roots.resolve(path.join(pods, 'Show', 'a.mp3'))).toBe(path.join(pods, 'Show', 'a.mp3'));
+  });
+
+  it('allows nothing when the load fails, instead of failing every caller', async () => {
+    const roots = new DownloadRoots(settings(), pods);
+    await expect(roots.load(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
+    expect(await roots.resolve(path.join(pods, 'Show', 'a.mp3'))).toBeNull();
+  });
 });
 
 describe('rootsFromLibrary', () => {
