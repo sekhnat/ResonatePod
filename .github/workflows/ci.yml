@@ -42,7 +42,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - name: Audit the dependencies the app ships
-        run: npm audit --omit=dev --audit-level=high
+        run: node scripts/audit-shipped.mjs
       - name: Unit tests, with coverage thresholds
         run: npm run test:coverage
       - name: Database tests (under Electron's Node)
