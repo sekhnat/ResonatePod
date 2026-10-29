@@ -1,5 +1,5 @@
 import type { LibraryPatch, LibrarySnapshot } from '../shared/library';
-import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
+import type { Chapter, DownloadMessage, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
 import type { ResonateApi } from '../electron/preload';
 import { downloadText } from './lib/opml';
 import { MemoryLibrary, type MemoryDump } from './lib/memory-library';
@@ -33,7 +33,7 @@ export interface Platform {
     cancel(key: string): void;
     setPaused(paused: boolean): void;
     setConcurrency(n: number): void;
-    onEvent(cb: (e: DownloadEvent) => void): () => void;
+    onEvent(cb: (e: DownloadMessage) => void): () => void;
   };
   deleteFile(file: string): Promise<void>;
   /** Moves files from one download folder to another; returns the ones that moved. */

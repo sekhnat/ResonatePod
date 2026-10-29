@@ -292,6 +292,30 @@ describe('downloads and storage', () => {
     expect(trackedBytes(st().eps)).toBe(100);
   });
 
+  it('applies a batch of progress in one store update, and skips downloads that are gone', () => {
+    useStore.setState({ dl: [
+      { key: K42, received: 0, total: 100, speed: 0 },
+      { key: K41, received: 5, total: 0, speed: 0, retryAt: 9 },
+      { key: K40, received: 7, total: 70, speed: 3 },
+    ] });
+    let updates = 0;
+    const unsubscribe = useStore.subscribe(() => { updates++; });
+    st().onDownloadEvent({ type: 'progressBatch', items: [
+      { key: K42, received: 50, total: 100, speed: 10 },
+      { key: K41, received: 20, total: 200, speed: 4 },
+      { key: 'gone:x', received: 1, total: 1, speed: 1 }, // cancelled while the batch was on its way
+    ] });
+    unsubscribe();
+    expect(updates).toBe(1);
+    const [a, b, c] = st().dl;
+    expect(a).toMatchObject({ key: K42, received: 50, speed: 10, active: true });
+    expect(b).toMatchObject({ key: K41, received: 20, total: 200, active: true, retryAt: undefined });
+    expect(c).toEqual({ key: K40, received: 7, total: 70, speed: 3 });
+    const before = st().dl;
+    st().onDownloadEvent({ type: 'progressBatch', items: [{ key: 'gone:y', received: 1, total: 1, speed: 1 }] });
+    expect(st().dl).toBe(before); // nothing listed moved: no new state
+  });
+
   it('counts what the tracked downloads take up, and follows deletions and unsubscribing', async () => {
     const GBx = 1024 ** 3;
     useStore.setState({ eps: { ...st().eps,

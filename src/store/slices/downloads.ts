@@ -44,6 +44,18 @@ export const createDownloadsSlice: Slice<'startDownload' | 'cancelDownload' | 'm
     toggleDlPause: () => set((s) => ({ dlPaused: !s.dlPaused })),
     onDownloadEvent: (e) => {
       const s = get();
+      if (e.type === 'progressBatch') {
+        // One update for all of them; a download that was cancelled or finished since is no longer listed, and is skipped.
+        const latest = new Map(e.items.map((p) => [p.key, p]));
+        if (!s.dl.some((d) => latest.has(d.key))) return;
+        set({
+          dl: s.dl.map((d) => {
+            const p = latest.get(d.key);
+            return p ? { ...d, received: p.received, total: p.total || d.total || 0, speed: p.speed, retryAt: undefined, active: true } : d;
+          }),
+        });
+        return;
+      }
       const patch = (p: Partial<ActiveDl>) => set({ dl: s.dl.map((d) => (d.key === e.key ? { ...d, ...p } : d)) });
       if (e.type === 'progress') {
         const d = s.dl.find((x) => x.key === e.key);

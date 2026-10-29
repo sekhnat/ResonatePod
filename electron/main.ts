@@ -11,6 +11,7 @@ import { DownloadManager, diskUsage, expandHome, moveFiles } from './downloads';
 import { DownloadRoots, rootsFromLibrary } from './paths';
 import { hopHeaders, originOf } from './hops';
 import { checkRequest } from './bridge';
+import { batchProgress } from './progress-batch';
 import { secretStatus } from './secrets';
 import { readJsonFile, updateJsonFile, writeFileAtomicSync } from './files';
 import { createLogger, type Logger } from './log';
@@ -490,7 +491,7 @@ function registerIpc() {
   ipcMain.handle('dl:cancel', (_e, key: string) => downloads.cancel(key));
   ipcMain.handle('dl:paused', (_e, paused: boolean) => downloads.setPaused(paused));
   ipcMain.handle('dl:concurrency', (_e, n: number) => downloads.setConcurrency(n));
-  downloads.on('event', (ev) => win?.webContents.send('dl:event', ev));
+  downloads.on('event', batchProgress((ev) => win?.webContents.send('dl:event', ev)));
 
   // Every path from the renderer goes through roots.resolve, and only what it returns is touched.
   ipcMain.handle('fs:delete', async (_e, file: string) => {
