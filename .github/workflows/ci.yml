@@ -1,13 +1,15 @@
 name: CI
 
-# Every push and pull request: typecheck, lint, an audit of the shipped dependencies, unit and database tests with
-# coverage thresholds, performance budgets, and the Electron end-to-end test,
+# Every pull request, and every push to main: typecheck, lint, an audit of the shipped dependencies, unit and database
+# tests with coverage thresholds, performance budgets, and the Electron end-to-end test,
 # then build the AppImage and .deb and smoke-test the packaged app.
 # Pushing a tag like v1.4.0 publishes those files as a GitHub release.
+# Other branches get no run of their own: a branch with a pull request is covered by the pull_request run (a push to
+# it used to start the same pipeline twice), and one without can be run by hand from the Actions tab (workflow_dispatch).
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
