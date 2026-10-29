@@ -195,23 +195,35 @@ export function startEngine() {
     if (trimming && s.speed < TRIM_RATE) saved += (ANALYSE_MS / 1000) * (TRIM_RATE / s.speed - 1);
     if (saved >= 1) { s.addTrimSaved(saved); saved = 0; }
   }
-  // Only listen while something is playing; a paused player has no silence to skip.
+  // Only listen while something is playing and the show wants its silences skipped: a paused player has none to skip,
+  // and for a show with trimming off the timer would wake 20 times a second to do nothing.
   let analyseTimer: ReturnType<typeof setInterval> | null = null;
-  function startAnalyser() {
-    if (analyser && !analyseTimer) analyseTimer = setInterval(tick, ANALYSE_MS);
-  }
   function stopAnalyser() {
     if (analyseTimer) { clearInterval(analyseTimer); analyseTimer = null; }
     silentMs = 0;
     if (trimming) { trimming = false; audio.playbackRate = st().speed; }
   }
-  audio.addEventListener('play', startAnalyser);
+  function syncAnalyser() {
+    const s = st();
+    if (analyser && s.playing && !audio.paused && trimWanted(s)) {
+      if (!analyseTimer) analyseTimer = setInterval(tick, ANALYSE_MS);
+    } else if (analyseTimer) {
+      stopAnalyser();
+    }
+  }
+  audio.addEventListener('play', syncAnalyser);
   for (const ev of ['pause', 'ended', 'emptied']) audio.addEventListener(ev, stopAnalyser);
 
   // Only what apply() acts on, so the rest of the store changing (progress, toasts, the screen) doesn't wake it.
   useStore.subscribe(
     (s) => ({ hydrated: s.hydrated, cur: s.cur, shows: s.shows, file: s.cur ? s.eps[s.cur]?.file : undefined, playing: s.playing, speed: s.speed, volume: s.volume, muted: s.muted }),
     () => apply(st()),
+    { equalityFn: shallow },
+  );
+  // Whether the timer should run follows the same things trimWanted() reads, and whether it is playing.
+  useStore.subscribe(
+    (s) => ({ cur: s.cur, shows: s.shows, ovr: s.ovr, tg: s.tg, playing: s.playing }),
+    syncAnalyser,
     { equalityFn: shallow },
   );
   apply(st());
