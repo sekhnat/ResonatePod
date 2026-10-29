@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { Chapter, DownloadEvent, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
+import type { Chapter, DownloadMessage, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
 import type { LibraryPatch, LibrarySnapshot } from '../shared/library';
 
 const env = ipcRenderer.sendSync('env') as { desktop: 'KDE' | 'GNOME'; hostname: string };
@@ -17,8 +17,8 @@ const api = {
     cancel: (key: string) => ipcRenderer.invoke('dl:cancel', key),
     setPaused: (paused: boolean) => ipcRenderer.invoke('dl:paused', paused),
     setConcurrency: (n: number) => ipcRenderer.invoke('dl:concurrency', n),
-    onEvent: (cb: (e: DownloadEvent) => void) => {
-      const h = (_: unknown, e: DownloadEvent) => cb(e);
+    onEvent: (cb: (e: DownloadMessage) => void) => {
+      const h = (_: unknown, e: DownloadMessage) => cb(e);
       ipcRenderer.on('dl:event', h);
       return () => ipcRenderer.off('dl:event', h);
     },

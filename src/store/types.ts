@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { EpisodeAction } from '../../shared/gpodder';
 import type { Override, Settings } from '../../shared/settings';
-import type { DownloadEvent } from '../../shared/types';
+import type { DownloadMessage } from '../../shared/types';
 import type { EpisodeMeta, Show } from '../data';
 import type { DirectoryResult, SourceChoice } from '../lib/directory';
 import type { OpmlFeed } from '../lib/opml';
@@ -160,7 +160,7 @@ export interface Actions {
   signInFeed(url: string, user: string, password: string, showId?: string): Promise<'ok' | 'denied' | 'failed'>;
   deleteFile(key: string, quiet?: boolean): Promise<void>;
   toggleDlPause(): void;
-  onDownloadEvent(e: DownloadEvent): void;
+  onDownloadEvent(e: DownloadMessage): void;
   updateUsage(): Promise<void>;
   cleanupStorage(opts?: { quiet?: boolean }): Promise<void>;
 

@@ -4,6 +4,7 @@ import { flushEpisodeState, flushSave } from '../persistence';
 import { dlSummary } from '../model';
 import { platform } from '../platform';
 import { startEngine } from '../audio/engine';
+import { trayPusher } from './tray';
 
 const HOUR = 3600000;
 let started = false;
@@ -18,7 +19,7 @@ export function startServices() {
   platform.download.onEvent((e) => st().onDownloadEvent(e));
   let blocked: boolean | null = null;
   let par: number | null = null;
-  let traySig = '';
+  const pushTray = trayPusher((t) => platform.updateTray(t));
   let folder: string | null = null;
   let autostart: boolean | null = null;
 
@@ -40,8 +41,7 @@ export function startServices() {
       downloads: dlSummary(s),
       dlPaused: s.dlPaused,
     };
-    const sig = JSON.stringify(tray);
-    if (sig !== traySig) { traySig = sig; platform.updateTray(tray); }
+    pushTray(tray);
   };
   // What sync() reads, and no more: playback position, toasts and screen changes don't run it.
   useStore.subscribe(

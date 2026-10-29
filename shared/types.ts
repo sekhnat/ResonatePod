@@ -80,13 +80,18 @@ export interface DownloadJob {
   suffix?: string;
 }
 
+export interface DownloadProgress { key: string; received: number; total: number; speed: number }
+
 export type DownloadEvent =
-  | { type: 'progress'; key: string; received: number; total: number; speed: number }
+  | ({ type: 'progress' } & DownloadProgress)
   | { type: 'done'; key: string; path: string; bytes: number }
   | { type: 'retry'; key: string; attempt: number; at: number; message: string }
   /** The job is waiting for a free slot (a due retry, or one pushed out by pause or a lower limit). */
   | { type: 'requeue'; key: string }
   | { type: 'error'; key: string; message: string };
+
+/** What the window receives: the manager's events, except that progress comes as one batch for every download that moved. */
+export type DownloadMessage = DownloadEvent | { type: 'progressBatch'; items: DownloadProgress[] };
 
 export interface TrayState {
   title: string;
