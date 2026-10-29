@@ -1,4 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
+import { plainText } from './plain-text';
 import type { Chapter, Episode, Feed } from './types';
 
 const parser = new XMLParser({
@@ -41,18 +42,6 @@ const parseNpt = (s: string) => {
   const frac = s.includes('.') ? parseFloat('0.' + s.split('.').pop()) : 0;
   return parseDuration(main) + frac;
 };
-
-/** Strip markup from show notes; the UI renders plain text only. */
-export function plainText(html: string): string {
-  return html
-    .replace(/<(br|\/p|\/li|\/h\d)\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 const TRANSCRIPT_PREF = ['text/vtt', 'application/x-subrip', 'application/srt', 'application/json', 'text/html', 'text/plain'];
 
@@ -123,15 +112,5 @@ export function parseFeed(xml: string): Feed {
   };
 }
 
-/** Rough release cadence from the gaps between recent episodes. */
-export function cadence(episodes: Pick<Episode, 'pubDate'>[]): string {
-  const ds = episodes.map((e) => e.pubDate).filter(Boolean).slice(0, 7);
-  if (ds.length < 3) return 'Occasional';
-  const gaps = ds.slice(1).map((d, i) => (ds[i] - d) / 86400000).sort((a, b) => a - b);
-  const median = gaps[Math.floor(gaps.length / 2)];
-  if (median <= 1.5) return 'Daily';
-  if (median <= 9) return 'Weekly';
-  if (median <= 18) return 'Fortnightly';
-  if (median <= 40) return 'Monthly';
-  return 'Occasional';
-}
+export { cadence } from './cadence';
+export { plainText } from './plain-text';

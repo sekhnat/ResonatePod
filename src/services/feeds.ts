@@ -1,4 +1,4 @@
-import { cadence } from '../../shared/feed';
+import { cadence } from '../../shared/cadence';
 import type { HttpResponse } from '../../shared/types';
 import { parseFeedAsync } from '../feed-parse';
 import { hueFor, sameEpisode, type Episode, type Show } from '../data';
