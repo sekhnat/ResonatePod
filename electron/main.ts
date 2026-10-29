@@ -48,6 +48,8 @@ let quitting = false;
 // ---------- feed credentials (HTTP Basic, per origin) ----------
 
 const credentials = new Map<string, string>();
+/** Settles once the saved logins are read (the keyring can be slow); requests that may need one wait for it. */
+let credsReady: Promise<void> = Promise.resolve();
 const authFor = (url: string): Record<string, string> => {
   const c = credentials.get(originOf(url));
   return c ? { Authorization: c } : {};
@@ -68,7 +70,7 @@ const rewrite = (url: string) => {
  * started with, so the login for the first origin would go to wherever the server points it, a CDN or a tracker, and it
  * can't be told to stop (a "manual" redirect makes it throw). `toFetch` rewrites a URL just before it is requested.
  */
-function fetchFollowing(url: string, init: { headers?: Record<string, string>; signal?: AbortSignal } = {}, toFetch = (u: string) => u): Promise<Response> {
+function fetchFollowingNow(url: string, init: { headers?: Record<string, string>; signal?: AbortSignal } = {}, toFetch = (u: string) => u): Promise<Response> {
   return new Promise((resolve, reject) => {
     let r!: Electron.ClientRequest;
     let current = url;
@@ -107,6 +109,9 @@ function fetchFollowing(url: string, init: { headers?: Record<string, string>; s
     open(url);
   });
 }
+
+/** fetchFollowingNow, once the saved logins are read. */
+const fetchFollowing = async (...args: Parameters<typeof fetchFollowingNow>) => { await credsReady; return fetchFollowingNow(...args); };
 
 const downloads = new DownloadManager((url, init) => fetchFollowing(url, init));
 
@@ -161,7 +166,10 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   if (st.maximized) win.maximize();
-  win.once('ready-to-show', () => { if (!process.argv.includes('--hidden') || !tray) win?.show(); });
+  win.once('ready-to-show', () => {
+    console.log(`Window ready to show ${Math.round(process.uptime() * 1000)} ms after launch`);
+    if (!process.argv.includes('--hidden') || !tray) win?.show();
+  });
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   const queueSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveWinState, 500); };
   for (const ev of ['resize', 'move', 'maximize', 'unmaximize'] as const) win.on(ev as 'resize', queueSave);
@@ -315,11 +323,14 @@ const HTTP_MAX_BYTES = 50 * 1024 * 1024;
 /** Requests the page may still cancel, by the name it gave them. */
 const cancellers = new Map<string, () => void>();
 
+/** requestNow, once the saved logins are read. */
+const request = async (...args: Parameters<typeof requestNow>) => { await credsReady; return requestNow(...args); };
+
 /**
  * GET/POST with redirects followed by hand, so we know whether every hop was permanent. A redirect to another origin
  * is a new request without the first origin's login (see hopHeaders); a POST isn't followed to another origin at all.
  */
-function request(url: string, req: HttpRequest, id?: string): Promise<TextResponse> {
+function requestNow(url: string, req: HttpRequest, id?: string): Promise<TextResponse> {
   return new Promise((resolve, reject) => {
     let r!: Electron.ClientRequest;
     let current = url;
@@ -445,6 +456,7 @@ function registerIpc() {
   });
 
   ipcMain.handle('auth:set', async (_e, url: string, user: string | null, password: string | null) => {
+    await credsReady; // the saved logins are still being read, and would overwrite this one
     const origin = originOf(url);
     if (!origin) return;
     const value = user == null ? null : 'Basic ' + Buffer.from(`${user}:${password ?? ''}`).toString('base64');
@@ -459,7 +471,11 @@ function registerIpc() {
   });
   ipcMain.handle('autostart:set', (_e, on: boolean) => setAutostart(on));
 
-  ipcMain.handle('lib:load', () => library!.load());
+  ipcMain.handle('lib:load', () => {
+    const snapshot = library!.load();
+    console.log(`Library loaded for the window ${Math.round(process.uptime() * 1000)} ms after launch`);
+    return snapshot;
+  });
   ipcMain.handle('lib:patch', (_e, patch: LibraryPatch) => library!.patch(patch));
   ipcMain.handle('lib:notes', (_e, show: string, guid: string) => library!.notes(String(show), String(guid)));
 
@@ -557,8 +573,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showWindow);
   app.whenReady().then(async () => {
     startLogging();
-    await loadCredentials();
-    await roots.load(() => fs.readFile(dataFile('library.json'), 'utf8').then(rootsFromLibrary, () => []));
+    // Reading the keyring can take a while (or wait for an unlock), and nothing on screen needs it: the window opens
+    // first, and what needs the logins or the download folders waits for them (credsReady, roots).
+    const t0 = Date.now();
+    credsReady = loadCredentials().catch((err) => console.warn('Saved logins could not be read:', err));
+    const rootsReady = roots.load(() => fs.readFile(dataFile('library.json'), 'utf8').then(rootsFromLibrary, () => []));
     const opened = openLibrary(dataFile('library.db'));
     library = opened.db;
     if (opened.recovered) console.warn(`library.db was damaged; kept as ${opened.recovered} and started a new library`);
@@ -567,6 +586,7 @@ if (!app.requestSingleInstanceLock()) {
       const legacy = await fs.readFile(dataFile('library.json'), 'utf8').catch(() => null);
       const imported = legacy ? importLegacyLibrary(library, legacy) : null;
       if (imported) {
+        await rootsReady; // the folders it adopts are read from the file that is about to be renamed
         await fs.rename(dataFile('library.json'), dataFile('library.json.bak'));
         console.log(`Imported library.json: ${imported.shows} shows, ${imported.episodes} episodes, ${imported.states} episode states (kept as library.json.bak)`);
       }
@@ -575,6 +595,8 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc();
     createWindow();
     if (!process.env.RESONATE_NO_TRAY) createTray();
+    console.log(`Window created ${Date.now() - t0} ms after the app was ready`);
+    void rootsReady.catch((err) => console.warn('Download folders could not be read:', err));
   });
   // Give the renderer a moment to write the library (and the playback position) before quitting.
   let flushed = false;

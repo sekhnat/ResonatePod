@@ -47,13 +47,21 @@ export function rootsFromLibrary(json: string | null): string[] {
  */
 export class DownloadRoots {
   private roots: string[] = [];
+  /** Settles when the list has been read; resolve() and add() wait for it, so the app can start before the read ends. */
+  private ready: Promise<void> = Promise.resolve();
 
   constructor(private file: string, private fallback: string) {}
 
   list() { return [...this.roots]; }
 
   /** Reads the saved list; without one, starts from the default folder plus whatever `adopt` finds. */
-  async load(adopt: () => Promise<string[]>) {
+  load(adopt: () => Promise<string[]>): Promise<void> {
+    const loading = this.read(adopt);
+    this.ready = loading.catch(() => {}); // a failed read leaves the list empty, which allows nothing
+    return loading;
+  }
+
+  private async read(adopt: () => Promise<string[]>) {
     const saved = (await readJsonFile<{ downloadRoots?: unknown }>(this.file, {})).downloadRoots; // an unreadable file is kept aside
     if (Array.isArray(saved) && saved.every((r) => typeof r === 'string')) { this.roots = saved; return; }
     this.roots = [...new Set([path.resolve(expandHome(this.fallback)), ...(await adopt())])];
@@ -61,6 +69,7 @@ export class DownloadRoots {
   }
 
   async add(folder: string) {
+    await this.ready;
     const abs = path.resolve(expandHome(folder));
     if (this.roots.includes(abs)) return;
     this.roots.push(abs);
@@ -70,6 +79,7 @@ export class DownloadRoots {
   /** The absolute, normalised path to use when `p` is inside a root; null otherwise. Callers must use what it returns. */
   async resolve(p: unknown): Promise<string | null> {
     if (typeof p !== 'string' || !p) return null;
+    await this.ready;
     const abs = path.resolve(expandHome(p));
     for (const root of this.roots) if (await isWithin(root, abs)) return abs;
     return null;
