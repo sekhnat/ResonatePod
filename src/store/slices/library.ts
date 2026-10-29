@@ -1,4 +1,4 @@
-import { epKey, pool } from '../../data';
+import { epKey, pool, type Show } from '../../data';
 import { resolveFeedUrl } from '../../lib/directory';
 import { fetchFeedUpdate, fetchNewFeed, mergeEpisodes, showFromFeed, takeCredentials } from '../../services/feeds';
 import { platform } from '../../platform';
@@ -28,37 +28,63 @@ export const createLibrarySlice: Slice<'markPlayed' | 'markAllPlayed' | 'refresh
         let needAuth = 0;
         const moved: string[] = [];
         const shows = get().shows;
-        await pool(shows, 4, async (sh) => {
-          try {
-            const r = await fetchFeedUpdate(sh);
-            if (r.kind === 'auth') { needAuth++; return; }
-            if (r.kind === 'unchanged') return;
-            const { show: upd, notes } = r;
-            const s = get();
-            const live = findShow(s, sh.id);
-            if (!live) return;
-            // Follow the feed when it has moved: a permanent redirect, or itunes:new-feed-url.
-            const target = r.movedTo ?? r.newFeedUrl;
-            if (target && !s.shows.some((x) => x.feedUrl === target)) {
-              upd.feedUrl = target;
-              // A validator from the old address means nothing to the new one.
-              if (!r.movedTo) { upd.etag = undefined; upd.lastModified = undefined; }
-              moved.push(upd.title);
+        // Feeds that arrive close together are merged in one store update, not one each: every update runs the
+        // selectors and redraws the lists and the sidebar. Waiting a moment still shows new episodes as they come in.
+        const arrived: { sh: Show; r: Extract<Awaited<ReturnType<typeof fetchFeedUpdate>>, { kind: 'updated' }> }[] = [];
+        let settleTimer: ReturnType<typeof setTimeout> | undefined;
+        const settle = () => {
+          clearTimeout(settleTimer);
+          settleTimer = undefined;
+          const batch = arrived.splice(0);
+          if (!batch.length) return;
+          const s = get();
+          let { eps, shows: current } = s;
+          let epsCopied = false;
+          for (const { sh, r } of batch) {
+            try {
+              const { show: upd, notes } = r;
+              const live = findShow({ shows: current }, sh.id);
+              if (!live) continue; // unsubscribed while it was being fetched
+              // Follow the feed when it has moved: a permanent redirect, or itunes:new-feed-url.
+              const target = r.movedTo ?? r.newFeedUrl;
+              if (target && !current.some((x) => x.feedUrl === target)) {
+                upd.feedUrl = target;
+                // A validator from the old address means nothing to the new one.
+                if (!r.movedTo) { upd.etag = undefined; upd.lastModified = undefined; }
+                moved.push(upd.title);
+              }
+              const referenced = (guid: string) => {
+                const key = epKey(sh.id, guid);
+                return key in eps || s.cur === key || s.queue.includes(key) || s.dlPending.includes(key) || dlByKey(s.dl).has(key);
+              };
+              const merge = mergeEpisodes(live.eps, upd.eps, referenced);
+              fresh += merge.added.length;
+              if (merge.added.length && !epsCopied) { eps = { ...eps }; epsCopied = true; }
+              for (const e of merge.added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
+              for (const e of merge.changed) holdNotes(sh.id, e.guid, notes.get(e.guid)); // a new or changed episode's notes are saved with it
+              current = current.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: merge.eps ?? x.eps } : x));
+            } catch {
+              failed++;
             }
-            const referenced = (guid: string) => {
-              const key = epKey(sh.id, guid);
-              return key in s.eps || s.cur === key || s.queue.includes(key) || s.dlPending.includes(key) || dlByKey(s.dl).has(key);
-            };
-            const merge = mergeEpisodes(live.eps, upd.eps, referenced);
-            fresh += merge.added.length;
-            const eps = merge.added.length ? { ...s.eps } : s.eps;
-            for (const e of merge.added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
-            for (const e of merge.changed) holdNotes(sh.id, e.guid, notes.get(e.guid)); // a new or changed episode's notes are saved with it
-            set({ eps, shows: s.shows.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: merge.eps ?? x.eps } : x)) });
-          } catch {
-            failed++;
           }
-        });
+          set({ eps, shows: current });
+        };
+        try {
+          await pool(shows, 4, async (sh) => {
+            try {
+              const r = await fetchFeedUpdate(sh);
+              if (r.kind === 'auth') { needAuth++; return; }
+              if (r.kind === 'unchanged') return;
+              arrived.push({ sh, r });
+              settleTimer ??= setTimeout(settle, 150);
+            } catch {
+              failed++;
+            }
+          });
+          settle();
+        } finally {
+          clearTimeout(settleTimer);
+        }
         const s = get();
         const queued = s.shows.flatMap((sh) => autoDownloadKeys(s, sh.id));
         set({ refreshing: false, lastChecked: Date.now() });
