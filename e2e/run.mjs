@@ -615,7 +615,11 @@ try {
       Promise.reject(new Error('e2e unhandled rejection'));
     });
     await waitFor('the page’s errors to reach the log', () => /renderer: .*e2e uncaught error/.test(logged()) && /renderer: unhandled rejection: e2e unhandled rejection/.test(logged()), 5000);
-    errors.splice(0, errors.length, ...errors.filter((e) => !/e2e (uncaught error|unhandled rejection)/.test(e)));
+    // The log is written from the page's report to the main process; Playwright is told of the same errors separately,
+    // and can be told after that. Wait until it has them, or they are left over for the final check.
+    const planted = (e) => /e2e (uncaught error|unhandled rejection)/.test(e);
+    await waitFor('Playwright to see the same errors', () => errors.filter(planted).length >= 2, 5000);
+    errors.splice(0, errors.length, ...errors.filter((e) => !planted(e)));
     await page.getByTitle('Main menu').click();
     await page.getByText('About Resonate', { exact: true }).click();
     await page.getByRole('button', { name: 'Open logs folder' }).waitFor();
