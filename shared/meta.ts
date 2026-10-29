@@ -1,4 +1,4 @@
-import { plainText } from './feed';
+import { plainText } from './plain-text';
 import type { Chapter, TranscriptLine } from './types';
 
 /** Podcasting 2.0 JSON chapters (https://github.com/Podcastindex-org/podcast-namespace/blob/main/chapters/jsonChapters.md). */

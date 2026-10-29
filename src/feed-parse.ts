@@ -1,4 +1,3 @@
-import { parseFeed } from '../shared/feed';
 import type { Feed } from '../shared/types';
 
 interface Reply { id: number; feed?: Feed; error?: string }
@@ -8,10 +7,16 @@ let worker: Worker | null | undefined; // undefined until first needed; null whe
 let nextId = 1;
 const pending = new Map<number, Pending>();
 
+/**
+ * Reads a feed on this thread. The parser is loaded when it is first needed here, so the window's main script doesn't
+ * carry it: in the usual case it lives only in the worker.
+ */
+const parseHere = (xml: string): Promise<Feed> => import('../shared/feed').then((m) => m.parseFeed(xml));
+
 /** Reads a feed in the worker (a 4 MB feed takes about 30 ms, in which the window can't be drawn) or, without one, right here. */
 export function parseFeedAsync(xml: string): Promise<Feed> {
   const w = getWorker();
-  if (!w) return Promise.resolve().then(() => parseFeed(xml));
+  if (!w) return parseHere(xml);
   return new Promise((resolve, reject) => {
     const id = nextId++;
     pending.set(id, { xml, resolve, reject });
@@ -40,7 +45,7 @@ function getWorker(): Worker | null {
     worker = null;
     for (const [id, p] of [...pending]) {
       pending.delete(id);
-      try { p.resolve(parseFeed(p.xml)); } catch (err) { p.reject(err as Error); }
+      parseHere(p.xml).then(p.resolve, p.reject);
     }
   });
   return worker;
