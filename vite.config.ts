@@ -30,16 +30,17 @@ const contentSecurityPolicy = (): Plugin => ({
 });
 
 /**
- * The icon and text fonts list woff, ttf and svg copies as fallbacks for old browsers. The app runs in Chromium, which
- * takes the woff2 and never loads the others, but the build still ships them (about 7 MB for the two icon fonts alone).
- * Dropping them from the font-face rules keeps only what is used.
+ * The text fonts list woff, ttf and svg copies as fallbacks for old browsers. The app runs in Chromium, which
+ * takes the woff2 and never loads the others, but the build would still ship them.
+ * Dropping them from the font-face rules keeps only what is used. (The icon fonts are cut down to woff2 already:
+ * see scripts/icons-subset.mjs.)
  */
 const woff2Only = (): Plugin => ({
   name: 'resonate-woff2-only',
   enforce: 'pre',
   apply: 'build',
   transform(css, id) {
-    if (!/\/node_modules\/(@phosphor-icons\/web|@fontsource\/inter)\/.*\.css$/.test(id.split('?')[0])) return null;
+    if (!/\/node_modules\/@fontsource\/inter\/.*\.css$/.test(id.split('?')[0])) return null;
     const trimmed = css.replace(/,\s*url\([^)]*\)\s*format\((['"])(?:woff|truetype|svg)\1\)/g, '');
     return trimmed === css ? null : { code: trimmed, map: null };
   },
