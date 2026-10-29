@@ -61,6 +61,34 @@ describe('subscribing and refreshing', () => {
     expect(st().lastChecked).toBeGreaterThan(0);
   });
 
+  it('merges feeds that arrive together in one store update, and keeps every show\'s changes', async () => {
+    const urls = Array.from({ length: 6 }, (_, i) => `https://show${i}.example/feed.xml`);
+    const body = (i: number, withNew: boolean) => {
+      const xml = feed.replaceAll('Kernel Panic Hour', `Show ${i}`);
+      return withNew ? xml.replace('<item>', `${NEW_ITEM}<item>`) : xml;
+    };
+    let fresh = false;
+    http.mockImplementation(async (url) => {
+      const i = urls.indexOf(url);
+      return i >= 0 ? { status: 200, text: body(i, fresh), etag: '"x"' } : { status: 404, text: '' };
+    });
+    for (const u of urls) await st().addFeed(u, { quiet: true });
+    expect(st().shows).toHaveLength(7);
+
+    fresh = true;
+    let updates = 0;
+    const unsubscribe = useStore.subscribe((s, prev) => { if (s.shows !== prev.shows || s.eps !== prev.eps) updates++; });
+    await st().refresh();
+    unsubscribe();
+    // Six feeds, one change to the shows and episodes (it was six, one for each feed).
+    expect(updates).toBe(1);
+    for (let i = 0; i < urls.length; i++) {
+      const show = st().shows.find((x) => x.title === `Show ${i}`)!;
+      expect(show.eps[0].title).toBe('Brand new');
+      expect(st().eps[`${show.id}:kp:ep:43`]).toMatchObject({ inbox: true, played: false });
+    }
+  });
+
   it('clears the refreshing flag even when the refresh throws', async () => {
     // autoDownloadKeys reads the overrides after every feed is done; make that blow up.
     useStore.setState({ ovr: new Proxy({}, { get() { throw new Error('boom'); } }) });
