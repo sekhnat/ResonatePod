@@ -180,8 +180,11 @@ run, for example for documentation-only changes.
 ## Project layout
 
 ```
-electron/        Main process: window, media protocol (local files and proxied streams with Range),
-                 download manager, tray, dialogs, nmcli, secrets, IPC; preload bridge
+electron/        Main process. main.ts: logging, window and app lifecycle. ipc.ts: every handler the page can call;
+                 http.ts and redirects.ts: requests, with redirects followed by hand so a login stays with its
+                 origin; protocol.ts: the media protocol (local files and proxied streams with Range);
+                 downloads.ts: the download manager; tray.ts; credentials.ts: saved logins and secrets;
+                 paths.ts: the folders the page may touch; db/: the library database; preload bridge
 shared/          Code used on both sides: feed parser, chapters and transcripts, embedded chapters
                  (ID3/MP4), gpodder client, types
 src/
@@ -193,6 +196,8 @@ src/
   services.ts    Wires the store to downloads, tray, network checks and timers
   screens/       One file per screen
   components/    Shared UI
+  styles/icons/  The Phosphor icons the app uses, cut from @phosphor-icons/web. Using a new icon? Run
+                 `npm run icons:subset` (src/icons.test.ts fails until you do)
 e2e/run.mjs      Playwright-driven Electron test against a local feed server (directories are served
                  from test/fixtures/directory via the RESONATE_URL_REWRITE test hook)
 test/fixtures/   Sample feed, chapters, transcript, and small media files (chaptered MP3/M4A, video)
