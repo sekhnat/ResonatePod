@@ -12,6 +12,7 @@ interface EpStateRow { key: string; played: number; pos: number; inbox: number; 
  */
 export class LibraryDb {
   private db: Database.Database;
+  private q!: ReturnType<typeof prepareStatements>;
 
   constructor(file: string) {
     this.db = new Database(file);
@@ -21,6 +22,7 @@ export class LibraryDb {
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('synchronous = NORMAL');
       migrate(this.db);
+      this.q = prepareStatements(this.db);
     } catch (err) {
       this.db.close();
       throw err;
@@ -82,54 +84,64 @@ export class LibraryDb {
   /** Applies everything or nothing. */
   patch(p: LibraryPatch) {
     this.db.transaction(() => {
-      const { db } = this;
+      const { q } = this;
       for (const id of p.shows?.delete ?? []) {
-        db.prepare('DELETE FROM shows WHERE id = ?').run(id);
-        db.prepare('DELETE FROM episodes WHERE show_id = ?').run(id);
-        db.prepare('DELETE FROM notes WHERE show_id = ?').run(id);
+        q.deleteShow.run(id);
+        q.deleteShowEps.run(id);
+        q.deleteShowNotes.run(id);
         // Show ids never contain ':' (keys are "<show id>:<guid>"), so the show's states are the range from "id:" up to "id;".
-        db.prepare('DELETE FROM ep_state WHERE key >= ? AND key < ?').run(`${id}:`, `${id};`);
+        q.deleteShowStates.run(`${id}:`, `${id};`);
       }
-      const upsertShow = db.prepare('INSERT INTO shows (id, ord, data) VALUES (@id, (SELECT COALESCE(MAX(ord), -1) + 1 FROM shows), @data) ON CONFLICT (id) DO UPDATE SET data = excluded.data');
       for (const show of p.shows?.upsert ?? []) {
         const { id, eps: _eps, ...rest } = show as ShowRecord & { eps?: unknown };
-        upsertShow.run({ id, data: JSON.stringify(rest) });
+        q.upsertShow.run({ id, data: JSON.stringify(rest) });
       }
-      const setOrder = db.prepare('UPDATE shows SET ord = ? WHERE id = ?');
-      (p.shows?.order ?? []).forEach((id, i) => setOrder.run(i, id));
+      (p.shows?.order ?? []).forEach((id, i) => q.setOrder.run(i, id));
 
-      const deleteEp = db.prepare('DELETE FROM episodes WHERE show_id = ? AND guid = ?');
-      const deleteNotes = db.prepare('DELETE FROM notes WHERE show_id = ? AND guid = ?');
-      for (const { show, guid } of p.episodes?.delete ?? []) { deleteEp.run(show, guid); deleteNotes.run(show, guid); }
-      const upsertEp = db.prepare(`INSERT INTO episodes (show_id, guid, pub_date, data) VALUES (@show, @guid, @pubDate, @data)
-        ON CONFLICT (show_id, guid) DO UPDATE SET pub_date = excluded.pub_date, data = excluded.data`);
-      const setNotes = db.prepare('INSERT INTO notes (show_id, guid, text) VALUES (?, ?, ?) ON CONFLICT (show_id, guid) DO UPDATE SET text = excluded.text');
+      for (const { show, guid } of p.episodes?.delete ?? []) { q.deleteEp.run(show, guid); q.deleteNotes.run(show, guid); }
       for (const { show, ep } of p.episodes?.upsert ?? []) {
         const { description, ...rest } = ep as EpisodeRecord;
-        upsertEp.run({ show, guid: ep.guid, pubDate: Number.isFinite(ep.pubDate) ? ep.pubDate : 0, data: JSON.stringify(rest) });
+        q.upsertEp.run({ show, guid: ep.guid, pubDate: Number.isFinite(ep.pubDate) ? ep.pubDate : 0, data: JSON.stringify(rest) });
         // Notes that aren't sent stay as they were; empty notes are the same as none.
-        if (description) setNotes.run(show, ep.guid, description);
-        else if (description === '') deleteNotes.run(show, ep.guid);
+        if (description) q.setNotes.run(show, ep.guid, description);
+        else if (description === '') q.deleteNotes.run(show, ep.guid);
       }
 
-      const deleteState = db.prepare('DELETE FROM ep_state WHERE key = ?');
-      for (const key of p.epState?.delete ?? []) deleteState.run(key);
-      const setState = db.prepare(`INSERT OR REPLACE INTO ep_state (key, played, pos, inbox, file, file_bytes, played_at, last_played)
-        VALUES (@key, @played, @pos, @inbox, @file, @fileBytes, @playedAt, @lastPlayed)`);
+      for (const key of p.epState?.delete ?? []) q.deleteState.run(key);
       for (const [key, st] of Object.entries(p.epState?.upsert ?? {})) {
-        setState.run({ key, played: st.played ? 1 : 0, pos: st.pos, inbox: st.inbox ? 1 : 0, file: st.file ?? null, fileBytes: st.fileBytes ?? null, playedAt: st.playedAt ?? null, lastPlayed: st.lastPlayed ?? null });
+        q.setState.run({ key, played: st.played ? 1 : 0, pos: st.pos, inbox: st.inbox ? 1 : 0, file: st.file ?? null, fileBytes: st.fileBytes ?? null, playedAt: st.playedAt ?? null, lastPlayed: st.lastPlayed ?? null });
       }
 
-      const setKv = db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)');
-      const deleteKv = db.prepare('DELETE FROM kv WHERE key = ?');
       for (const [key, value] of Object.entries(p.kv ?? {})) {
-        if (value === undefined) deleteKv.run(key);
-        else setKv.run(key, JSON.stringify(value));
+        if (value === undefined) q.deleteKv.run(key);
+        else q.setKv.run(key, JSON.stringify(value));
       }
     })();
   }
 
   close() { this.db.close(); }
+}
+
+/** The statements a save runs, prepared once: a save used to prepare about a dozen of them every time. */
+function prepareStatements(db: Database.Database) {
+  return {
+    deleteShow: db.prepare('DELETE FROM shows WHERE id = ?'),
+    deleteShowEps: db.prepare('DELETE FROM episodes WHERE show_id = ?'),
+    deleteShowNotes: db.prepare('DELETE FROM notes WHERE show_id = ?'),
+    deleteShowStates: db.prepare('DELETE FROM ep_state WHERE key >= ? AND key < ?'),
+    upsertShow: db.prepare('INSERT INTO shows (id, ord, data) VALUES (@id, (SELECT COALESCE(MAX(ord), -1) + 1 FROM shows), @data) ON CONFLICT (id) DO UPDATE SET data = excluded.data'),
+    setOrder: db.prepare('UPDATE shows SET ord = ? WHERE id = ?'),
+    deleteEp: db.prepare('DELETE FROM episodes WHERE show_id = ? AND guid = ?'),
+    deleteNotes: db.prepare('DELETE FROM notes WHERE show_id = ? AND guid = ?'),
+    upsertEp: db.prepare(`INSERT INTO episodes (show_id, guid, pub_date, data) VALUES (@show, @guid, @pubDate, @data)
+      ON CONFLICT (show_id, guid) DO UPDATE SET pub_date = excluded.pub_date, data = excluded.data`),
+    setNotes: db.prepare('INSERT INTO notes (show_id, guid, text) VALUES (?, ?, ?) ON CONFLICT (show_id, guid) DO UPDATE SET text = excluded.text'),
+    deleteState: db.prepare('DELETE FROM ep_state WHERE key = ?'),
+    setState: db.prepare(`INSERT OR REPLACE INTO ep_state (key, played, pos, inbox, file, file_bytes, played_at, last_played)
+      VALUES (@key, @played, @pos, @inbox, @file, @fileBytes, @playedAt, @lastPlayed)`),
+    setKv: db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)'),
+    deleteKv: db.prepare('DELETE FROM kv WHERE key = ?'),
+  };
 }
 
 /**
