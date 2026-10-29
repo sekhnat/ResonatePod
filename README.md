@@ -171,8 +171,9 @@ installed.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request: typecheck, unit tests and the
+`.github/workflows/ci.yml` runs for every pull request and every push to `main`: typecheck, unit tests and the
 Electron end-to-end test, then it builds the AppImage and `.deb` and smoke-tests the packaged app.
+A branch without a pull request has no run of its own; start one from the Actions tab.
 The packages are kept on the run for 7 days. Include `[skip ci]` in a commit message to skip the
 run, for example for documentation-only changes.
 
