@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import { renameSync } from 'node:fs';
+import { BACKUP_FORMAT, BACKUP_VERSION, type BackupNote, type LibraryBackup } from '../../shared/backup';
 import type { EpisodeRecord, EpStateRecord, LibraryPatch, LibrarySnapshot, ShowRecord } from '../../shared/library';
 import { migrate, schemaVersion } from './migrations';
 
@@ -81,6 +82,12 @@ export class LibraryDb {
     return row?.text ?? '';
   }
 
+  /** One named setting; undefined when it was never saved. */
+  setting(key: string): unknown {
+    const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(key) as { value: string } | undefined;
+    return row ? JSON.parse(row.value) : undefined;
+  }
+
   /** Applies everything or nothing. */
   patch(p: LibraryPatch) {
     this.db.transaction(() => {
@@ -117,6 +124,38 @@ export class LibraryDb {
         else q.setKv.run(key, JSON.stringify(value));
       }
     })();
+  }
+
+  /** Every episode's show notes, for a backup. */
+  *allNotes(): Generator<BackupNote> {
+    yield* this.db.prepare('SELECT show_id AS show, guid, text FROM notes ORDER BY id').iterate() as Iterable<BackupNote>;
+  }
+
+  /** The whole library, show notes included, as a backup made by version `app` of Resonate. */
+  backup(app: string): LibraryBackup {
+    return { format: BACKUP_FORMAT, version: BACKUP_VERSION, app, createdAt: Date.now(), library: this.load(), notes: [...this.allNotes()] };
+  }
+
+  /**
+   * Replaces everything with `library` and its show notes, in one transaction: a record the database refuses rolls the
+   * whole thing back, and the library is as it was.
+   */
+  replace(library: LibrarySnapshot, notes: BackupNote[]) {
+    const byEp = new Map(notes.map((n) => [`${n.show}:${n.guid}`, n.text]));
+    this.db.transaction(() => {
+      this.db.exec('DELETE FROM shows; DELETE FROM episodes; DELETE FROM notes; DELETE FROM ep_state; DELETE FROM kv;');
+      this.patch({
+        shows: { upsert: library.shows, order: library.shows.map((s) => s.id) },
+        episodes: { upsert: library.shows.flatMap((s) => s.eps.map((ep) => ({ show: s.id, ep: { ...ep, description: byEp.get(`${s.id}:${ep.guid}`) } as EpisodeRecord }))) },
+        epState: { upsert: library.epState },
+        kv: library.kv,
+      });
+    })();
+  }
+
+  /** Copies the database, as it is now, to `file` (SQLite's online backup, so it is consistent while the app runs). */
+  async copyTo(file: string) {
+    await this.db.backup(file);
   }
 
   close() { this.db.close(); }

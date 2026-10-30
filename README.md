@@ -109,6 +109,7 @@ in place, downloading only what changed.
 | **Auto-download** | A global *keep latest N* rule, overridable per show. |
 | **Storage** | Played files are deleted after 1 day or 1 week, checked hourly. A storage limit removes the oldest played files first. Changing the download folder offers to move existing downloads. Downloads pause on metered connections (NetworkManager, via `nmcli`). |
 | **Per-show settings** | Auto-download, playback speed, silence trim and intro skip. |
+| **Backup** | *Preferences → Library backup* saves the whole library to one `.resonate-backup` file (gzipped JSON): shows, episodes and their notes, play positions, the queue and preferences. Saved passwords aren't included: they are encrypted with this computer's keyring. *Restore from backup* replaces the library after showing what the backup holds. The library you had is kept as `library.db.before-restore`. Downloaded files are kept only if they are on this computer, and the download folder only if it is already one of yours here. |
 
 ### Sync and desktop integration
 
@@ -144,6 +145,7 @@ Everything lives in `~/.config/Resonate/`:
 | `main-settings.json` | The download folders Resonate may read and write |
 | `logs/main.log` | What went wrong, if anything (rotated, three files of up to 1 MB); About → Open logs folder. Crash dumps stay on this computer |
 | `library.json.bak` | Only if you used an earlier version: your library as it was before it moved into `library.db` |
+| `library.db.before-restore` | Only after restoring a backup: your library as it was before the restore |
 
 Only what changes is written to the library, a moment after it changes. The playback position is
 saved every 30 seconds while playing, on pause, and on quit. Downloaded episodes stay in your
@@ -181,6 +183,7 @@ run, for example for documentation-only changes.
 
 ```
 electron/        Main process. main.ts: logging, window and app lifecycle. ipc.ts: every handler the page can call;
+                 backup.ts: library backup files, and fitting a restored one to this computer;
                  http.ts and redirects.ts: requests, with redirects followed by hand so a login stays with its
                  origin; protocol.ts: the media protocol (local files and proxied streams with Range);
                  downloads.ts: the download manager; tray.ts; credentials.ts: saved logins and secrets;

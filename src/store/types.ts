@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import type { BackupSummary } from '../../shared/backup';
 import type { EpisodeAction } from '../../shared/gpodder';
 import type { Override, Settings } from '../../shared/settings';
 import type { DownloadMessage } from '../../shared/types';
@@ -42,7 +43,7 @@ export type Sleep =
   | { mode: 'timer'; minutes: number; remaining: number }
   | { mode: 'chapter' }
   | { mode: 'episode' };
-export type DialogKind = 'unsubscribe' | 'folder' | 'storage' | 'sync' | 'shortcuts' | 'about' | 'move' | 'feedAuth' | 'podcastIndex';
+export type DialogKind = 'unsubscribe' | 'folder' | 'storage' | 'sync' | 'shortcuts' | 'about' | 'move' | 'feedAuth' | 'podcastIndex' | 'restore';
 export interface DirectoryPrefs {
   /** Apple storefront for charts and search, e.g. "gb". */
   country: string;
@@ -97,6 +98,8 @@ export interface Ui {
   video: boolean;
   /** Folder change waiting on the "move downloaded files?" dialog. */
   pendingMove: { from: string; to: string } | null;
+  /** The backup chosen to restore, shown in the dialog that asks before replacing the library. */
+  restoreFrom: BackupSummary | null;
   /** Feed that needs a username and password (the show, when already subscribed). */
   authFor: { url: string; showId?: string } | null;
   metered: boolean | null;

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Chapter, DownloadMessage, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
 import type { LibraryPatch } from '../shared/library';
+import type { BackupSummary } from '../shared/backup';
 
 const env = ipcRenderer.sendSync('env') as { desktop: 'KDE' | 'GNOME'; hostname: string };
 
@@ -13,6 +14,9 @@ const api = {
   libLoadJson: (): Promise<string> => ipcRenderer.invoke('lib:load'),
   libPatch: (patch: LibraryPatch): Promise<void> => ipcRenderer.invoke('lib:patch', patch),
   libNotes: (show: string, guid: string): Promise<string> => ipcRenderer.invoke('lib:notes', show, guid),
+  backupLibrary: (): Promise<BackupSummary | null> => ipcRenderer.invoke('lib:backup'),
+  chooseBackup: (): Promise<BackupSummary | { error: string } | null> => ipcRenderer.invoke('lib:chooseBackup'),
+  restoreBackup: (): Promise<{ error: string } | null> => ipcRenderer.invoke('lib:restore'),
   download: {
     start: (job: DownloadJob) => ipcRenderer.invoke('dl:start', job),
     cancel: (key: string) => ipcRenderer.invoke('dl:cancel', key),

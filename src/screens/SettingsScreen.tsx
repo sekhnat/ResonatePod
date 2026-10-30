@@ -5,7 +5,7 @@ import { delLabel, keepLabel, skipLabel, speedLabel } from '../settings-labels';
 import { Seg, Toggle } from '../components/ui';
 import { platform } from '../platform';
 import { clockLabel } from '../model';
-import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
+import { backupLibraryFile, chooseBackupFile, exportOpmlFile, importOpmlFile } from '../lib/library-io';
 import { CountrySelect, SourceSelect } from '../components/DirectoryCard';
 
 type Row = { label: string; hint?: string } & (
@@ -64,6 +64,10 @@ export function SettingsScreen() {
       { label: 'Sync server', hint: s.sync.server ? `gpodder-compatible · ${s.syncing ? 'syncing…' : `last synced ${clockLabel(s.sync.lastSynced)}`}` : 'gpodder-compatible · subscriptions and play positions', kind: 'value', value: s.sync.server ? `${s.sync.user}@${s.sync.server.replace(/^https?:\/\//, '')}` : 'Not connected', action: 'Configure', run: () => s.set({ dialog: 'sync' }) },
       { label: 'Subscriptions', hint: 'OPML works with almost every podcast app', kind: 'value', value: `${s.shows.length} feeds`, action: 'Export OPML', run: () => void exportOpmlFile() },
       { label: 'Import subscriptions', kind: 'value', value: '', action: 'Import OPML…', run: () => void importOpmlFile() },
+      ...(platform.isDesktop ? [
+        { label: 'Library backup', hint: 'Shows, episodes and their notes, play positions, queue and preferences; not saved passwords', kind: 'value', value: '', action: 'Back up…', run: () => void backupLibraryFile() },
+        { label: 'Restore from backup', hint: 'Replaces your library; the one you have now is kept beside it', kind: 'value', value: '', action: 'Restore…', run: () => void chooseBackupFile() },
+      ] as Row[] : []),
     ] },
   ];
 

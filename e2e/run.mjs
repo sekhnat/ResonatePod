@@ -472,6 +472,40 @@ try {
     await shot('07-settings');
   });
 
+  await step('back up the library, change it, and restore the backup', async () => {
+    const out = path.join(home, 'library.resonate-backup');
+    await app.evaluate(({ dialog }, p) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: p }); }, out);
+    await page.getByRole('button', { name: 'Back up…' }).click();
+    await page.getByText(/^Backed up \d+ shows? and \d+ episodes? to library\.resonate-backup$/).waitFor();
+    assert.deepEqual([...readFileSync(out).subarray(0, 2)], [0x1f, 0x8b], 'the backup is gzipped');
+
+    // A file that isn't a backup is turned away before anything is asked.
+    const junk = path.join(home, 'junk.resonate-backup');
+    writeFileSync(junk, 'not a backup');
+    await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, junk);
+    await page.getByRole('button', { name: 'Restore…' }).click();
+    await page.getByText('Couldn’t read that backup: This file isn’t a Resonate backup').waitFor();
+
+    // Change the library: unsubscribe from a show.
+    await page.locator('nav').getByRole('button', { name: 'Fixture FM' }).click();
+    await page.getByTitle('Unsubscribe…').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Unsubscribe' }).click();
+    await until(() => ![...document.querySelectorAll('nav button')].some((b) => b.textContent.includes('Fixture FM')));
+
+    // Restore: the dialog says what is in the backup, and the window comes back with the show.
+    await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, out);
+    await page.locator('nav button', { hasText: 'Preferences' }).click();
+    await page.getByRole('button', { name: 'Restore…' }).click();
+    const confirm = page.getByRole('dialog', { name: 'Restore library' });
+    await confirm.getByText(/^library\.resonate-backup was made on .+ by Resonate [\d.]+\. It has \d+ shows? and \d+ episodes?\.$/).waitFor();
+    await shot('07b-restore');
+    await confirm.getByRole('button', { name: 'Restore' }).click();
+    await page.locator('nav').getByRole('button', { name: 'Fixture FM' }).waitFor({ timeout: 15000 });
+    await page.locator('nav').getByRole('button', { name: 'Fixture FM' }).click();
+    await page.getByText('Episode one').waitFor();
+    assert.ok(existsSync(path.join(home, 'config', 'library.db.before-restore')), 'the replaced library is kept');
+  });
+
   await step('Discover suggests shows and lists the regional chart', async () => {
     await page.locator('nav button', { hasText: 'Discover' }).click();
     const suggested = page.getByRole('region', { name: 'Suggested for you' });

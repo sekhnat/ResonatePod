@@ -5,7 +5,7 @@ let tmpCounter = 0;
 const tmpName = (file: string) => `${file}.tmp-${process.pid}-${++tmpCounter}`;
 
 /** Writes through a temporary file of its own name and a rename, so a crash leaves the old file or the new one, never half of one. */
-export async function writeFileAtomic(file: string, data: string, mode?: number): Promise<void> {
+export async function writeFileAtomic(file: string, data: string | Uint8Array, mode?: number): Promise<void> {
   const tmp = tmpName(file);
   try {
     await fs.writeFile(tmp, data, { mode });

@@ -115,3 +115,78 @@ describe('the database file', () => {
     fresh.close();
   });
 });
+
+describe('backup and restore', () => {
+  const fill = (db: LibraryDb) => db.patch({
+    shows: { upsert: [{ id: 'kp', title: 'Kernel Panic Hour', persons: [{ name: 'Ines', role: 'host', group: 'cast' }] }, { id: 'lu', title: 'LINUX Unplugged' }], order: ['lu', 'kp'] },
+    episodes: { upsert: [
+      { show: 'kp', ep: { guid: 'kp:42', pubDate: 2, title: 'Wayland', season: 3, description: 'Screen sharing, portals.' } },
+      { show: 'kp', ep: { guid: 'kp:41', pubDate: 1, title: 'Rolling' } },
+      { show: 'lu', ep: { guid: 'lu:1', pubDate: 3, title: 'Pilot', description: 'The first one \u{1F3A7}' } },
+    ] },
+    epState: { upsert: { 'kp:kp:42': { played: true, pos: 0, inbox: false, playedAt: 9 }, 'lu:lu:1': { played: false, pos: 61.5, inbox: true, file: '/p/lu1.mp3', fileBytes: 7 } } },
+    kv: { folder: '~/Podcasts', queue: ['lu:lu:1'], sv: { keep: 3 } },
+  });
+
+  it('a backup holds the library and every episode’s show notes', () => {
+    const db = new LibraryDb(':memory:');
+    fill(db);
+    const b = db.backup('1.7.0');
+    expect(b).toMatchObject({ format: 'resonate-backup', version: 1, app: '1.7.0' });
+    expect(b.library).toEqual(db.load());
+    expect(b.notes).toEqual([
+      { show: 'kp', guid: 'kp:42', text: 'Screen sharing, portals.' },
+      { show: 'lu', guid: 'lu:1', text: 'The first one \u{1F3A7}' },
+    ]);
+    expect(db.setting('folder')).toBe('~/Podcasts');
+    expect(db.setting('missing')).toBeUndefined();
+    db.close();
+  });
+
+  it('restoring replaces everything with the backup, show order and notes included', () => {
+    const from = new LibraryDb(':memory:');
+    fill(from);
+    const b = from.backup('1.7.0');
+    const to = new LibraryDb(':memory:');
+    to.patch({
+      shows: { upsert: [{ id: 'old', title: 'Gone after the restore' }] },
+      episodes: { upsert: [{ show: 'old', ep: { guid: 'o', pubDate: 1, description: 'old notes' } }] },
+      epState: { upsert: { 'old:o': { played: true, pos: 0, inbox: false } } },
+      kv: { folder: '/somewhere', stale: 1 },
+    });
+    to.replace(b.library, b.notes);
+    expect(to.loadJson()).toBe(from.loadJson());
+    expect(to.load().shows.map((s) => s.id)).toEqual(['lu', 'kp']);
+    expect(to.notes('kp', 'kp:42')).toBe('Screen sharing, portals.');
+    expect(to.notes('old', 'o')).toBe('');
+    expect([...to.allNotes()]).toEqual(expect.arrayContaining(b.notes)); // written in the shows' order, not the original one
+    expect([...to.allNotes()]).toHaveLength(b.notes.length);
+    from.close();
+    to.close();
+  });
+
+  it('a restore that fails part way leaves the library as it was', () => {
+    const db = new LibraryDb(':memory:');
+    fill(db);
+    const before = db.loadJson();
+    const b = db.backup('1.7.0');
+    // A state the database can't hold (pos is NOT NULL), after everything else has been written.
+    const bad = { ...b.library, epState: { ...b.library.epState, 'kp:kp:41': { played: false, pos: null as never, inbox: false } } };
+    expect(() => db.replace(bad, b.notes)).toThrow();
+    expect(db.loadJson()).toBe(before);
+    expect(db.notes('kp', 'kp:42')).toBe('Screen sharing, portals.');
+    db.close();
+  });
+
+  it('copies the database to a file while it is open', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'resonate-copy-'));
+    const db = new LibraryDb(path.join(dir, 'library.db'));
+    fill(db);
+    const copy = path.join(dir, 'library.db.before-restore');
+    await db.copyTo(copy);
+    const opened = new LibraryDb(copy);
+    expect(opened.loadJson()).toBe(db.loadJson());
+    opened.close();
+    db.close();
+  });
+});

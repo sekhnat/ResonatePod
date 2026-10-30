@@ -3,13 +3,16 @@ import { execFile } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { hostname } from 'node:os';
 import path from 'node:path';
+import { BACKUP_EXT, summarise, type BackupSummary, type LibraryBackup } from '../shared/backup';
 import type { LibraryPatch } from '../shared/library';
 import type { DownloadEvent, DownloadJob, HttpRequest, HttpResponse, TrayState } from '../shared/types';
 import { readEmbeddedChapters } from '../shared/embedded';
+import { backupName, decodeBackup, encodeBackup, fitToMachine, MAX_BACKUP_BYTES } from './backup';
 import { checkRequest } from './bridge';
-import { ctx } from './context';
+import { ctx, dataFile } from './context';
 import { readSecret, setCredential, writeSecret } from './credentials';
 import { diskUsage, expandHome, moveFiles, type DownloadManager } from './downloads';
+import { writeFileAtomic } from './files';
 import { originOf } from './hops';
 import { cancelRequest, fetchFollowing, request } from './http';
 import type { DownloadRoots } from './paths';
@@ -64,6 +67,9 @@ async function setAutostart(on: boolean) {
   ].join('\n'));
 }
 
+/** Where the library is kept, as it was, when a backup replaces it. */
+const BEFORE_RESTORE = 'library.db.before-restore';
+
 /** Everything the page may ask of the main process. `roots` and `downloads` are made in main.ts, once the user-data path is set. */
 export function registerIpc({ roots, downloads }: { roots: DownloadRoots; downloads: DownloadManager }) {
   ipcMain.on('env', (e) => { e.returnValue = { desktop: desktop(), hostname: hostname() }; });
@@ -98,6 +104,60 @@ export function registerIpc({ roots, downloads }: { roots: DownloadRoots; downlo
   });
   ipcMain.handle('lib:patch', (_e, patch: LibraryPatch) => ctx.library!.patch(patch));
   ipcMain.handle('lib:notes', (_e, show: string, guid: string) => ctx.library!.notes(String(show), String(guid)));
+
+  // ---------- backup and restore ----------
+  // The page asks for a backup to be chosen, shows what is in it, and only then asks for it to be restored: the backup
+  // waits here in between, so the page never handles (or alters) what gets written.
+  let chosen: { backup: LibraryBackup; summary: BackupSummary } | null = null;
+  const backupFilter = [{ name: 'Resonate backup', extensions: [BACKUP_EXT] }];
+  ipcMain.handle('lib:backup', async () => {
+    const r = await dialog.showSaveDialog(ctx.win!, { title: 'Back up library', defaultPath: path.join(app.getPath('documents'), backupName()), filters: backupFilter });
+    if (r.canceled || !r.filePath) return null;
+    const backup = ctx.library!.backup(app.getVersion());
+    await writeFileAtomic(r.filePath, encodeBackup(backup));
+    console.log(`Library backed up to ${r.filePath}`);
+    return summarise(backup, path.basename(r.filePath));
+  });
+  ipcMain.handle('lib:chooseBackup', async (): Promise<BackupSummary | { error: string } | null> => {
+    chosen = null;
+    const r = await dialog.showOpenDialog(ctx.win!, { title: 'Restore library', filters: [...backupFilter, { name: 'All files', extensions: ['*'] }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const file = r.filePaths[0];
+    try {
+      if ((await fs.stat(file)).size > MAX_BACKUP_BYTES) throw new Error('This file is too big to be a Resonate backup');
+      const backup = decodeBackup(await fs.readFile(file));
+      chosen = { backup, summary: summarise(backup, path.basename(file)) };
+      return chosen.summary;
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  });
+  ipcMain.handle('lib:restore', async (): Promise<{ error: string } | null> => {
+    if (!chosen) return { error: 'Choose a backup first' };
+    const { backup, summary } = chosen;
+    const library = ctx.library!;
+    try {
+      const fitted = await fitToMachine(backup, {
+        hasFile: async (f) => { const p = await roots.resolve(f); return !!p && fs.access(p).then(() => true, () => false); },
+        isDownloadFolder: async (f) => !!(await roots.resolve(f)),
+        folder: library.setting('folder'),
+        autostart: await fs.access(autostartFile()).then(() => true, () => false),
+        podcastIndexKey: !!(await readSecret('podcastindex')),
+      });
+      // The library as it was, in case this wasn't the backup that was wanted.
+      await library.copyTo(dataFile(BEFORE_RESTORE));
+      for (const key of downloads.pending()) downloads.cancel(key); // they belong to the library being replaced
+      library.replace(fitted, backup.notes);
+    } catch (err) {
+      console.error('Restoring a backup failed', err);
+      return { error: (err as Error).message };
+    }
+    chosen = null;
+    console.log(`Library restored from ${summary.name} (${summary.shows} shows, ${summary.episodes} episodes, made by Resonate ${summary.app}); the previous one is kept as ${BEFORE_RESTORE}`);
+    // The page still holds the library that was replaced: it starts again and reads the restored one.
+    setImmediate(() => ctx.win?.webContents.reload());
+    return null;
+  });
 
   ipcMain.handle('dl:start', async (_e, job: DownloadJob) => {
     const folder = await roots.resolve(job.folder);

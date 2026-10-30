@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Episode, Show } from '../data';
 import { useStore, type State } from '../store';
-import { exportOpmlFile, importOpmlFile } from '../lib/library-io';
+import { backupLibraryFile, chooseBackupFile, exportOpmlFile, importOpmlFile } from '../lib/library-io';
+import { platform } from '../platform';
 
 export interface PalItem { label: string; hint: string; icon: string; run: () => void }
 
@@ -54,6 +55,10 @@ export function paletteItems(s: PaletteState, query = s.query): PalItem[] {
     { label: 'Go to Queue', hint: 'Ctrl 3', icon: 'ph ph-queue', run: () => s.go('queue') },
     { label: 'Go to Discover', hint: 'Ctrl 5', icon: 'ph ph-compass', run: () => s.go('discover') },
     { label: 'Export OPML…', hint: 'Ctrl E', icon: 'ph ph-file-arrow-down', run: () => { s.set({ palette: false }); void exportOpmlFile(); } },
+    ...(platform.isDesktop ? [
+      { label: 'Back up library…', hint: '', icon: 'ph ph-archive', run: () => { s.set({ palette: false }); void backupLibraryFile(); } },
+      { label: 'Restore library from a backup…', hint: '', icon: 'ph ph-clock-counter-clockwise', run: () => { s.set({ palette: false }); void chooseBackupFile(); } },
+    ] : []),
     { label: 'Pause all downloads', hint: '', icon: 'ph ph-pause', run: () => { s.set({ palette: false }); if (!s.dlPaused) s.toggleDlPause(); } },
     { label: 'Sleep timer: off', hint: '', icon: 'ph ph-moon', run: () => s.setSleep({ mode: 'off' }) },
     { label: 'Keyboard shortcuts', hint: 'Ctrl /', icon: 'ph ph-keyboard', run: () => s.set({ palette: false, dialog: 'shortcuts' }) },

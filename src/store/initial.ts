@@ -35,6 +35,7 @@ export const initialUi: Ui = {
   meta: {},
   video: false,
   pendingMove: null,
+  restoreFrom: null,
   authFor: null,
   metered: null,
   folderBytes: null,

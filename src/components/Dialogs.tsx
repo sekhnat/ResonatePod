@@ -4,6 +4,7 @@ import { art, mono } from '../data';
 import { trackedBytes, useStore, type Override } from '../store';
 import { dlRuleLabel, introLabel, keepLabel, onOff, orGlobal, speedLabel } from '../settings-labels';
 import { platform } from '../platform';
+import { restoreBackupFile } from '../lib/library-io';
 import { APP_VERSION } from '../version';
 import { Seg } from './ui';
 import { useSecretConsent } from './SecretNotice';
@@ -123,7 +124,7 @@ const SHORTCUTS: [string, string][] = [
 
 export function Dialogs() {
   const s = useStore(useShallow((s) => ({
-    cleanupStorage: s.cleanupStorage, dialog: s.dialog, eps: s.eps, folder: s.folder, moveDownloads: s.moveDownloads, pendingMove: s.pendingMove, set: s.set,
+    cleanupStorage: s.cleanupStorage, dialog: s.dialog, eps: s.eps, folder: s.folder, moveDownloads: s.moveDownloads, pendingMove: s.pendingMove, restoreFrom: s.restoreFrom, set: s.set,
     setPrefs: s.setPrefs, showId: s.showId, shows: s.shows, storageLimitGb: s.storageLimitGb, toast: s.toast, unsubscribe: s.unsubscribe,
   })));
   const close = () => s.set({ dialog: null });
@@ -177,6 +178,29 @@ export function Dialogs() {
           <div className="dialog-actions flush roomy">
             <button className="btn btn-secondary btn-12" onClick={leave}>Leave them</button>
             <button className="btn btn-primary btn-12" onClick={() => void s.moveDownloads(mv.from, mv.to)}>Move</button>
+          </div>
+        </Modal>
+      );
+    }
+    case 'restore': {
+      const b = s.restoreFrom;
+      if (!b) return null;
+      const cancel = () => s.set({ dialog: null, restoreFrom: null });
+      const made = new Date(b.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      return (
+        <Modal onClose={cancel} width={460} label="Restore library">
+          <div className="modal-head loose">
+            <span className="dialog-title">Replace your library with this backup?</span>
+            <span className="dialog-body modal-text">
+              {b.name} was made on {made} by Resonate {b.app}. It has {b.shows} show{b.shows === 1 ? '' : 's'} and {b.episodes.toLocaleString()} episode{b.episodes === 1 ? '' : 's'}.
+            </span>
+            <span className="dialog-body modal-text">
+              Your subscriptions, episodes, play positions, queue and preferences are replaced, and Resonate reloads. The library you have now is kept as library.db.before-restore. Saved passwords aren’t in backups.
+            </span>
+          </div>
+          <div className="dialog-actions flush roomy">
+            <button className="btn btn-secondary btn-12" onClick={cancel}>Cancel</button>
+            <button className="btn btn-primary btn-12" onClick={() => void restoreBackupFile()}>Restore</button>
           </div>
         </Modal>
       );

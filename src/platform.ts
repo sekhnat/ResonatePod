@@ -1,3 +1,4 @@
+import type { BackupSummary } from '../shared/backup';
 import type { LibraryPatch, LibrarySnapshot } from '../shared/library';
 import type { Chapter, DownloadMessage, DownloadJob, HttpRequest, HttpResponse, SecretStatus, TrayAction, TrayState } from '../shared/types';
 import type { ResonateApi } from '../electron/preload';
@@ -25,6 +26,12 @@ export interface Platform {
   libPatch(patch: LibraryPatch): Promise<void>;
   /** The show notes of one episode. */
   libNotes(show: string, guid: string): Promise<string>;
+  /** Saves a backup of the whole library where the user picks; null when they cancel. */
+  backupLibrary(): Promise<BackupSummary | null>;
+  /** Asks for a backup file and reads it; the main process keeps it for restoreBackup. Null when the user cancels. */
+  chooseBackup(): Promise<BackupSummary | { error: string } | null>;
+  /** Replaces the library with the chosen backup and reloads the window; resolves with an error if nothing changed. */
+  restoreBackup(): Promise<{ error: string } | null>;
   mediaUrl(file: string | undefined, url: string): string;
   /** Whether media URLs are same-origin enough for Web Audio analysis (silence trim). */
   canAnalyse: boolean;
@@ -94,6 +101,9 @@ function electronPlatform(api: ResonateApi): Platform {
     libLoad: async () => JSON.parse(await api.libLoadJson()) as LibrarySnapshot,
     libPatch: api.libPatch,
     libNotes: api.libNotes,
+    backupLibrary: api.backupLibrary,
+    chooseBackup: api.chooseBackup,
+    restoreBackup: api.restoreBackup,
     mediaUrl: (file, url) => (file ? `resonate-media://file/${encodeURIComponent(file)}` : `resonate-media://remote/${encodeURIComponent(url)}`),
     canAnalyse: true,
     download: {
@@ -149,6 +159,10 @@ function browserPlatform(): Platform {
     libLoad: async () => library.load(),
     libPatch: async (patch) => { library.patch(patch); LS.set(LIBRARY_KEY, JSON.stringify(library.dump())); },
     libNotes: async (show, guid) => library.notes(show, guid),
+    // Backups are a desktop feature: the browser build keeps its library in localStorage.
+    backupLibrary: async () => null,
+    chooseBackup: async () => ({ error: 'Backups need the desktop app' }),
+    restoreBackup: async () => ({ error: 'Backups need the desktop app' }),
     mediaUrl: (_file, url) => url,
     canAnalyse: false,
     download: { start() {}, cancel() {}, setPaused() {}, setConcurrency() {}, onEvent: () => () => {} },
