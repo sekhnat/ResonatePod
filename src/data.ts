@@ -1,6 +1,6 @@
-import type { Chapter, Episode, TranscriptLine } from '../shared/types';
+import type { Chapter, Episode, Funding, License, Person, Soundbite, TranscriptLine } from '../shared/types';
 
-export type { Chapter, Episode, TranscriptLine };
+export type { Chapter, Episode, Funding, License, Person, Soundbite, TranscriptLine };
 
 export interface Show {
   id: string;
@@ -14,6 +14,11 @@ export interface Show {
   feedUrl: string;
   imageUrl?: string;
   link?: string;
+  persons?: Person[];
+  funding?: Funding[];
+  location?: string;
+  license?: License;
+  podcastGuid?: string;
   /** Newest first. */
   eps: Episode[];
   etag?: string;
@@ -62,13 +67,22 @@ export function lastAtOrBefore<T>(items: readonly T[], t: number, at: (item: T) 
 
 const sameChapters = (a?: Chapter[], b?: Chapter[]) => a === b || (!!a && !!b && a.length === b.length && a.every((c, i) => c.at === b[i].at && c.t === b[i].t));
 
-/** Whether two parses of an episode say the same thing (every field, chapters compared by value). */
+/**
+ * Whether two values from a feed are the same: the same value, or lists and records with the same contents. Both
+ * come from the same parser, so the same contents are written out in the same order.
+ */
+export const sameJson = (a: unknown, b: unknown) => a === b || (!!a && !!b && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
+
+/** Whether two parses of an episode say the same thing (every field, lists such as chapters and people compared by value). */
 export function sameEpisode(a: Episode, b: Episode) {
   for (const k of new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof Episode>) {
-    if (k === 'inlineChapters' ? !sameChapters(a[k], b[k]) : a[k] !== b[k]) return false;
+    if (k === 'inlineChapters' ? !sameChapters(a[k], b[k]) : !sameJson(a[k], b[k])) return false;
   }
   return true;
 }
+
+/** The show's fields that a feed gives as lists or records, which a refresh keeps as they were when they haven't changed. */
+export const SHOW_STRUCTS = ['persons', 'funding', 'license'] as const;
 
 /** Show ids never contain ':', so split on the first one (GUIDs often contain colons). */
 export const parseKey = (key: string): [string, string] => {

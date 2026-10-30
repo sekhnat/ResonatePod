@@ -15,6 +15,8 @@ export async function showFromFeed(url: string, xml: string, id: string, etag?: 
   const show: Show = {
     id, title: f.title, author: f.author, hue: hueFor(f.title), cat: f.category, freq: cadence(f.episodes),
     desc: f.description, feedUrl: url, imageUrl: f.imageUrl, link: f.link, eps,
+    // Set even when absent, so a refresh clears what the feed no longer says.
+    persons: f.persons, funding: f.funding, location: f.location, license: f.license, podcastGuid: f.podcastGuid,
     etag, lastModified, subscribedAt: Date.now(),
   };
   return { show, newFeedUrl: f.newFeedUrl && f.newFeedUrl !== url ? f.newFeedUrl : undefined, notes };

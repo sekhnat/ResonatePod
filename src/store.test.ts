@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, getEp, sortFor, trackedBytes, trimOn, useStore, withEp } from './store';
-import { applySort, inboxKeys, liveMeta, rowsFor, totalUnplayed, unplayedFor } from './model';
+import { applySort, epLabel, hostsOf, inboxKeys, liveMeta, nameList, peopleOf, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
 import { paletteItems, searchIndex, selectPalette } from './components/CommandPalette';
@@ -113,6 +113,27 @@ describe('subscribing and refreshing', () => {
     expect(after.eps[0].title).toBe('Wayland, six years on');
     expect(after.eps[1]).toBe(before.eps[1]);
     expect(after.eps[2]).toBe(before.eps[2]);
+  });
+
+  it('keeps the same show lists and episodes when a refresh repeats the same people and funding, and clears what the feed drops', async () => {
+    const tags = '<podcast:person role="host">Ines Varga</podcast:person><podcast:funding url="https://patreon.example/kp">Patreon</podcast:funding><podcast:license>cc-by-4.0</podcast:license>';
+    const guest = '<podcast:person role="guest">Pat Guest</podcast:person><podcast:soundbite startTime="10" duration="5">Bite</podcast:soundbite>';
+    feedBody = feed.replace('<channel>', `<channel>${tags}`).replace('<guid isPermaLink="false">kp:ep:42</guid>', `<guid isPermaLink="false">kp:ep:42</guid>${guest}`);
+    await st().refresh();
+    const before = st().shows[0];
+    expect(before.persons).toEqual([{ name: 'Ines Varga', role: 'host', group: 'cast' }]);
+    expect(before.eps[0].persons).toEqual([{ name: 'Pat Guest', role: 'guest', group: 'cast' }]);
+
+    await st().refresh(); // the same feed parsed again: new objects with the same contents
+    const again = st().shows[0];
+    expect(again.eps).toBe(before.eps);
+    for (const k of ['persons', 'funding', 'license'] as const) expect(again[k]).toBe(before[k]);
+
+    feedBody = feed;
+    await st().refresh();
+    const after = st().shows[0];
+    for (const k of ['persons', 'funding', 'license'] as const) expect(after[k]).toBeUndefined();
+    expect(after.eps[0].persons).toBeUndefined();
   });
 
   it('keeps episodes the feed has dropped while something refers to them, and lets the rest go', async () => {
@@ -252,6 +273,20 @@ describe('playback', () => {
     expect(getEp(st(), K41).pos).toBe(700);
     expect(getPlayhead()).toBe(0);
     expect(st().speed).toBe(1.2);
+  });
+
+  it('plays from a soundbite’s start, without skipping the intro or losing the saved position of another episode', () => {
+    st().setOverride('kernel-panic-hour', 'intro', 30);
+    useStore.setState({ eps: { ...st().eps, [K41]: { ...getEp(st(), K41), played: true } } });
+    st().play(K41, 5);
+    expect(st().cur).toBe(K41);
+    expect(getPlayhead()).toBe(5);
+    expect(getEp(st(), K41).played).toBe(true); // a soundbite doesn't change what was played
+    // The playing episode seeks, and starts again if it was paused.
+    st().togglePlay();
+    st().play(K41, 20);
+    expect(getPlayhead()).toBe(20);
+    expect(st().playing).toBe(true);
   });
 
   it('applies the intro skip and per-show speed', () => {
@@ -622,6 +657,29 @@ describe('episode rows', () => {
     useStore.setState({ eps: { ...st().eps, [K41]: { ...getEp(st(), K41), pos: 600 } } });
     expect(row(K41).meta).toContain('54:00 left'); // 3840 s - 600 s
     expect(row(K40).meta).not.toContain('left');
+  });
+
+  it('lead with the season and episode number when the feed gives them', () => {
+    expect(epLabel({ season: 2, epNum: 5 })).toBe('S2 E5');
+    expect(epLabel({ epNum: 12.5 })).toBe('E12.5');
+    expect(epLabel({ season: 2, epNum: 1, episodeType: 'trailer' })).toBe('S2 Trailer');
+    expect(epLabel({ episodeType: 'bonus' })).toBe('Bonus');
+    expect(epLabel({})).toBe('');
+    const [show] = st().shows;
+    useStore.setState({ shows: [{ ...show, eps: show.eps.map((e, i) => (i === 0 ? { ...e, season: 3, epNum: 42 } : e)) }] });
+    expect(row(K42).meta).toMatch(/^S3 E42 · /);
+    expect(row(K41).meta).not.toMatch(/^S/);
+  });
+
+  it('name people as a short list', () => {
+    const p = (name: string, role = 'host') => ({ name, role, group: 'cast' });
+    expect(nameList([p('Ann')])).toBe('Ann');
+    expect(nameList([p('Ann'), p('Bo'), p('Cy')])).toBe('Ann, Bo and Cy');
+    expect(nameList([p('A'), p('B'), p('C'), p('D'), p('E'), p('F')])).toBe('A, B, C, D and 2 more');
+    expect(hostsOf({ persons: [p('Ann'), p('Ed', 'editor')] })).toEqual([p('Ann')]);
+    expect(hostsOf({ persons: [p('Ed', 'editor')] })).toEqual([p('Ed', 'editor')]);
+    expect(peopleOf({ persons: [p('Ann')] }, { persons: [p('Gus', 'guest')] })).toEqual([p('Gus', 'guest')]);
+    expect(peopleOf({ persons: [p('Ann')] }, {})).toEqual([p('Ann')]);
   });
 });
 

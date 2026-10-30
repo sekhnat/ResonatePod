@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { art, epKey, mono, parseKey } from '../data';
-import { findShow, getEp, sortFor, useStore } from '../store';
+import { art, epKey, fmt, mono, parseKey } from '../data';
+import { epInfo, findShow, getEp, sortFor, useStore } from '../store';
 import { useNotes } from '../notes';
-import { applyFilter, applySort, episodeRow, orderable, ruleLabel, unplayedFor, type EpisodeRow } from '../model';
+import { applyFilter, applySort, episodeRow, hostsOf, nameList, orderable, ruleLabel, unplayedFor, type EpisodeRow } from '../model';
 import { Art, GhostIcon, RowMeta, RowPlay, RowProgress, Seg, SortSelect, StatusIcon } from '../components/ui';
 import { VirtualList } from '../components/VirtualList';
 
@@ -30,6 +30,7 @@ function ShowPage({ id }: { id: string }) {
     return applySort(applyFilter(items, filter), sort).map((r) => r.key);
   }, [sh, eps, cur, filter, sort]);
   if (!sh) return null;
+  const hosts = hostsOf(sh);
 
   return (
     <div className="show-page">
@@ -41,7 +42,11 @@ function ShowPage({ id }: { id: string }) {
           <span className="show-author">
             {sh.author}
             {sh.link && <>{sh.author && ' · '}<a className="show-link" href={sh.link} target="_blank" rel="noreferrer">Website</a></>}
+            {sh.funding?.map((f) => (
+              <span key={f.url}>{(sh.author || sh.link) && ' · '}<a className="show-link show-support" href={f.url} target="_blank" rel="noreferrer" title={f.url}><i className="ph ph-hand-heart" />{f.label}</a></span>
+            ))}
           </span>
+          {!!hosts.length && <span className="show-people">Hosted by {nameList(hosts)}</span>}
           <div className="show-actions">
             <button className="btn btn-primary" disabled={!sh.eps.length} onClick={() => s.play(epKey(sh.id, sh.eps[0].guid))}>
               <i className="ph-fill ph-play ico-13" />Play latest
@@ -57,6 +62,17 @@ function ShowPage({ id }: { id: string }) {
         </div>
       </div>
       <p className="show-desc">{sh.desc}</p>
+      {(sh.location || sh.license) && (
+        <p className="show-facts">
+          {sh.location && <span><i className="ph ph-map-pin" />{sh.location}</span>}
+          {sh.license && (
+            <span>
+              <i className="ph ph-scales" />
+              {sh.license.url ? <a className="show-link" href={sh.license.url} target="_blank" rel="noreferrer">{sh.license.name}</a> : sh.license.name}
+            </span>
+          )}
+        </p>
+      )}
       <div className="list">
         <div className="show-list-head">
           <span className="show-count">{sh.eps.length} episodes · {s.unplayed} unplayed</span>
@@ -95,6 +111,7 @@ const ShowEpisodeRow = memo(function ShowEpisodeRow({ id }: { id: string }) {
           <span className={`ep-title clip link ${titleClass(e)}${open ? ' open' : ''}`} onClick={() => setOpen((o) => !o)} title={open ? 'Hide show notes' : 'Show notes'}>{e.title}</span>
         </div>
         <span className="ep-meta"><RowMeta e={e} /></span>
+        {open && <EpisodeExtras id={id} />}
         {open && <p className="ep-notes">{notes === null ? 'Loading…' : notes || 'No show notes for this episode.'}</p>}
       </div>
       <div className="row-actions">
@@ -107,6 +124,43 @@ const ShowEpisodeRow = memo(function ShowEpisodeRow({ id }: { id: string }) {
     </div>
   );
 });
+
+/** What an opened episode's feed says beyond its notes: who is on it, where, and the highlights to play. */
+function EpisodeExtras({ id }: { id: string }) {
+  const { info, play } = useStore(useShallow((s) => ({ info: epInfo(s, id), play: s.play })));
+  if (!info) return null;
+  const { ep } = info;
+  // Only the episode's own people: the show's hosts are already on the page above.
+  const people = ep.persons ?? [];
+  if (!people.length && !ep.soundbites && !ep.location) return null;
+  return (
+    <div className="ep-extras">
+      {!!people.length && (
+        <div className="ep-people" aria-label="People">
+          {people.map((p) => {
+            const body = <>{p.img ? <img className="person-img" src={p.img} alt="" loading="lazy" /> : <i className="ph ph-user" />}{p.name}<span className="person-role">{p.role}</span></>;
+            return p.href
+              ? <a key={`${p.name}-${p.role}`} className="tag tag-neutral person" href={p.href} target="_blank" rel="noreferrer">{body}</a>
+              : <span key={`${p.name}-${p.role}`} className="tag tag-neutral person">{body}</span>;
+          })}
+        </div>
+      )}
+      {ep.location && <span className="ep-location"><i className="ph ph-map-pin" />{ep.location}</span>}
+      {ep.soundbites && (
+        <div className="ep-soundbites" aria-label="Soundbites">
+          <span className="section-label">Soundbites</span>
+          {ep.soundbites.map((b) => (
+            <button key={b.at} className="btn btn-ghost soundbite" onClick={() => play(id, b.at)} title={`Play from ${fmt(b.at)}`}>
+              <i className="ph-fill ph-play" />
+              <span className="soundbite-title">{b.title || 'Soundbite'}</span>
+              <span className="soundbite-time">{fmt(b.at)} · {Math.round(b.dur)} s</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** The class that colours an episode's title: dimmed once played, highlighted while it is the current one. */
 export const titleClass = (e: EpisodeRow) => (e.played ? 'played' : e.isCur ? 'cur' : '');

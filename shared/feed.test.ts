@@ -43,6 +43,73 @@ describe('parseFeed', () => {
     expect(b.description).toBe('Arch, Tumbleweed & friends.\nPicks');
   });
 
+  it('leaves out the Podcasting 2.0 fields a feed doesn’t have', () => {
+    for (const k of ['persons', 'funding', 'location', 'license', 'podcastGuid']) expect(f).not.toHaveProperty(k);
+    for (const k of ['season', 'epNum', 'episodeType', 'persons', 'soundbites', 'location']) expect(f.episodes[2]).not.toHaveProperty(k);
+  });
+
+  describe('Podcasting 2.0 tags', () => {
+    const p20 = parseFeed(xml
+      .replace('<channel>', `<channel>
+        <podcast:guid>917393e3-1b1e-5cef-ace4-edaa54e1f810</podcast:guid>
+        <podcast:person href="https://ines.example/" img="https://ines.example/me.jpg">Ines Varga</podcast:person>
+        <podcast:person role="Host" img="file:///etc/passwd" href="javascript:alert(1)">Tom Achebe</podcast:person>
+        <podcast:person role="editor" group="Post-Production">Sam Cut</podcast:person>
+        <podcast:person> </podcast:person>
+        <podcast:funding url="https://patreon.example/kp">Back us on Patreon</podcast:funding>
+        <podcast:funding url="https://ko-fi.example/kp"/>
+        <podcast:funding url="ftp://nope.example/">Not a web page</podcast:funding>
+        <podcast:location geo="geo:52.52,13.40">Berlin, Germany</podcast:location>
+        <podcast:license url="https://creativecommons.org/licenses/by/4.0/">cc-by-4.0</podcast:license>`)
+      .replace('<guid isPermaLink="false">kp:ep:42</guid>', `<guid isPermaLink="false">kp:ep:42</guid>
+        <podcast:season name="Desktop">3</podcast:season>
+        <podcast:episode display="Ch. 42">42.5</podcast:episode>
+        <itunes:season>9</itunes:season>
+        <podcast:person role="guest" href="https://guest.example/">Pat Guest</podcast:person>
+        <podcast:soundbite startTime="1200" duration="45.5">Fractional scaling, explained</podcast:soundbite>
+        <podcast:soundbite startTime="73.5" duration="30"/>
+        <podcast:soundbite startTime="-4" duration="30">Before the start</podcast:soundbite>
+        <podcast:soundbite startTime="100" duration="0">No length</podcast:soundbite>
+        <podcast:location>Studio B</podcast:location>`)
+      .replace('<guid>https://kernelpanic.example/41</guid>', `<guid>https://kernelpanic.example/41</guid>
+        <itunes:season>3</itunes:season><itunes:episode>41</itunes:episode><itunes:episodeType>full</itunes:episodeType>`)
+      .replace('<title>The init wars, revisited</title>', '<title>The init wars, revisited</title><itunes:episodeType>Bonus</itunes:episodeType><itunes:episode>x</itunes:episode>'));
+    const [a, b, c] = p20.episodes;
+
+    it('reads the show’s people, keeping only web links and pictures', () => {
+      expect(p20.persons).toEqual([
+        { name: 'Ines Varga', role: 'host', group: 'cast', img: 'https://ines.example/me.jpg', href: 'https://ines.example/' },
+        { name: 'Tom Achebe', role: 'host', group: 'cast' },
+        { name: 'Sam Cut', role: 'editor', group: 'post-production' },
+      ]);
+    });
+
+    it('reads funding, location, license and the podcast GUID', () => {
+      expect(p20.funding).toEqual([{ url: 'https://patreon.example/kp', label: 'Back us on Patreon' }, { url: 'https://ko-fi.example/kp', label: 'Support the show' }]);
+      expect(p20.location).toBe('Berlin, Germany');
+      expect(p20.license).toEqual({ name: 'cc-by-4.0', url: 'https://creativecommons.org/licenses/by/4.0/' });
+      expect(p20.podcastGuid).toBe('917393e3-1b1e-5cef-ace4-edaa54e1f810');
+    });
+
+    it('reads season and episode numbers, preferring podcast: tags over itunes: ones', () => {
+      expect(a).toMatchObject({ season: 3, epNum: 42.5 });
+      expect(b).toMatchObject({ season: 3, epNum: 41 });
+      expect(b).not.toHaveProperty('episodeType'); // "full" is the default, so it isn't kept
+      expect(c.episodeType).toBe('bonus');
+      expect(c).not.toHaveProperty('epNum'); // not a number
+    });
+
+    it('gives an episode its own people only when it names some', () => {
+      expect(a.persons).toEqual([{ name: 'Pat Guest', role: 'guest', group: 'cast', href: 'https://guest.example/' }]);
+      expect(b).not.toHaveProperty('persons');
+    });
+
+    it('reads soundbites in order, dropping ones without a valid start and length', () => {
+      expect(a.soundbites).toEqual([{ at: 73.5, dur: 30, title: '' }, { at: 1200, dur: 45.5, title: 'Fractional scaling, explained' }]);
+      expect(a.location).toBe('Studio B');
+    });
+  });
+
   it('reads itunes:new-feed-url when a publisher moves the feed', () => {
     expect(f.newFeedUrl).toBeUndefined();
     const moved = xml.replace('<channel>', '<channel><itunes:new-feed-url>https://new.example/feed.xml</itunes:new-feed-url>');

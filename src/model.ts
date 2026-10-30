@@ -1,4 +1,4 @@
-import { art, epKey, fmt, mono, type Episode, type Show } from './data';
+import { art, epKey, fmt, mono, type Episode, type Person, type Show } from './data';
 import { dlRuleLabel } from './settings-labels';
 import { dlByKey, downloadsBlocked, epInfo, findShow, getEp, ruleFor, type EpState, type Filter, type Sort, type State } from './store';
 
@@ -43,6 +43,33 @@ export interface EpisodeRow {
   file?: string;
 }
 
+/** The people named for an episode: its own, or else its show's (an episode's list replaces the show's, not adds to it). */
+export const peopleOf = (show: Pick<Show, 'persons'>, ep?: Pick<Episode, 'persons'>): Person[] => ep?.persons ?? show.persons ?? [];
+
+/** The show's hosts, or everyone it names when none is called a host. */
+export const hostsOf = (show: Pick<Show, 'persons'>): Person[] => {
+  const all = show.persons ?? [];
+  const hosts = all.filter((p) => p.role === 'host');
+  return hosts.length ? hosts : all;
+};
+
+/** "Ann, Bo and Cy", with the rest counted after `max` names. */
+export function nameList(people: Person[], max = 4): string {
+  const names = people.slice(0, max).map((p) => p.name);
+  const more = people.length - names.length;
+  if (more > 0) return `${names.join(', ')} and ${more} more`;
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+}
+
+/** Where an episode sits in its show, as the feed numbers it: "S2 E5", "E5", "S2 Trailer", "Bonus"; empty when it doesn't say. */
+export function epLabel(ep: Pick<Episode, 'season' | 'epNum' | 'episodeType'>): string {
+  const parts: string[] = [];
+  if (ep.season !== undefined) parts.push(`S${ep.season}`);
+  if (ep.episodeType) parts.push(ep.episodeType === 'trailer' ? 'Trailer' : 'Bonus');
+  else if (ep.epNum !== undefined) parts.push(`E${ep.epNum}`);
+  return parts.join(' ');
+}
+
 /**
  * The row for an episode. It doesn't read the live playback position (that changes four times a second, and
  * rows are built for whole lists): the playing episode shows its saved position until RowMeta/RowProgress,
@@ -58,7 +85,8 @@ export function episodeRow(s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'play
   const status: EpStatus = dlItem && !dlItem.error ? 'downloading' : played ? 'played' : st.file ? 'downloaded' : 'cloud';
   const [stIcon, stLabel] = STATUS[status];
   const pos = st.pos;
-  const head = [e.date];
+  const label = epLabel(e.ep);
+  const head = label ? [label, e.date] : [e.date];
   if (e.durMin) head.push(`${e.durMin} min`);
   const tail: string[] = [];
   if (e.sizeMb) tail.push(`${e.sizeMb} MB`);

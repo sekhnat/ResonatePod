@@ -52,9 +52,11 @@ let base = '';
 const feed = () => `<?xml version="1.0"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
 <channel><title>Fixture FM</title><itunes:author>Resonate Tests</itunes:author><description>A feed served by the e2e test.</description><link>${base}/</link>
-<item><title>Episode two</title><guid>fx-2</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/></item>
+<podcast:person role="host">Ana Fixture</podcast:person><podcast:funding url="${base}/support">Back the show</podcast:funding><podcast:location>Testville</podcast:location>
+<item><title>Episode two</title><guid>fx-2</guid><pubDate>${new Date().toUTCString()}</pubDate><enclosure url="${base}/ep2.wav" length="${media['/ep2.wav'].length}" type="audio/wav"/><itunes:season>1</itunes:season><itunes:episode>2</itunes:episode></item>
 <item><title>Episode one</title><guid>fx-1</guid><pubDate>${new Date(Date.now() - 864e5).toUTCString()}</pubDate><description>Fixture show notes for episode one.</description><enclosure url="${base}/ep1.wav" length="${media['/ep1.wav'].length}" type="audio/wav"/>
-<podcast:chapters url="${base}/ch.json" type="application/json+chapters"/><podcast:transcript url="${base}/t.vtt" type="text/vtt"/></item>
+<podcast:chapters url="${base}/ch.json" type="application/json+chapters"/><podcast:transcript url="${base}/t.vtt" type="text/vtt"/>
+<podcast:season>1</podcast:season><podcast:episode>1</podcast:episode><podcast:person role="guest">Ben Guest</podcast:person><podcast:soundbite startTime="9" duration="3">The comeback</podcast:soundbite></item>
 </channel></rss>`;
 
 // A show whose title and author are far longer than a grid card.
@@ -236,6 +238,14 @@ try {
     // Show notes aren't kept on the episodes; these are the ones from the feed, still waiting to be saved.
     await page.getByTitle('Show notes').last().click();
     await page.getByText('Fixture show notes for episode one.').waitFor();
+    // Podcasting 2.0: the show's host, funding and location, and the episode's number, guest and soundbite.
+    await page.getByText('Hosted by Ana Fixture').waitFor();
+    await page.getByRole('link', { name: 'Back the show' }).waitFor();
+    await page.getByText('Testville').waitFor();
+    await page.getByText(/^S1 E1 · /).waitFor();
+    await page.getByLabel('People').getByText('Ben Guest').waitFor();
+    await page.getByLabel('Soundbites').getByRole('button', { name: /The comeback/ }).waitFor();
+    await shot('02a-episode-details');
     await page.getByTitle('Hide show notes').click();
     await shot('02-show');
   });

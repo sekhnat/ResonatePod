@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { art, fmt, lastAtOrBefore, mono, type EpisodeInfo } from '../data';
 import { currentChapter, epInfo, sleepLabel, trimOn, useStore } from '../store';
+import { nameList, peopleOf } from '../model';
 import { useChapters, useCurrent } from '../current';
 import { usePlayhead } from '../playhead';
 import { attachVideo, detachVideo } from '../audio/engine';
@@ -76,6 +77,13 @@ function Transcript({ big }: { big?: boolean }) {
   );
 }
 
+/** Who is on the playing episode (its own people, or else the show's), as one line. */
+function People({ cur, max }: { cur: EpisodeInfo; max?: number }) {
+  const people = peopleOf(cur.show, cur.ep);
+  if (!people.length) return null;
+  return <span className="np-people">With {nameList(people, max)}</span>;
+}
+
 /** Shows the playing episode's picture by borrowing the engine's media element. */
 function VideoView({ glow }: { glow?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -116,6 +124,7 @@ export function NowPlayingPanel() {
       <div className="np-meta">
         <span className="np-title">{cur.title}</span>
         <span className="np-sub">{cur.show.title} · {cur.date}</span>
+        <People cur={cur} />
       </div>
       <Chapters />
       <Transcript />
@@ -147,6 +156,7 @@ export function NowPlayingFull() {
         <div className="np-full-meta">
           <span className="np-full-title">{cur.title}</span>
           <span className="np-full-sub">{cur.show.title} · {cur.date}</span>
+          <People cur={cur} max={8} />
         </div>
         <div className="np-full-tags">
           <span className="tag tag-accent">{s.speed}× speed</span>

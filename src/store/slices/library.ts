@@ -1,4 +1,4 @@
-import { epKey, pool, type Show } from '../../data';
+import { epKey, pool, sameJson, SHOW_STRUCTS, type Show } from '../../data';
 import { resolveFeedUrl } from '../../lib/directory';
 import { fetchFeedUpdate, fetchNewFeed, mergeEpisodes, showFromFeed, takeCredentials } from '../../services/feeds';
 import { platform } from '../../platform';
@@ -62,6 +62,8 @@ export const createLibrarySlice: Slice<'markPlayed' | 'markAllPlayed' | 'refresh
               if (merge.added.length && !epsCopied) { eps = { ...eps }; epsCopied = true; }
               for (const e of merge.added) eps[epKey(sh.id, e.guid)] = { played: false, pos: 0, inbox: true };
               for (const e of merge.changed) holdNotes(sh.id, e.guid, notes.get(e.guid)); // a new or changed episode's notes are saved with it
+              // Lists that say the same as before stay the same objects, so the show isn't written again for them.
+              for (const k of SHOW_STRUCTS) if (sameJson(live[k], upd[k])) (upd as unknown as Record<string, unknown>)[k] = live[k];
               current = current.map((x) => (x.id === sh.id ? { ...x, ...upd, hue: x.hue, subscribedAt: x.subscribedAt, eps: merge.eps ?? x.eps } : x));
             } catch {
               failed++;

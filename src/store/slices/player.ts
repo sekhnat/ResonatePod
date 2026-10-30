@@ -55,16 +55,21 @@ export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack
   };
 
   return {
-    play: (key) => {
+    play: (key, from) => {
       const s = get();
-      if (s.cur === key) { get().togglePlay(); set({ palette: false }); return; }
+      if (s.cur === key) {
+        if (from === undefined) get().togglePlay();
+        else { get().seek(from); if (!s.playing) get().togglePlay(); }
+        set({ palette: false });
+        return;
+      }
       const next = epInfo(s, key);
       if (!next) return;
       if (s.playing) recordPlay();
       const eps = saveCurPos();
       const st = getEp(s, key);
-      let pos = st.played || (next.dur && st.pos >= next.dur - 5) ? 0 : st.pos;
-      if (pos === 0) pos = introFor(s, next.show.id);
+      let pos = from ?? (st.played || (next.dur && st.pos >= next.dur - 5) ? 0 : st.pos);
+      if (pos === 0 && from === undefined) pos = introFor(s, next.show.id);
       lastChapterIdx = -1;
       playStartedAt = pos;
       setPlayhead(pos); // before `cur` changes, so the engine loads the episode at this position

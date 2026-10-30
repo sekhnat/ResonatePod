@@ -132,7 +132,8 @@ export interface Actions {
   toast(text: string): void;
   dismissToast(id: number): void;
 
-  play(key: string): void;
+  /** Plays an episode from where it was left, or from `from` seconds (a soundbite); the current one pauses or resumes, or seeks to `from`. */
+  play(key: string, from?: number): void;
   togglePlay(): void;
   seek(pos: number): void;
   skipBack(): void;

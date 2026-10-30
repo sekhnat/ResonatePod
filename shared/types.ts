@@ -12,6 +12,25 @@ export interface TranscriptLine {
   at: number;
 }
 
+/** `podcast:person`: someone who makes or appears on a show or an episode. */
+export interface Person {
+  name: string;
+  /** Lowercased, as the Podcasting 2.0 taxonomy spells it: "host", "guest", "producer"… */
+  role: string;
+  group: string;
+  img?: string;
+  href?: string;
+}
+
+/** `podcast:funding`: where listeners can support the show. */
+export interface Funding { url: string; label: string }
+
+/** `podcast:soundbite`: a highlight the publisher picked, `dur` seconds from `at`. */
+export interface Soundbite { at: number; dur: number; title: string }
+
+/** `podcast:license`. */
+export interface License { name: string; url?: string }
+
 export interface Episode {
   guid: string;
   title: string;
@@ -30,6 +49,15 @@ export interface Episode {
   transcriptUrl?: string;
   transcriptType?: string;
   inlineChapters?: Chapter[];
+  season?: number;
+  /** The episode's number (`podcast:episode` may be a decimal, such as 12.5). */
+  epNum?: number;
+  /** `itunes:episodeType`, kept only when it isn't a full episode. */
+  episodeType?: 'trailer' | 'bonus';
+  /** The episode's own people; when absent, the show's apply. */
+  persons?: Person[];
+  soundbites?: Soundbite[];
+  location?: string;
 }
 
 export interface Feed {
@@ -41,6 +69,12 @@ export interface Feed {
   category: string;
   /** `itunes:new-feed-url`: the publisher moved the feed here. */
   newFeedUrl?: string;
+  persons?: Person[];
+  funding?: Funding[];
+  location?: string;
+  license?: License;
+  /** `podcast:guid`: the show's identity, which stays the same when the feed moves. */
+  podcastGuid?: string;
   episodes: Episode[];
 }
 
