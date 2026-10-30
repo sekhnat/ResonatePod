@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HttpResponse } from '../../shared/types';
 import type { Episode } from '../data';
 import { platform } from '../platform';
+import { PARSER_VERSION } from '../../shared/parser-version';
 import { fetchFeedUpdate, fetchNewFeed, mergeEpisodes, splitCredentials, takeCredentials } from './feeds';
 
 const URL = 'https://kernelpanic.example/feed.xml';
@@ -12,7 +13,7 @@ const reply = (r: Partial<HttpResponse>) => http.mockResolvedValue({ status: 200
 
 afterEach(() => http.mockReset());
 
-const show = { id: 'kp', feedUrl: URL, etag: '"abc"', lastModified: 'Mon, 19 Oct 2026 06:00:00 GMT' };
+const show = { id: 'kp', feedUrl: URL, etag: '"abc"', lastModified: 'Mon, 19 Oct 2026 06:00:00 GMT', parser: PARSER_VERSION };
 
 describe('fetchFeedUpdate', () => {
   it('asks with the validators from last time', async () => {
@@ -20,8 +21,19 @@ describe('fetchFeedUpdate', () => {
     await fetchFeedUpdate(show);
     expect(http).toHaveBeenCalledWith(URL, { headers: { 'If-None-Match': '"abc"', 'If-Modified-Since': show.lastModified } });
     http.mockClear();
-    await fetchFeedUpdate({ id: 'kp', feedUrl: URL });
+    await fetchFeedUpdate({ id: 'kp', feedUrl: URL, parser: PARSER_VERSION });
     expect(http).toHaveBeenCalledWith(URL, { headers: {} });
+  });
+
+  it('asks for the whole feed when an older parser read it, so what the parser has learnt reaches the show', async () => {
+    reply({});
+    for (const parser of [undefined, PARSER_VERSION - 1]) {
+      http.mockClear();
+      const r = await fetchFeedUpdate({ ...show, parser });
+      expect(http).toHaveBeenCalledWith(URL, { headers: {} });
+      if (r.kind !== 'updated') throw new Error(r.kind);
+      expect(r.show.parser).toBe(PARSER_VERSION);
+    }
   });
 
   it('reports a feed that did not change, and one that wants a password', async () => {

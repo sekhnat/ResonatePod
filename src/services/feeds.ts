@@ -1,4 +1,5 @@
 import { cadence } from '../../shared/cadence';
+import { PARSER_VERSION } from '../../shared/parser-version';
 import type { HttpResponse } from '../../shared/types';
 import { parseFeedAsync } from '../feed-parse';
 import { hueFor, sameEpisode, type Episode, type Show } from '../data';
@@ -17,7 +18,7 @@ export async function showFromFeed(url: string, xml: string, id: string, etag?: 
     desc: f.description, feedUrl: url, imageUrl: f.imageUrl, link: f.link, eps,
     // Set even when absent, so a refresh clears what the feed no longer says.
     persons: f.persons, funding: f.funding, location: f.location, license: f.license, podcastGuid: f.podcastGuid,
-    etag, lastModified, subscribedAt: Date.now(),
+    etag, lastModified, subscribedAt: Date.now(), parser: PARSER_VERSION,
   };
   return { show, newFeedUrl: f.newFeedUrl && f.newFeedUrl !== url ? f.newFeedUrl : undefined, notes };
 }
@@ -50,11 +51,17 @@ export type FeedUpdate =
   | { kind: 'auth' }
   | { kind: 'updated'; show: Show; notes: Map<string, string>; movedTo?: string; newFeedUrl?: string };
 
-/** Asks a subscribed feed whether it changed (with the validators from last time) and parses it when it did. Throws when it can't be read. */
-export async function fetchFeedUpdate(show: Pick<Show, 'id' | 'feedUrl' | 'etag' | 'lastModified'>): Promise<FeedUpdate> {
+/**
+ * Asks a subscribed feed whether it changed (with the validators from last time) and parses it when it did. A show an
+ * older parser read is fetched in full instead, once, so what the parser has learnt to read reaches it even when the
+ * feed itself hasn't changed. Throws when it can't be read.
+ */
+export async function fetchFeedUpdate(show: Pick<Show, 'id' | 'feedUrl' | 'etag' | 'lastModified' | 'parser'>): Promise<FeedUpdate> {
   const headers: Record<string, string> = {};
-  if (show.etag) headers['If-None-Match'] = show.etag;
-  if (show.lastModified) headers['If-Modified-Since'] = show.lastModified;
+  if (show.parser === PARSER_VERSION) {
+    if (show.etag) headers['If-None-Match'] = show.etag;
+    if (show.lastModified) headers['If-Modified-Since'] = show.lastModified;
+  }
   const res = await platform.http(show.feedUrl, { headers });
   if (res.status === 401) return { kind: 'auth' };
   if (res.status === 304) return { kind: 'unchanged' };

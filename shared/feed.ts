@@ -195,4 +195,5 @@ export function parseFeed(xml: string): Feed {
 }
 
 export { cadence } from './cadence';
+export { PARSER_VERSION } from './parser-version';
 export { plainText } from './plain-text';

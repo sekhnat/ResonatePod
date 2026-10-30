@@ -6,6 +6,7 @@ import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
 import { paletteItems, searchIndex, selectPalette } from './components/CommandPalette';
 import { heldNotes, loadNotes } from './notes';
+import { PARSER_VERSION } from '../shared/parser-version';
 
 const FEED_URL = 'https://kernelpanic.example/feed.xml';
 const feed = readFileSync('test/fixtures/feed.xml', 'utf8');
@@ -177,6 +178,21 @@ describe('subscribing and refreshing', () => {
     await st().refresh();
     expect(http).toHaveBeenLastCalledWith(FEED_URL, { headers: { 'If-None-Match': '"v2"' } });
     expect(st().shows[0].eps).toHaveLength(3);
+  });
+
+  it('reads a show an older parser read in full once, even when its server would say it hasn’t changed', async () => {
+    // A library from before PARSER_VERSION: the show has validators the server answers 304 to, and no parser.
+    useStore.setState({ shows: st().shows.map(({ parser: _p, ...s }) => ({ ...s, etag: '"v2"' })) });
+    feedBody = feed.replace('<channel>', '<channel><podcast:person role="host">Ines Varga</podcast:person>');
+    await st().refresh();
+    expect(http).toHaveBeenLastCalledWith(FEED_URL, { headers: {} });
+    expect(st().shows[0]).toMatchObject({ persons: [{ name: 'Ines Varga', role: 'host', group: 'cast' }], parser: PARSER_VERSION, etag: '"v1"' });
+    const eps = st().shows[0].eps;
+    // From then on it asks with its validators again.
+    useStore.setState({ shows: st().shows.map((s) => ({ ...s, etag: '"v2"' })) });
+    await st().refresh();
+    expect(http).toHaveBeenLastCalledWith(FEED_URL, { headers: { 'If-None-Match': '"v2"' } });
+    expect(st().shows[0].eps).toBe(eps);
   });
 
   it('starts auto-downloads for a new show on the desktop', async () => {

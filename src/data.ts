@@ -24,6 +24,8 @@ export interface Show {
   etag?: string;
   lastModified?: string;
   subscribedAt: number;
+  /** The PARSER_VERSION (shared/parser-version.ts) that last read the feed; absent when it was read before that was recorded. */
+  parser?: number;
 }
 
 export const CATS = ['Popular', 'Technology', 'Science', 'History', 'Arts', 'Society', 'Books'];
