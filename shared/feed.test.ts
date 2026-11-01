@@ -143,6 +143,17 @@ describe('parseFeed', () => {
     expect((title ?? '').length).toBeLessThan(1_000_000);
   });
 
+  it('decodes character references in titles, names and labels', () => {
+    const escaped = xml
+      .replace('<title>Kernel Panic Hour</title>', '<title>Josie&#39;s Lonely Hearts Club</title>')
+      .replace('<title>Wayland, five years on</title>', '<title>Wayland&amp;#x2019;s fifth year &amp;amp; beyond</title>')
+      .replace('<channel>', '<channel><itunes:author><![CDATA[Good Story Guild &#8212; Ana &amp; Bo]]></itunes:author>');
+    const g = parseFeed(escaped);
+    expect(g.title).toBe("Josie's Lonely Hearts Club");
+    expect(g.author).toBe('Good Story Guild \u2014 Ana & Bo');
+    expect(g.episodes[0].title).toBe('Wayland\u2019s fifth year & beyond'); // escaped twice by the feed
+  });
+
   it('accepts whitespace and comments after the closing tag', () => {
     expect(parseFeed(`${xml}\n\n<!-- cached by the CDN -->\n`).episodes).toHaveLength(f.episodes.length);
   });
@@ -159,6 +170,7 @@ describe('helpers', () => {
 
   it('strips markup', () => {
     expect(plainText('<p>a&nbsp;&amp;&#39;b</p><br/>c')).toBe("a &'b\n\nc");
+    expect(plainText('&#x2019; &rsquo; &amp;lt; &bogus; &#xD800; &#99999999;')).toBe('\u2019 \u2019 &lt; &bogus; &#xD800; &#99999999;');
   });
 
   it('estimates cadence', () => {

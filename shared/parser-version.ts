@@ -4,6 +4,6 @@
  * server answer "not modified", so what the parser now reads reaches shows that were subscribed before.
  *
  * 1: before this was recorded (a show without `parser`). 2: Podcasting 2.0 people, numbering, funding, soundbites,
- * location, license and GUID.
+ * location, license and GUID. 3: character references ("&#39;") decoded in titles, names and other labels.
  */
-export const PARSER_VERSION = 2;
+export const PARSER_VERSION = 3;

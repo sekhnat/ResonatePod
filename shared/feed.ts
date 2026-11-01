@@ -1,5 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
-import { plainText } from './plain-text';
+import { decodeEntities, plainText } from './plain-text';
 import type { Chapter, Episode, Feed, Funding, License, Person, Soundbite } from './types';
 
 const parser = new XMLParser({
@@ -25,6 +25,8 @@ const attr = (n: unknown, name: string): string => {
   const o = Array.isArray(n) ? n[0] : n;
   return o && typeof o === 'object' ? text((o as Record<string, unknown>)[`@_${name}`]) : '';
 };
+/** Text shown as written (a title, a name), with character references such as "&#39;" decoded and the ends trimmed. */
+const label = (s: string): string => decodeEntities(s).trim();
 
 /** "1:02:03", "62:03", "3723" or "3723.5" → seconds. */
 export function parseDuration(s: string): number {
@@ -58,7 +60,7 @@ const num = (n: unknown): number | undefined => {
 function persons(n: unknown): Person[] | undefined {
   const out: Person[] = [];
   for (const p of list(n).slice(0, 30)) {
-    const name = text(p).trim();
+    const name = label(text(p));
     if (!name) continue;
     const person: Person = { name, role: attr(p, 'role').trim().toLowerCase() || 'host', group: attr(p, 'group').trim().toLowerCase() || 'cast' };
     const img = httpUrl(attr(p, 'img'));
@@ -73,7 +75,7 @@ function persons(n: unknown): Person[] | undefined {
 function funding(n: unknown): Funding[] | undefined {
   const out = list(n).flatMap((f) => {
     const url = httpUrl(attr(f, 'url'));
-    return url ? [{ url, label: text(f).trim() || 'Support the show' }] : [];
+    return url ? [{ url, label: label(text(f)) || 'Support the show' }] : [];
   });
   return out.length ? out : undefined;
 }
@@ -82,13 +84,13 @@ function soundbites(n: unknown): Soundbite[] | undefined {
   const out = list(n).flatMap((b) => {
     const at = parseFloat(attr(b, 'startTime'));
     const dur = parseFloat(attr(b, 'duration'));
-    return Number.isFinite(at) && at >= 0 && Number.isFinite(dur) && dur > 0 ? [{ at, dur, title: text(b).trim() }] : [];
+    return Number.isFinite(at) && at >= 0 && Number.isFinite(dur) && dur > 0 ? [{ at, dur, title: label(text(b)) }] : [];
   });
   return out.length ? out.sort((a, b) => a.at - b.at) : undefined;
 }
 
 function license(n: unknown): License | undefined {
-  const name = text(n).trim();
+  const name = label(text(n));
   if (!name) return undefined;
   const url = httpUrl(attr(n, 'url'));
   return url ? { name, url } : { name };
@@ -102,7 +104,7 @@ function itemExtras(it: Record<string, unknown>): Partial<Episode> {
   const type = text(it['itunes:episodeType']).trim().toLowerCase();
   const people = persons(it['podcast:person']);
   const bites = soundbites(it['podcast:soundbite']);
-  const location = text(it['podcast:location']).trim();
+  const location = label(text(it['podcast:location']));
   if (season !== undefined) out.season = season;
   if (epNum !== undefined) out.epNum = epNum;
   if (type === 'trailer' || type === 'bonus') out.episodeType = type;
@@ -118,7 +120,7 @@ function parseItem(it: Record<string, unknown>): Episode | null {
   const enc = (it.enclosure as unknown[] | undefined)?.[0];
   const url = attr(enc, 'url');
   if (!url) return null;
-  const title = text(it.title) || 'Untitled episode';
+  const title = label(text(it.title)) || 'Untitled episode';
   const guid = text(it.guid) || url;
   const date = Date.parse(text(it.pubDate));
   const transcripts = ((it['podcast:transcript'] as unknown[]) ?? [])
@@ -126,7 +128,7 @@ function parseItem(it: Record<string, unknown>): Episode | null {
     .filter((t) => t.url)
     .sort((a, b) => rank(a.type) - rank(b.type));
   const psc = ((it['psc:chapters'] as Record<string, unknown> | undefined)?.['psc:chapter'] as unknown[]) ?? [];
-  const inline: Chapter[] = psc.map((c) => ({ t: attr(c, 'title') || 'Chapter', at: parseNpt(attr(c, 'start')) })).sort((a, b) => a.at - b.at);
+  const inline: Chapter[] = psc.map((c) => ({ t: label(attr(c, 'title')) || 'Chapter', at: parseNpt(attr(c, 'start')) })).sort((a, b) => a.at - b.at);
   return {
     guid,
     title,
@@ -173,7 +175,7 @@ export function parseFeed(xml: string): Feed {
   const extras: Partial<Feed> = {};
   const people = persons(ch['podcast:person']);
   const fund = funding(ch['podcast:funding']);
-  const location = text(ch['podcast:location']).trim();
+  const location = label(text(ch['podcast:location']));
   const lic = license(ch['podcast:license']);
   const podcastGuid = text(ch['podcast:guid']).trim();
   if (people) extras.persons = people;
@@ -182,12 +184,12 @@ export function parseFeed(xml: string): Feed {
   if (lic) extras.license = lic;
   if (podcastGuid) extras.podcastGuid = podcastGuid;
   return {
-    title: text(ch.title) || 'Untitled podcast',
-    author: text(ch['itunes:author']) || text((ch['itunes:owner'] as Record<string, unknown>)?.['itunes:name']) || text(ch.managingEditor) || '',
+    title: label(text(ch.title)) || 'Untitled podcast',
+    author: label(text(ch['itunes:author']) || text((ch['itunes:owner'] as Record<string, unknown>)?.['itunes:name']) || text(ch.managingEditor)),
     description: plainText(text(ch.description) || text(ch['itunes:summary'])),
     imageUrl: attr(ch['itunes:image'], 'href') || text((ch.image as Record<string, unknown>)?.url) || undefined,
     link,
-    category: attr(ch['itunes:category'], 'text') || 'Podcast',
+    category: label(attr(ch['itunes:category'], 'text')) || 'Podcast',
     newFeedUrl: /^https?:\/\//.test(moved) ? moved : undefined,
     ...extras,
     episodes,
