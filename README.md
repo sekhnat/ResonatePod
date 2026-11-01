@@ -218,12 +218,14 @@ It is not on Flathub; submitting it there is a separate step. Inside the sandbox
 
 ## Releasing
 
-1. Bump `version` in `package.json` (and `package-lock.json`): `npm version <x.y.z> --no-git-tag-version`.
-2. Commit, then tag and push: `git tag v<x.y.z> && git push origin main v<x.y.z>`.
+1. Add the version's entry to `CHANGELOG.md` — CI publishes it as the release's "What's new" section, and the release fails if it isn't there.
+2. Bump `version` in `package.json` (and `package-lock.json`): `npm version <x.y.z> --no-git-tag-version`.
+3. Commit, then tag and push: `git tag v<x.y.z> && git push origin main v<x.y.z>`.
 
 CI checks that the tag matches the `package.json` version, then attaches the AppImage and its `.zsync`, the `.deb`,
 `SHA256SUMS.txt` and its Sigstore signature (`SHA256SUMS.txt.sigstore.json`, signed keylessly with the
-workflow's identity) to a GitHub release with generated notes.
+workflow's identity) to a GitHub release: its body is the version's `CHANGELOG.md` entry as "What's new",
+the install notes, and GitHub's generated change list.
 
 ## Known limitations
 
