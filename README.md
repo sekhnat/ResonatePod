@@ -204,6 +204,7 @@ src/
 e2e/run.mjs      Playwright-driven Electron test against a local feed server (directories are served
                  from test/fixtures/directory via the RESONATE_URL_REWRITE test hook)
 test/fixtures/   Sample feed, chapters, transcript, and small media files (chaptered MP3/M4A, video)
+android/         The start of the Android app: its Jetpack Compose theme (see android/README.md)
 ```
 
 ## Flatpak
