@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The waveform mark from assets/icon.svg, its exact path scaled by 0.17 about the centre so it sits inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M26.8,54L36.32,54L42.44,36.32L51.28,73.04L60.12,26.8L68.28,66.24L73.72,54L81.2,54"
+        android:strokeColor="#FF9184D9"
+        android:strokeWidth="5.1"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

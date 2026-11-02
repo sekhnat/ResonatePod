@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Resonate</string>
+    <string name="welcome_title">Welcome to Resonate</string>
+    <string name="welcome_body">Subscribe to a few shows to get started. New episodes land in your inbox and download automatically.</string>
+</resources>

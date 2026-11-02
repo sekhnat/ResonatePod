@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window behind Compose, seen at launch and in the system splash: Nocturne's ground (color-bg). -->
+    <color name="window_background">#FF161826</color>
+
+    <style name="Theme.Resonate" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>
