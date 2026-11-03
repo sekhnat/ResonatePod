@@ -38,7 +38,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "@vitest/coverage-v8": "^2.1.9",
-    "electron": "^43.8.2",
+    "electron": "^45.2.1",
     "electron-builder": "^26.18.0",
     "esbuild": "^0.24.0",
     "eslint": "^10.13.0",
