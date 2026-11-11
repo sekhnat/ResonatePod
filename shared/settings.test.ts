@@ -52,6 +52,7 @@ describe('upgradeOverrides', () => {
       c: { dl: 'off' },
     });
     expect(upgradeOverrides({ a: { dl: 'Latest 1', intro: '90 s', speed: '1×' } })).toEqual({ a: { dl: 1, speed: 1, intro: 90 } });
+    expect(upgradeOverrides({ a: { segs: false }, b: { segs: 'yes' } })).toEqual({ a: { segs: false } });
   });
 
   it('passes typed overrides through, including an explicit "off" and trim false', () => {

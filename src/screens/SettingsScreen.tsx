@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { trackedBytes, useStore, type Settings, type Toggles } from '../store';
+import { SKIP_CATEGORIES, SKIP_HINTS, SKIP_LABELS } from '../../shared/skips';
+import { skipsFor, trackedBytes, useStore, type Settings, type Toggles } from '../store';
 import { delLabel, keepLabel, skipLabel, speedLabel } from '../settings-labels';
 import { Seg, Toggle } from '../components/ui';
 import { platform } from '../platform';
 import { clockLabel } from '../model';
-import { backupLibraryFile, chooseBackupFile, exportOpmlFile, importOpmlFile } from '../lib/library-io';
+import { backupLibraryFile, chooseBackupFile, exportOpmlFile, importOpmlFile, importSkipsFile } from '../lib/library-io';
 import { CountrySelect, SourceSelect } from '../components/DirectoryCard';
 
 type Row = { label: string; hint?: string } & (
@@ -18,8 +19,9 @@ export function SettingsScreen() {
   const s = useStore(useShallow((s) => ({
     directory: s.directory, eps: s.eps, folder: s.folder, set: s.set, setPrefs: s.setPrefs, setSetting: s.setSetting, setToggle: s.setToggle,
     shows: s.shows, storageLimitGb: s.storageLimitGb, sv: s.sv, sync: s.sync, syncing: s.syncing, tg: s.tg, toast: s.toast,
-    folderBytes: s.folderBytes, updateUsage: s.updateUsage,
+    folderBytes: s.folderBytes, updateUsage: s.updateUsage, autoSkip: s.autoSkip, toggleAutoSkip: s.toggleAutoSkip,
   })));
+  const withSegments = Object.keys(s.eps).filter((k) => skipsFor(s, k).length).length;
   const changeFolder = async () => {
     if (!platform.isDesktop) { s.set({ dialog: 'folder' }); return; }
     const folder = await platform.pickFolder(s.folder);
@@ -52,6 +54,12 @@ export function SettingsScreen() {
       { label: 'Skip back / forward', kind: 'node', node: seg('skip', [{ back: 10, fwd: 30 }, { back: 15, fwd: 30 }, { back: 30, fwd: 60 }], skipLabel) },
       { label: 'Notify on new episodes', kind: 'toggle', k: 'notify' },
     ] },
+    ...(platform.isDesktop ? [{ title: 'Skip segments', rows: [
+      { label: 'Segments', hint: 'Ads, promos and credits marked in downloaded episodes, from a segments file; playback jumps over them and the files are left as they are', kind: 'value',
+        value: withSegments ? `${withSegments.toLocaleString()} episode${withSegments === 1 ? '' : 's'}` : 'None', action: 'Import…', run: () => void importSkipsFile() },
+      ...SKIP_CATEGORIES.map((c): Row => ({ label: `Skip ${SKIP_LABELS[c].toLowerCase()}`, hint: SKIP_HINTS[c], kind: 'node',
+        node: <Toggle on={s.autoSkip.includes(c)} onToggle={() => s.toggleAutoSkip(c)} label={`Skip ${SKIP_LABELS[c].toLowerCase()}`} /> })),
+    ] as Row[] }] : []),
     ...(platform.isDesktop ? [{ title: 'Desktop', rows: [
       { label: 'Start Resonate when you log in', hint: 'Opens hidden in the tray', kind: 'toggle', k: 'autostart' },
     ] as Row[] }] : []),

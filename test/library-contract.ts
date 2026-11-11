@@ -78,7 +78,8 @@ export function libraryContract(name: string, make: () => LibraryStore) {
   });
 
   it('round-trips episode state, leaving out what is not set', () => {
-    const full = { played: true, pos: 12.5, inbox: true, file: '/p/a.mp3', fileBytes: 1234, playedAt: 5, lastPlayed: 6 };
+    const full = { played: true, pos: 12.5, inbox: true, file: '/p/a.mp3', fileBytes: 1234, playedAt: 5, lastPlayed: 6,
+      skips: { file: '/p/a.mp3', bytes: 1234, segs: [{ start: 0, end: 30.5, cat: 'promo' as const }, { start: 600, end: 660, cat: 'sponsor' as const }] } };
     const bare = { played: false, pos: 0, inbox: true };
     db.patch({ epState: { upsert: { 'a:1': full, 'a:2': bare } } });
     expect(db.load().epState).toEqual({ 'a:1': full, 'a:2': bare });

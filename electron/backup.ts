@@ -50,7 +50,7 @@ export async function fitToMachine(b: LibraryBackup, m: Machine): Promise<Librar
   const epState = { ...b.library.epState };
   await Promise.all(Object.entries(epState).map(async ([key, st]) => {
     if (st.file === undefined || await m.hasFile(st.file)) return;
-    const { file: _file, fileBytes: _bytes, ...rest } = st;
+    const { file: _file, fileBytes: _bytes, skips: _skips, ...rest } = st; // segments belong to that file
     epState[key] = rest;
   }));
   const kv = { ...b.library.kv };

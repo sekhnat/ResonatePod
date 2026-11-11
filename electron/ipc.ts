@@ -67,6 +67,9 @@ async function setAutostart(on: boolean) {
   ].join('\n'));
 }
 
+/** A segments file for a library of thousands of episodes is a few MB; anything far bigger isn't one. */
+const MAX_SKIPS_BYTES = 64 * 1024 * 1024;
+
 /** Where the library is kept, as it was, when a backup replaces it. */
 const BEFORE_RESTORE = 'library.db.before-restore';
 
@@ -209,6 +212,14 @@ export function registerIpc({ roots, downloads }: { roots: DownloadRoots; downlo
     const r = await dialog.showOpenDialog(ctx.win!, { title: 'Import subscriptions', filters: [{ name: 'OPML', extensions: ['opml', 'xml'] }], properties: ['openFile'] });
     if (r.canceled || !r.filePaths[0]) return null;
     return { name: path.basename(r.filePaths[0]), text: await fs.readFile(r.filePaths[0], 'utf8') };
+  });
+  ipcMain.handle('dialog:openSkips', async (): Promise<{ name: string; text: string } | { error: string } | null> => {
+    const r = await dialog.showOpenDialog(ctx.win!, { title: 'Import skip segments', filters: [{ name: 'Segments file', extensions: ['json'] }, { name: 'All files', extensions: ['*'] }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const file = r.filePaths[0];
+    // Read only, never written; the window parses and checks it (shared/skips.ts).
+    if ((await fs.stat(file)).size > MAX_SKIPS_BYTES) return { error: 'This file is too big to be a segments file' };
+    return { name: path.basename(file), text: await fs.readFile(file, 'utf8') };
   });
   ipcMain.handle('dialog:saveOpml', async (_e, name: string, text: string) => {
     const r = await dialog.showSaveDialog(ctx.win!, { title: 'Export subscriptions', defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: 'OPML', extensions: ['opml'] }] });

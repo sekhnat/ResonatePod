@@ -20,7 +20,7 @@ function Modal({ onClose, width = 480, children, label }: { onClose: () => void;
 }
 
 export function ShowSettingsDialog() {
-  const s = useStore(useShallow((s) => ({ cur: s.cur, ovr: s.ovr, resetOverride: s.resetOverride, set: s.set, setOverride: s.setOverride, setSpeed: s.setSpeed, showId: s.showId, shows: s.shows, sv: s.sv, tg: s.tg })));
+  const s = useStore(useShallow((s) => ({ autoSkip: s.autoSkip, cur: s.cur, ovr: s.ovr, resetOverride: s.resetOverride, set: s.set, setOverride: s.setOverride, setSpeed: s.setSpeed, showId: s.showId, shows: s.shows, sv: s.sv, tg: s.tg })));
   const sh = s.shows.find((x) => x.id === s.showId);
   if (!sh) return null;
   const close = () => s.set({ cfgOpen: false });
@@ -53,6 +53,7 @@ export function ShowSettingsDialog() {
         {row('speed', 'Playback speed', `Global: ${speedLabel(s.sv.speed)}`, [undefined, 1, 1.2, 1.5, 2], orGlobal(speedLabel))}
         {row('trim', 'Trim silence', s.tg.silence ? 'Global: on' : 'Global: off', [undefined, true, false], orGlobal(onOff))}
         {row('intro', 'Skip intro', 'Skips from start on every episode', [undefined, 30, 60, 90], introLabel)}
+        {row('segs', 'Skip segments', s.autoSkip.length ? `Global: ${s.autoSkip.length} kinds` : 'Global: off', [undefined, true, false], orGlobal(onOff))}
       </div>
       <div className="modal-foot">
         <div className="modal-foot-left">

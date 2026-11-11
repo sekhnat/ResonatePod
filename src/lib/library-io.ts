@@ -21,6 +21,14 @@ export async function importOpmlFile() {
   if (n) useStore.getState().go('shows');
 }
 
+/** Adds skip segments from a segments file to the downloaded episodes it names (see shared/skips.ts). */
+export async function importSkipsFile() {
+  const file = await platform.openSkips().catch((err: Error) => ({ error: err.message }));
+  if (!file) return;
+  if ('error' in file) { useStore.getState().toast(`Couldn’t import skip segments: ${file.error}`); return; }
+  useStore.getState().importSkips(file.text, file.name);
+}
+
 export async function exportOpmlFile() {
   const s = useStore.getState();
   const name = await platform.saveOpml('resonate-subscriptions.opml', exportOpml(s.shows.map((x) => ({ title: x.title, xmlUrl: x.feedUrl }))));

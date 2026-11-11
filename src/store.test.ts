@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INBOX_SORT, autoDownloadKeys, chaptersOf, cleanupKeys, epInfo, getEp, sortFor, trackedBytes, trimOn, useStore, withEp } from './store';
+import { INBOX_SORT, autoDownloadKeys, autoSkipFor, chaptersOf, cleanupKeys, epInfo, getEp, skipsFor, sortFor, trackedBytes, trimOn, useStore, withEp } from './store';
 import { applySort, epLabel, hostsOf, inboxKeys, liveMeta, nameList, peopleOf, rowsFor, totalUnplayed, unplayedFor } from './model';
 import { platform } from './platform';
 import { getPlayhead, setPlayhead } from './playhead';
@@ -245,6 +245,51 @@ describe('subscribing and refreshing', () => {
     st().setOverride('kernel-panic-hour', 'trim', undefined);
     expect(st().ovr).toEqual({});
     expect(trimOn(st(), 'kernel-panic-hour')).toBe(st().tg.silence);
+  });
+
+  it('adds skip segments to the downloaded episodes a segments file names, for as long as the file is the same', () => {
+    useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), file: '/p/42.mp3', fileBytes: 900 }, [K41]: { ...getEp(st(), K41), file: '/p/41.mp3' } } });
+    const file = JSON.stringify({
+      '/p/42.mp3': { duration: 1800, segments: [{ start: 0, end: 30, category: 'promo' }, { start: 900, end: 960, category: 'sponsor' }] },
+      '/p/41.mp3': { segments: [{ start: 1700, end: 1750, category: 'outro' }] },
+      '/p/elsewhere.mp3': { segments: [{ start: 0, end: 30, category: 'promo' }] },
+    });
+    expect(st().importSkips(file, 'segments.json')).toEqual({ episodes: 2, unmatched: 1 });
+    expect(st().toasts.at(-1)!.text).toBe('Added skip segments to 2 episodes (1 file not in your library)');
+    expect(getEp(st(), K42).skips).toEqual({ file: '/p/42.mp3', bytes: 900, segs: [{ start: 0, end: 30, cat: 'promo' }, { start: 900, end: 960, cat: 'sponsor' }] });
+    expect(getEp(st(), K41).skips).toEqual({ file: '/p/41.mp3', segs: [{ start: 1700, end: 1750, cat: 'outro' }] });
+    expect(skipsFor(st(), K42)).toHaveLength(2);
+    // Downloaded again (a different size: different ads) or deleted: the segments no longer line up and are left alone.
+    useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), fileBytes: 950 } } });
+    expect(skipsFor(st(), K42)).toEqual([]);
+    useStore.setState({ eps: { ...st().eps, [K41]: { ...getEp(st(), K41), file: undefined } } });
+    expect(skipsFor(st(), K41)).toEqual([]);
+    expect(st().importSkips('{ nope', 'broken.json')).toBeNull();
+    expect(st().toasts.at(-1)!.text).toBe('Couldn’t import broken.json: it isn’t JSON');
+  });
+
+  it('skips the advertising kinds of segment by default, and lets a show turn skipping off', () => {
+    expect([...autoSkipFor(st(), 'kernel-panic-hour')]).toEqual(['sponsor', 'promo', 'selfpromo', 'bumper']);
+    st().toggleAutoSkip('promo');
+    st().toggleAutoSkip('intro');
+    expect([...autoSkipFor(st(), 'kernel-panic-hour')]).toEqual(['sponsor', 'selfpromo', 'bumper', 'intro']);
+    st().setOverride('kernel-panic-hour', 'segs', false);
+    expect(autoSkipFor(st(), 'kernel-panic-hour').size).toBe(0);
+    useStore.setState({ autoSkip: ['sponsor', 'weather'] as never }); // whatever was saved, only real kinds count
+    st().setOverride('kernel-panic-hour', 'segs', undefined);
+    expect([...autoSkipFor(st(), 'kernel-panic-hour')]).toEqual(['sponsor']);
+  });
+
+  it('puts an action on a toast and keeps it up longer', () => {
+    vi.useFakeTimers();
+    const run = vi.fn();
+    st().toast('Skipped sponsor (0:32)', { label: 'Undo', run });
+    expect(st().toasts.at(-1)).toMatchObject({ text: 'Skipped sponsor (0:32)', action: { label: 'Undo' } });
+    vi.advanceTimersByTime(4000);
+    expect(st().toasts).toHaveLength(1);
+    vi.advanceTimersByTime(3100);
+    expect(st().toasts).toHaveLength(0);
+    vi.useRealTimers();
   });
 
   it('follows the global download rule until the show sets its own', () => {

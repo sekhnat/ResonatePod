@@ -84,6 +84,7 @@ export default function App() {
         {toasts.map((t) => (
           <div key={t.id} className="toast" onClick={() => dismissToast(t.id)}>
             <i className="ph ph-info toast-icon" />{t.text}
+            {t.action && <button className="toast-action" onClick={(e) => { e.stopPropagation(); t.action!.run(); dismissToast(t.id); }}>{t.action.label}</button>}
           </div>
         ))}
       </div>

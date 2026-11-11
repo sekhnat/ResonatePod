@@ -4,7 +4,7 @@ import { BACKUP_FORMAT, BACKUP_VERSION, type BackupNote, type LibraryBackup } fr
 import type { EpisodeRecord, EpStateRecord, LibraryPatch, LibrarySnapshot, ShowRecord } from '../../shared/library';
 import { migrate, schemaVersion } from './migrations';
 
-interface EpStateRow { key: string; played: number; pos: number; inbox: number; file: string | null; fileBytes: number | null; playedAt: number | null; lastPlayed: number | null }
+interface EpStateRow { key: string; played: number; pos: number; inbox: number; file: string | null; fileBytes: number | null; playedAt: number | null; lastPlayed: number | null; skips: string | null }
 
 /**
  * The library on disk. Changes arrive as patches and are written in one transaction, so a save costs what changed,
@@ -58,13 +58,14 @@ export class LibraryDb {
     });
 
     const epState: Record<string, EpStateRecord> = {};
-    const states = this.db.prepare('SELECT key, played, pos, inbox, file, file_bytes AS fileBytes, played_at AS playedAt, last_played AS lastPlayed FROM ep_state');
+    const states = this.db.prepare('SELECT key, played, pos, inbox, file, file_bytes AS fileBytes, played_at AS playedAt, last_played AS lastPlayed, skips FROM ep_state');
     for (const r of states.iterate() as Iterable<EpStateRow>) {
       const st: EpStateRecord = { played: !!r.played, pos: r.pos, inbox: !!r.inbox };
       if (r.file != null) st.file = r.file;
       if (r.fileBytes != null) st.fileBytes = r.fileBytes;
       if (r.playedAt != null) st.playedAt = r.playedAt;
       if (r.lastPlayed != null) st.lastPlayed = r.lastPlayed;
+      if (r.skips != null) { try { st.skips = JSON.parse(r.skips) as EpStateRecord['skips']; } catch { /* unreadable: left out */ } }
       epState[r.key] = st;
     }
     const kv = (this.db.prepare('SELECT key, value FROM kv').all() as { key: string; value: string }[])
@@ -116,7 +117,7 @@ export class LibraryDb {
 
       for (const key of p.epState?.delete ?? []) q.deleteState.run(key);
       for (const [key, st] of Object.entries(p.epState?.upsert ?? {})) {
-        q.setState.run({ key, played: st.played ? 1 : 0, pos: st.pos, inbox: st.inbox ? 1 : 0, file: st.file ?? null, fileBytes: st.fileBytes ?? null, playedAt: st.playedAt ?? null, lastPlayed: st.lastPlayed ?? null });
+        q.setState.run({ key, played: st.played ? 1 : 0, pos: st.pos, inbox: st.inbox ? 1 : 0, file: st.file ?? null, fileBytes: st.fileBytes ?? null, playedAt: st.playedAt ?? null, lastPlayed: st.lastPlayed ?? null, skips: st.skips ? JSON.stringify(st.skips) : null });
       }
 
       for (const [key, value] of Object.entries(p.kv ?? {})) {
@@ -176,8 +177,8 @@ function prepareStatements(db: Database.Database) {
       ON CONFLICT (show_id, guid) DO UPDATE SET pub_date = excluded.pub_date, data = excluded.data`),
     setNotes: db.prepare('INSERT INTO notes (show_id, guid, text) VALUES (?, ?, ?) ON CONFLICT (show_id, guid) DO UPDATE SET text = excluded.text'),
     deleteState: db.prepare('DELETE FROM ep_state WHERE key = ?'),
-    setState: db.prepare(`INSERT OR REPLACE INTO ep_state (key, played, pos, inbox, file, file_bytes, played_at, last_played)
-      VALUES (@key, @played, @pos, @inbox, @file, @fileBytes, @playedAt, @lastPlayed)`),
+    setState: db.prepare(`INSERT OR REPLACE INTO ep_state (key, played, pos, inbox, file, file_bytes, played_at, last_played, skips)
+      VALUES (@key, @played, @pos, @inbox, @file, @fileBytes, @playedAt, @lastPlayed, @skips)`),
     setKv: db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)'),
     deleteKv: db.prepare('DELETE FROM kv WHERE key = ?'),
   };

@@ -42,6 +42,7 @@ const api = {
   pickFolder: (current: string): Promise<string | null> => ipcRenderer.invoke('dialog:folder', current),
   openOpml: (): Promise<{ name: string; text: string } | null> => ipcRenderer.invoke('dialog:openOpml'),
   saveOpml: (name: string, text: string): Promise<string | null> => ipcRenderer.invoke('dialog:saveOpml', name, text),
+  openSkips: (): Promise<{ name: string; text: string } | { error: string } | null> => ipcRenderer.invoke('dialog:openSkips'),
   isMetered: (): Promise<boolean | null> => ipcRenderer.invoke('net:metered'),
   logError: (message: string, detail?: string) => ipcRenderer.send('log:renderer', message, detail),
   openLogs: (): Promise<string> => ipcRenderer.invoke('log:open'),

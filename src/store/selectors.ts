@@ -1,4 +1,5 @@
 import { fileStem, safeName } from '../../shared/filename';
+import { DEFAULT_AUTO_SKIP, SKIP_CATEGORIES, type SkipCategory, type SkipSegment } from '../../shared/skips';
 import { chaptersFor, epKey, episodeInfo, lastAtOrBefore, parseKey, type Episode, type EpisodeInfo, type Show } from '../data';
 import type { DlRule } from '../../shared/settings';
 import type { ActiveDl, Data, EpState, Sleep, State, Sort, Ui } from './types';
@@ -88,6 +89,28 @@ export const trimOn = (s: Pick<Data, 'ovr' | 'tg'>, showId: string) => s.ovr[sho
 export const speedFor = (s: Data, showId: string) => s.ovr[showId]?.speed ?? s.sv.speed;
 
 export const introFor = (s: Data, showId: string) => s.ovr[showId]?.intro ?? 0;
+
+const NO_SEGMENTS: SkipSegment[] = [];
+const NO_CATEGORIES: ReadonlySet<SkipCategory> = new Set();
+
+/**
+ * An episode's skip segments, while its downloaded file is still the one they were measured on: after the file is
+ * deleted or downloaded again (and with dynamic ads, different), they no longer line up and are left alone.
+ */
+export const skipsFor = (s: Pick<Data, 'eps'>, key: string | null): SkipSegment[] => {
+  const st = key ? s.eps[key] : undefined;
+  const k = st?.skips;
+  if (!k || !st?.file || k.file !== st.file) return NO_SEGMENTS;
+  if (k.bytes != null && st.fileBytes != null && k.bytes !== st.fileBytes) return NO_SEGMENTS;
+  return k.segs;
+};
+
+/** The categories a show's episodes skip automatically: those chosen in Preferences, or none when the show says so. */
+export const autoSkipFor = (s: Pick<Data, 'ovr' | 'autoSkip'>, showId: string): ReadonlySet<SkipCategory> => {
+  if (s.ovr[showId]?.segs === false) return NO_CATEGORIES;
+  const chosen = Array.isArray(s.autoSkip) ? s.autoSkip : DEFAULT_AUTO_SKIP;
+  return new Set(chosen.filter((c) => (SKIP_CATEGORIES as readonly string[]).includes(c)));
+};
 
 export const currentChapter = (ch: { at: number }[], pos: number) => lastAtOrBefore(ch, pos, (c) => c.at);
 

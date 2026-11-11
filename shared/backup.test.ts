@@ -38,6 +38,7 @@ describe('readBackup', () => {
     expect(broken((b) => { b.library.shows[0].eps[1].guid = ''; })).toThrow('an episode of kp');
     expect(broken((b) => { b.library.epState['kp:kp:ep:42'].pos = 'x' as never; })).toThrow('episode state kp:kp:ep:42');
     expect(broken((b) => { b.library.epState['kp:kp:ep:42'].file = 5 as never; })).toThrow('episode state');
+    expect(broken((b) => { b.library.epState['kp:kp:ep:42'].skips = { file: '/x.mp3', segs: [{ start: 0, end: 5, cat: 'ads' }] } as never; })).toThrow('skip segments of kp:kp:ep:42');
     expect(broken((b) => { b.notes.push({ show: 'kp' } as never); })).toThrow('damaged (show notes)');
     expect(broken((b) => { (b as { notes: unknown }).notes = undefined; })).toThrow('no show notes');
   });

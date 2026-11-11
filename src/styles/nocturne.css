@@ -54,6 +54,14 @@
      round-7 blurple raised it past the ground's) with a lighter bloom and
      a ghost tint of the same hue, while the slide grounds stay
      desaturated. Deck-scale fills only — not interface colors. */
+  /* skip segments on the seek bar, one hue per kind of segment */
+  --color-seg-sponsor: #5fbf8a;
+  --color-seg-promo: #e0a84e;
+  --color-seg-selfpromo: #d97bb0;
+  --color-seg-bumper: #57b4c9;
+  --color-seg-intro: #8a8fae;
+  --color-seg-outro: #8a8fae;
+  --color-seg-recap: #8a8fae;
   --color-section: #262a60;
   --color-section-glow: #353b80;
   --color-section-ghost: #4c5397;

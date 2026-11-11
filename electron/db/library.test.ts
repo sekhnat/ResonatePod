@@ -62,7 +62,7 @@ describe('the database file', () => {
     again.close();
   });
 
-  it('upgrades settings saved as labels when it moves a version 1 database to 2', () => {
+  it('upgrades settings saved as labels when it moves a version 1 database to the current one', () => {
     const file = path.join(dir, 'library.db');
     const raw = new Database(file);
     raw.exec(`
@@ -87,7 +87,8 @@ describe('the database file', () => {
     });
     lib.close();
     const check = new Database(file);
-    expect(check.pragma('user_version', { simple: true })).toBe(2);
+    expect(check.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);
+    expect(check.prepare("SELECT name FROM pragma_table_info('ep_state') WHERE name = 'skips'").get()).toEqual({ name: 'skips' });
     check.close();
     const again = new LibraryDb(file); // already upgraded: opening it again changes nothing
     expect(again.load().kv.sv).toEqual({ keep: 5, par: 1, speed: 2, del: 'day', skip: { back: 10, fwd: 30 } });
@@ -124,7 +125,7 @@ describe('backup and restore', () => {
       { show: 'kp', ep: { guid: 'kp:41', pubDate: 1, title: 'Rolling' } },
       { show: 'lu', ep: { guid: 'lu:1', pubDate: 3, title: 'Pilot', description: 'The first one \u{1F3A7}' } },
     ] },
-    epState: { upsert: { 'kp:kp:42': { played: true, pos: 0, inbox: false, playedAt: 9 }, 'lu:lu:1': { played: false, pos: 61.5, inbox: true, file: '/p/lu1.mp3', fileBytes: 7 } } },
+    epState: { upsert: { 'kp:kp:42': { played: true, pos: 0, inbox: false, playedAt: 9 }, 'lu:lu:1': { played: false, pos: 61.5, inbox: true, file: '/p/lu1.mp3', fileBytes: 7, skips: { file: '/p/lu1.mp3', bytes: 7, segs: [{ start: 1, end: 4, cat: 'sponsor' }] } } } },
     kv: { folder: '~/Podcasts', queue: ['lu:lu:1'], sv: { keep: 3 } },
   });
 

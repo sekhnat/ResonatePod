@@ -28,6 +28,8 @@ export interface Override {
   trim?: boolean;
   /** Seconds skipped from the start of every episode. */
   intro?: number;
+  /** Whether skip segments are skipped for this show (absent: the categories chosen in Preferences). */
+  segs?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = { keep: 3, par: 2, speed: 1.2, del: 'week', skip: { back: 15, fwd: 30 } };
@@ -94,6 +96,7 @@ function upgradeOverride(saved: unknown): Override {
   // intro: "Off" (absent) or "30 s"
   const intro = typeof v.intro === 'string' ? parseInt(v.intro, 10) : v.intro;
   if (isPositive(intro)) out.intro = intro;
+  if (typeof v.segs === 'boolean') out.segs = v.segs;
   return out;
 }
 

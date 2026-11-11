@@ -56,6 +56,8 @@ const steps: ((db: Database.Database) => void)[] = [
       update.run(JSON.stringify(key === 'sv' ? upgradeSettings(saved) : upgradeOverrides(saved)), key);
     }
   },
+  // 3: skip segments for a downloaded episode (JSON, see shared/skips.ts), kept with the file they were measured on.
+  (db) => db.exec('ALTER TABLE ep_state ADD COLUMN skips TEXT'),
 ];
 
 export const SCHEMA_VERSION = steps.length;

@@ -4,6 +4,17 @@ What's new in each release of Resonate. When a version is tagged, CI publishes
 its entry here as the "What's new" section of the GitHub release, so every
 release needs one.
 
+## 1.9.0 (11 November 2026)
+
+- Added: skip segments. Import a segments file that marks ads, promos, credits
+  and the like in downloaded episodes, and playback jumps over the kinds you
+  choose in Preferences (sponsors, promotions, self-promotion and break bumpers
+  by default), with an Undo on the message that says what was skipped. Segments
+  are drawn on the seek bar, a "Skip intro"-style button appears inside the
+  ones that aren't skipped automatically, and each show can turn skipping off.
+  Audio files are never changed: playback only seeks, and segments stop
+  applying if an episode is downloaded again.
+
 ## 1.8.1 (1 November 2026)
 
 - Fixed: show and episode titles, author names, people and other feed text now

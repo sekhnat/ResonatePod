@@ -1,8 +1,9 @@
 import { useRef, type CSSProperties } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { art, fmt, mono, type Chapter } from '../data';
-import { currentChapter, useStore, type Sleep } from '../store';
-import { useChapters, useCurrent } from '../current';
+import { activeSegment, SKIP_LABELS } from '../../shared/skips';
+import { autoSkipFor, currentChapter, useStore, type Sleep } from '../store';
+import { useChapters, useCurrent, useSkips } from '../current';
 import { usePlayhead } from '../playhead';
 import { MenuItem } from './HeaderBar';
 import { Art, GhostIcon, useOutside } from './ui';
@@ -31,6 +32,9 @@ export function SeekBar({ height = 14, thumb = true, ticks = true, glow = true, 
   const pos = usePlayhead((p) => p);
   const { seek, skipBack, skipFwd } = useStore(useShallow((s) => ({ seek: s.seek, skipBack: s.skipBack, skipFwd: s.skipFwd })));
   const scrub = useScrub((f) => cur && cur.dur && seek(f * cur.dur));
+  const segs = useSkips();
+  // As a string, so the bar redraws only when the choice changes (a Set would be new every time).
+  const auto = useStore((s) => (cur ? [...autoSkipFor(s, cur.show.id)].join(' ') : ''));
   if (!cur) return null;
   const pct = `${cur.dur ? Math.min(100, (pos / cur.dur) * 100).toFixed(2) : 0}%`;
   return (
@@ -38,6 +42,10 @@ export function SeekBar({ height = 14, thumb = true, ticks = true, glow = true, 
       onKeyDown={(e) => { if (e.key === 'ArrowLeft') { e.stopPropagation(); skipBack(); } if (e.key === 'ArrowRight') { e.stopPropagation(); skipFwd(); } }}
       className="seek" style={{ height, ...style }}>
       <div className="seek-track" />
+      {!!cur.dur && segs.map((g) => (
+        <span key={`${g.start}-${g.cat}`} className={`seek-seg seg-${g.cat}${auto.split(' ').includes(g.cat) ? ' auto' : ''}`}
+          style={{ left: `${(g.start / cur.dur) * 100}%`, width: `${(Math.min(g.end, cur.dur) - g.start) / cur.dur * 100}%` }} />
+      ))}
       <div className={`seek-fill${glow ? ' glow' : ''}`} style={{ width: pct }} />
       {ticks && !!cur.dur && chapters.slice(1).map((c) => (
         <span key={`${c.at}-${c.t}`} className="seek-tick" style={{ left: `${(c.at / cur.dur) * 100}%` }} />
@@ -107,6 +115,19 @@ function Remaining({ dur, speed }: { dur: number; speed: number }) {
   return <>{usePlayhead((p) => (dur ? `-${fmt((dur - p) / speed)}` : '--:--'))}</>;
 }
 
+/** "Skip intro" and the like, while playback is in a skip segment; redrawn only when that segment changes. */
+function SkipSegmentButton() {
+  const segs = useSkips();
+  const seg = usePlayhead((p) => activeSegment(segs, p));
+  const seek = useStore((s) => s.seek);
+  if (!seg) return null;
+  return (
+    <button className="btn btn-secondary skip-seg" title={`Jump to ${fmt(seg.end)}`} onClick={() => seek(seg.end)}>
+      Skip {SKIP_LABELS[seg.cat].toLowerCase()}
+    </button>
+  );
+}
+
 /** The title of the chapter playing, which changes a few times an episode. */
 function ChapterName({ chapters }: { chapters: Chapter[] }) {
   return <>{chapters[usePlayhead((p) => currentChapter(chapters, p))].t}</>;
@@ -149,6 +170,7 @@ export function PlayerBar() {
           <span className="player-remaining"><Remaining dur={cur.dur} speed={s.speed} /></span>
         </div>
       </div>
+      <SkipSegmentButton />
       <div className="player-right">
         <button className="btn btn-secondary player-speed" onClick={s.cycleSpeed} title="Playback speed">{s.speed}×</button>
         <SleepButton id="sleep-bar" placement={{ bottom: 40, right: -60 }} />

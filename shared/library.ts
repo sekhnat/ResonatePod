@@ -2,6 +2,8 @@
 // keeps its own richer types; here a show and an episode are records with a few known fields, because the database
 // only needs those to index and order them and keeps the rest as JSON.
 
+import type { SkipSet } from './skips';
+
 /** A show without its episodes. */
 export interface ShowRecord { id: string; [field: string]: unknown }
 
@@ -17,6 +19,8 @@ export interface EpStateRecord {
   fileBytes?: number;
   playedAt?: number;
   lastPlayed?: number;
+  /** Stretches of the downloaded file that playback skips (see shared/skips.ts). */
+  skips?: SkipSet;
 }
 
 export interface LoadedShow extends ShowRecord { eps: Omit<EpisodeRecord, 'description'>[] }

@@ -4,6 +4,7 @@
 // are encrypted with this computer's keyring and couldn't be read anywhere else.
 
 import type { EpStateRecord, LibrarySnapshot } from './library';
+import { isSkipSet } from './skips';
 
 export const BACKUP_FORMAT = 'resonate-backup';
 export const BACKUP_VERSION = 1;
@@ -41,6 +42,7 @@ function damaged(what: string): never {
 function checkState(key: string, st: unknown): asserts st is EpStateRecord {
   if (!isRecord(st) || typeof st.played !== 'boolean' || !isNum(st.pos) || typeof st.inbox !== 'boolean') damaged(`episode state ${key}`);
   if ((st.file !== undefined && typeof st.file !== 'string') || !optNum(st.fileBytes) || !optNum(st.playedAt) || !optNum(st.lastPlayed)) damaged(`episode state ${key}`);
+  if (st.skips !== undefined && !isSkipSet(st.skips)) damaged(`skip segments of ${key}`);
 }
 
 /**

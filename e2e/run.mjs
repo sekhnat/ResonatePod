@@ -321,6 +321,36 @@ try {
     await page.getByRole('button', { name: 'Unmute' }).waitFor();
   });
 
+  await step('skip segments jump over a marked stretch without touching the file, and Undo goes back', async () => {
+    const dir = path.join(home, 'Podcasts', 'Fixture FM');
+    const file = path.join(dir, readdirSync(dir).find((f) => f.includes('Episode one') && f.endsWith('.wav')));
+    const before = statSync(file);
+    const segments = path.join(home, 'segments.json');
+    writeFileSync(segments, JSON.stringify({ [file]: { duration: 12, segments: [{ start: 4, end: 9, category: 'sponsor', source: 'test' }] }, '/nowhere/else.mp3': { segments: [{ start: 0, end: 5, category: 'promo' }] } }));
+    await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, segments);
+    await page.locator('nav button', { hasText: 'Preferences' }).click();
+    await page.getByRole('switch', { name: 'Trim silence' }).click(); // at normal speed the stretch takes seconds to play through
+    await page.getByRole('button', { name: 'Import…', exact: true }).click();
+    await page.getByText('Added skip segments to 1 episode (1 file not in your library)').waitFor();
+    await page.getByText('1 episode', { exact: true }).waitFor();
+    await page.locator('.seek-seg.seg-sponsor.auto').waitFor();
+    assert.equal(await time(), 3);
+    await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+    await page.getByText(/Skipped sponsor \(0:05\)/).waitFor({ timeout: 8000 });
+    assert.ok((await time()) >= 9, 'playback jumped to the end of the segment');
+    await shot('05a-skipped');
+    await page.getByRole('button', { name: 'Undo' }).click();
+    // Back at the start of the stretch, which now plays through: the person chose to hear it.
+    await until(() => { const v = Number(document.querySelector('[aria-label="Seek"]')?.getAttribute('aria-valuenow')); return v >= 6 && v <= 8; }, null, { timeout: 8000 });
+    await page.getByRole('button', { name: 'Pause', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Skip sponsor' }).waitFor(); // inside a segment: it can still be skipped by hand
+    await page.getByRole('switch', { name: 'Trim silence' }).click();
+    const after = statSync(file);
+    assert.deepEqual([after.size, after.mtimeMs], [before.size, before.mtimeMs], 'the audio file is left as it was');
+    const box = await page.locator('[aria-label="Seek"]').boundingBox();
+    await page.mouse.click(box.x + box.width * 0.25, box.y + box.height / 2); // back to 0:03, where the next step expects it
+  });
+
   await step('queue plays the next episode when one ends', async () => {
     await page.locator('nav button', { hasText: 'New episodes' }).click();
     await page.locator('.h-row', { hasText: 'Episode two' }).getByRole('button', { name: 'Add to queue', exact: true }).click();
@@ -726,7 +756,7 @@ try {
     const chosen = (within) => page.evaluate((root) => [...document.querySelector(root).querySelectorAll('[role=radio][aria-checked=true]')].map((e) => e.textContent), within);
     await page.getByTitle('Show settings').click();
     await page.getByText('Overrides for this show').waitFor();
-    assert.deepEqual(await chosen('.dialog'), ['Latest 1', 'Global', 'Off', '30 s'], 'the show keeps its own choices');
+    assert.deepEqual(await chosen('.dialog'), ['Latest 1', 'Global', 'Off', '30 s', 'Global'], 'the show keeps its own choices'); // skip segments: never set
     await page.keyboard.press('Escape');
     await page.locator('nav button', { hasText: 'Preferences' }).click();
     await page.getByText('Sync server').waitFor();

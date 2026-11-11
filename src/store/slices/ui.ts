@@ -15,10 +15,10 @@ export const createUiSlice: Slice<'go' | 'goBack' | 'openShow' | 'set' | 'toast'
       }),
     openShow: (id) => get().go('show', { showId: id }),
     set: (patch) => set(patch),
-    toast: (text) => {
+    toast: (text, action) => {
       const id = ++toastId;
-      set((s) => ({ toasts: [...s.toasts.slice(-2), { id, text }] }));
-      setTimeout(() => get().dismissToast(id), 3800);
+      set((s) => ({ toasts: [...s.toasts.slice(-2), action ? { id, text, action } : { id, text }] }));
+      setTimeout(() => get().dismissToast(id), action ? 7000 : 3800);
     },
     dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   };

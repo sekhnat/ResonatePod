@@ -1,5 +1,7 @@
 import { shallow } from 'zustand/shallow';
-import { epInfo, getEp, setPlayer, trimOn, useStore, type State } from '../store';
+import { SKIP_LABELS, skipAt, type SkipSegment } from '../../shared/skips';
+import { fmt } from '../data';
+import { autoSkipFor, epInfo, getEp, setPlayer, skipsFor, trimOn, useStore, type State } from '../store';
 import { platform } from '../platform';
 import { getPlayhead } from '../playhead';
 
@@ -61,11 +63,17 @@ export function startEngine() {
   let loadedFile: string | undefined;
   let pendingSeek: number | null = null;
   let trimming = false;
+  // Skip segments: where playback was at the last timeupdate (null right after loading), and the segments a person
+  // chose to hear (Undo) in this episode.
+  let lastTime: number | null = null;
+  let allowed = new Set<SkipSegment>();
 
   const rate = (s: State) => (trimming && s.speed < TRIM_RATE ? TRIM_RATE : s.speed);
 
   function load(s: State, resumeAt?: number) {
     loadedKey = s.cur;
+    lastTime = null;
+    if (resumeAt == null) allowed = new Set();
     const info = epInfo(s, s.cur);
     loadedFile = info ? getEp(s, info.key).file : undefined;
     if (!info) {
@@ -117,8 +125,39 @@ export function startEngine() {
     if (st().video !== video) useStore.setState({ video });
   });
   let lastPosState = 0;
+  /**
+   * Jumps over a skip segment playback has just run into (see skipAt), and offers to go back. Only for the local file
+   * the segments were measured on: skipsFor gives none once the episode's file is another one, and a stream has none.
+   */
+  function skipSegment(now: number): boolean {
+    const prev = lastTime;
+    lastTime = now;
+    const s = st();
+    if (audio.paused || !loadedFile || !s.cur) return false;
+    const segs = skipsFor(s, s.cur);
+    if (!segs.length) return false;
+    const info = epInfo(s, s.cur);
+    const seg = info && skipAt(segs, autoSkipFor(s, info.show.id), prev, now, allowed);
+    if (!seg) return false;
+    const to = Number.isFinite(audio.duration) ? Math.min(seg.end, audio.duration) : seg.end;
+    audio.currentTime = to; // at the very end this ends the episode, and the queue moves on as usual
+    lastTime = to;
+    s.onTime(to);
+    const key = s.cur;
+    s.toast(`Skipped ${SKIP_LABELS[seg.cat].toLowerCase()} (${fmt(seg.end - seg.start)})`, {
+      label: 'Undo',
+      run: () => {
+        if (loadedKey !== key) return;
+        allowed.add(seg);
+        st().seek(seg.start);
+      },
+    });
+    return true;
+  }
+
   audio.addEventListener('timeupdate', () => {
     if (pendingSeek != null) return;
+    if (skipSegment(audio.currentTime)) return;
     st().onTime(audio.currentTime);
     const now = Date.now();
     if ('mediaSession' in navigator && now - lastPosState > 1000 && Number.isFinite(audio.duration)) {

@@ -9,7 +9,7 @@ const backup = (): LibraryBackup => ({
     shows: [{ id: 'kp', eps: [{ guid: 'a', pubDate: 2 }, { guid: 'b', pubDate: 1 }] }],
     epState: {
       'kp:a': { played: false, pos: 30, inbox: true, file: '/home/u/Podcasts/KP/a.mp3', fileBytes: 100 },
-      'kp:b': { played: true, pos: 0, inbox: false, file: '/elsewhere/b.mp3', fileBytes: 200, playedAt: 5 },
+      'kp:b': { played: true, pos: 0, inbox: false, file: '/elsewhere/b.mp3', fileBytes: 200, playedAt: 5, skips: { file: '/elsewhere/b.mp3', bytes: 200, segs: [{ start: 0, end: 30, cat: 'promo' }] } },
     },
     kv: { folder: '/mnt/other', tg: { auto: false, autostart: true }, directory: { country: 'gb', podcastIndex: true }, dlPending: ['kp:a', 'kp:b', 7], queue: ['kp:b'] },
   },
@@ -49,7 +49,7 @@ describe('fitToMachine', () => {
     ...over,
   });
 
-  it('keeps downloads that are here, and forgets the rest, which then download again', async () => {
+  it('keeps downloads that are here, and forgets the rest (and their skip segments), which then download again', async () => {
     const lib = await fitToMachine(backup(), machine());
     expect(lib.epState['kp:a']).toEqual(backup().library.epState['kp:a']);
     expect(lib.epState['kp:b']).toEqual({ played: true, pos: 0, inbox: false, playedAt: 5 });

@@ -1,4 +1,5 @@
 import { upgradeSettings } from '../../shared/settings';
+import { DEFAULT_AUTO_SKIP } from '../../shared/skips';
 import { defaultCountry } from '../lib/directory';
 import type { Data, Ui } from './types';
 
@@ -26,6 +27,7 @@ export const initialData: Data = {
   lastChecked: 0,
   trimSaved: 0,
   directory: { country: defaultCountry(), source: 'all', podcastIndex: false },
+  autoSkip: [...DEFAULT_AUTO_SKIP],
 };
 
 export const initialUi: Ui = {

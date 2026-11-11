@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand';
 import type { BackupSummary } from '../../shared/backup';
 import type { EpisodeAction } from '../../shared/gpodder';
 import type { Override, Settings } from '../../shared/settings';
+import type { SkipCategory, SkipSet } from '../../shared/skips';
 import type { DownloadMessage } from '../../shared/types';
 import type { EpisodeMeta, Show } from '../data';
 import type { DirectoryResult, SourceChoice } from '../lib/directory';
@@ -23,6 +24,8 @@ export interface EpState {
   fileBytes?: number;
   playedAt?: number;
   lastPlayed?: number;
+  /** Skip segments for the downloaded file (see shared/skips.ts). */
+  skips?: SkipSet;
 }
 export interface ActiveDl {
   key: string;
@@ -51,7 +54,7 @@ export interface DirectoryPrefs {
   /** A Podcast Index key is saved (the key itself lives in secrets). */
   podcastIndex: boolean;
 }
-export interface Toast { id: number; text: string }
+export interface Toast { id: number; text: string; action?: { label: string; run: () => void } }
 export interface Toggles { auto: boolean; metered: boolean; silence: boolean; notify: boolean; deletePlayed: boolean; autostart: boolean }
 export interface SyncState {
   server: string;
@@ -87,6 +90,8 @@ export interface Data {
   lastChecked: number;
   trimSaved: number;
   directory: DirectoryPrefs;
+  /** Skip segment categories skipped automatically; the others are only marked. */
+  autoSkip: SkipCategory[];
 }
 
 export interface Ui {
@@ -132,7 +137,8 @@ export interface Actions {
   goBack(): void;
   openShow(id: string): void;
   set(patch: Partial<Ui>): void;
-  toast(text: string): void;
+  /** A short message; with `action`, a button on it ("Undo") and a little longer on screen. */
+  toast(text: string, action?: Toast['action']): void;
   dismissToast(id: number): void;
 
   /** Plays an episode from where it was left, or from `from` seconds (a soundbite); the current one pauses or resumes, or seeks to `from`. */
@@ -188,6 +194,10 @@ export interface Actions {
   setToggle(k: keyof Toggles): void;
   setSetting<K extends keyof Settings>(k: K, v: Settings[K]): void;
   setPrefs(patch: Partial<Pick<Data, 'folder' | 'storageLimitGb'>>): void;
+  /** Turns automatic skipping of one segment category on or off. */
+  toggleAutoSkip(cat: SkipCategory): void;
+  /** Adds the segments in a segments file to the downloaded episodes it names; reports how many matched. */
+  importSkips(text: string, name: string): { episodes: number; unmatched: number } | null;
 
   setDirectory(patch: Partial<DirectoryPrefs>): void;
   setPodcastIndexKey(key: { key: string; secret: string } | null): Promise<void>;

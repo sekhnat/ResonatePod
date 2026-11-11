@@ -162,6 +162,8 @@ button { font: inherit; }
 .app-body { flex: 1; min-height: 0; display: flex; position: relative; }
 .app-main { flex: 1; min-width: 0; overflow: auto; padding: var(--space-8); }
 .toast-icon { color: var(--color-accent); font-size: 15px; }
+.toast-action { margin-left: 6px; padding: 2px 8px; border-radius: var(--radius-sm); font: inherit; font-weight: 600; color: var(--color-accent-300); background: transparent; border: 1px solid var(--color-accent-700); cursor: pointer; }
+.toast-action:hover { background: var(--color-accent-900); }
 
 .titlebar-brand { font-size: 18px; color: var(--color-accent); padding: 0 4px; }
 .titlebar-nav { display: flex; gap: 2px; width: 212px; }
@@ -250,6 +252,18 @@ button { font: inherit; }
 .seek-fill { position: absolute; left: 0; height: 4px; border-radius: 2px; background: var(--color-accent); }
 .seek-fill.glow { box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent) 60%, transparent); }
 .seek-tick { position: absolute; width: 2px; height: 8px; border-radius: 1px; background: var(--color-bg); }
+/* Skip segments sit on the track under the fill; the ones skipped automatically are brighter. */
+.seek-seg { position: absolute; height: 4px; min-width: 2px; opacity: 0.45; pointer-events: none; }
+.seek-seg.auto { opacity: 0.9; }
+.seek-seg.seg-sponsor { background: var(--color-seg-sponsor); }
+.seek-seg.seg-promo { background: var(--color-seg-promo); }
+.seek-seg.seg-selfpromo { background: var(--color-seg-selfpromo); }
+.seek-seg.seg-bumper { background: var(--color-seg-bumper); }
+.seek-seg.seg-intro { background: var(--color-seg-intro); }
+.seek-seg.seg-outro { background: var(--color-seg-outro); }
+.seek-seg.seg-recap { background: var(--color-seg-recap); }
+/* Floats above the player bar's right end while playback is in a skip segment. */
+.btn.skip-seg { position: absolute; right: var(--space-6); bottom: calc(100% + 10px); font-size: 12.5px; padding: 6px 14px; white-space: nowrap; box-shadow: var(--shadow-md); }
 .seek-thumb { position: absolute; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: var(--color-accent-200); }
 
 /* ---------- Now playing (the side panel and the full view) ---------- */

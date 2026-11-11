@@ -58,6 +58,8 @@ export interface Platform {
   pickFolder(current: string): Promise<string | null>;
   openOpml(): Promise<{ name: string; text: string } | null>;
   saveOpml(name: string, text: string): Promise<string | null>;
+  /** A skip segments file the person picks (desktop only: segments belong to downloaded files). */
+  openSkips(): Promise<{ name: string; text: string } | { error: string } | null>;
   isMetered(): Promise<boolean | null>;
   /** Records an error the page didn't handle, in the log file (the console in the browser build). */
   logError(message: string, detail?: string): void;
@@ -124,6 +126,7 @@ function electronPlatform(api: ResonateApi): Platform {
     openFolder: (f) => { void api.openFolder(f); },
     pickFolder: api.pickFolder,
     openOpml: api.openOpml,
+    openSkips: api.openSkips,
     saveOpml: api.saveOpml,
     isMetered: api.isMetered,
     logError: api.logError,
@@ -190,6 +193,7 @@ function browserPlatform(): Platform {
       input.click();
     }),
     saveOpml: async (name, text) => { downloadText(name, text); return name; },
+    openSkips: async () => null,
     isMetered: async () => null,
     logError: (message, detail) => console.error(message, detail ?? ''),
     openLogs() {},
