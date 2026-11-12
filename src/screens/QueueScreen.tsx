@@ -46,9 +46,7 @@ interface DragHandlers {
 
 const QueueRow = memo(function QueueRow({ id, index: i, dragging, over, on }: { id: string; index: number; dragging: boolean; over: boolean; on: DragHandlers }) {
   const e = useStore(useShallow((s) => episodeRow(s, id)));
-  // "Play next" goes after the episode that's playing, if that is the head of the queue.
-  const nextSlot = useStore((s) => (s.queue[0] === s.cur ? 1 : 0));
-  const a = useStore(useShallow((s) => ({ play: s.play, moveQueue: s.moveQueue, removeFromQueue: s.removeFromQueue })));
+  const a = useStore(useShallow((s) => ({ play: s.play, playNext: s.playNext, removeFromQueue: s.removeFromQueue })));
   if (!e) return null;
   return (
     <div draggable
@@ -63,7 +61,7 @@ const QueueRow = memo(function QueueRow({ id, index: i, dragging, over, on }: { 
         <span className="ep-meta"><RowMeta e={e} prefix={`${e.showTitle} · `} /></span>
       </div>
       <div className="row-actions">
-        {i > 0 && <GhostIcon icon="ph ph-arrow-line-up" title="Play next" onClick={() => a.moveQueue(i, nextSlot)} />}
+        {i > 0 && <GhostIcon icon="ph ph-arrow-line-up" title="Play next" onClick={() => a.playNext(e.key)} />}
         <GhostIcon icon="ph ph-x" title="Remove from queue" onClick={() => a.removeFromQueue(e.key)} />
       </div>
       <StatusIcon e={e} />

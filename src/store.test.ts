@@ -386,12 +386,53 @@ describe('playback', () => {
   });
 
   it('keeps playing when nothing else is queued', () => {
-    useStore.setState({ queue: [K42] });
-    st().play(K42);
+    useStore.setState({ queue: [K40] });
+    st().play(K40); // the show's last episode, newest first, so nothing follows it
     st().nextEpisode();
-    expect(st().cur).toBe(K42);
+    expect(st().cur).toBe(K40);
     expect(st().playing).toBe(true);
+    expect(st().queue).toEqual([K40]);
+  });
+
+  it('queues the show’s next episode, as its page is sorted, when nothing else is queued', () => {
+    st().play(K42);
+    expect(st().queue).toEqual([K41]);
+    // Once that one starts, the one after it is lined up, whether by Next or by the end of an episode.
+    st().nextEpisode();
+    expect(st().cur).toBe(K41);
+    expect(st().queue).toEqual([K41, K40]);
+    st().onEnded();
+    expect(st().cur).toBe(K40);
+    expect(st().queue).toEqual([K40]);
+  });
+
+  it('follows the show’s sort when queueing its next episode', () => {
+    st().setSort('kernel-panic-hour', 'Oldest first');
+    st().play(K42); // the newest is last, oldest first
+    expect(st().queue).toEqual([]);
+    st().play(K41);
     expect(st().queue).toEqual([K42]);
+  });
+
+  it('leaves the queue alone when something else is already in it', () => {
+    useStore.setState({ queue: [K40] });
+    st().play(K42);
+    expect(st().queue).toEqual([K40]);
+  });
+
+  it('puts an episode next: after the playing one when it is queued, else at the front', () => {
+    useStore.setState({ queue: [K40] });
+    st().play(K42);
+    st().playNext(K41);
+    expect(st().queue).toEqual([K41, K40]);
+    expect(st().toasts.at(-1)?.text).toBe('Playing “Rolling releases vs. the rest of us” next');
+
+    useStore.setState({ queue: [K42, K41, K40] });
+    st().playNext(K40); // already queued: moved, not added twice
+    expect(st().queue).toEqual([K42, K40, K41]);
+    st().playNext(K42);
+    expect(st().queue).toEqual([K42, K40, K41]);
+    expect(st().toasts.at(-1)?.text).toBe('Already playing');
   });
 
   it('stops at the end of the episode when the sleep timer says so', () => {

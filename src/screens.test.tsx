@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DownloadsScreen } from './screens/DownloadsScreen';
 import { ShowScreen } from './screens/ShowScreen';
+import { EpisodeMenu } from './components/EpisodeMenu';
 import { platform } from './platform';
 import { setPlayhead } from './playhead';
 import { useStore } from './store';
@@ -107,6 +108,33 @@ describe('the Show screen', () => {
     click(byTitle('Mark played'));
     expect(useStore.getState().eps[K]).toMatchObject({ played: true });
     expect(rowTitles()).toHaveLength(5);
+  });
+
+  it('offers Play next and Add to queue on a right-click', () => {
+    mount(<><ShowScreen /><EpisodeMenu /></>);
+    const rightClick = (i: number) => act(() => {
+      container.querySelectorAll('.h-row')[i].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 100, clientY: 200 }));
+    });
+    const item = (label: string) => [...container.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === label);
+
+    rightClick(4);
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+    click(item('Add to queue'));
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+    rightClick(2);
+    click(item('Play next'));
+    expect(useStore.getState().queue).toEqual(['show-0:show-0-ep-2', 'show-0:show-0-ep-4']);
+
+    // Something else scrolling (the Now playing transcript following along) leaves it open; scrolling the list closes it.
+    rightClick(1);
+    const elsewhere = document.body.appendChild(document.createElement('div'));
+    act(() => { elsewhere.dispatchEvent(new Event('scroll')); });
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+    act(() => { container.dispatchEvent(new Event('scroll')); }); // late, for a scroll from before it opened
+    expect(container.querySelector('[role="menu"]')).not.toBeNull();
+    act(() => { container.scrollTop = 120; container.dispatchEvent(new Event('scroll')); });
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+    elsewhere.remove();
   });
 
   // (Rows are keyed by episode, so this holds with or without the page being keyed by show; the page key matters for the list's own state.)

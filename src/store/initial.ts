@@ -54,6 +54,7 @@ export const initialUi: Ui = {
   palette: false,
   query: '',
   menu: null,
+  epMenu: null,
   dialog: null,
   refreshing: false,
   syncing: false,

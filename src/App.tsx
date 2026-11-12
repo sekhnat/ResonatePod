@@ -10,6 +10,7 @@ import { PlayerBar } from './components/PlayerBar';
 import { NowPlayingFull, NowPlayingPanel } from './components/NowPlaying';
 import { Dialogs, ShowSettingsDialog } from './components/Dialogs';
 import { CommandPalette } from './components/CommandPalette';
+import { EpisodeMenu } from './components/EpisodeMenu';
 import { ShowScreen } from './screens/ShowScreen';
 import { InboxScreen } from './screens/InboxScreen';
 import { ShowsScreen } from './screens/ShowsScreen';
@@ -53,7 +54,7 @@ export default function App() {
       else if (mod && k === 'w') { e.preventDefault(); platform.close(); }
       else if (mod && k === 'q') { e.preventDefault(); platform.quit(); }
       else if (mod && /^[1-5]$/.test(k)) { e.preventDefault(); st.go(NAV_KEYS[+k - 1]); }
-      else if (e.key === 'Escape') { st.set({ palette: false, cfgOpen: false, npFull: false, dialog: null, menu: null }); }
+      else if (e.key === 'Escape') { st.set({ palette: false, cfgOpen: false, npFull: false, dialog: null, menu: null, epMenu: null }); }
       else if (inInput || mod) return;
       else if (e.key === ' ') { e.preventDefault(); st.togglePlay(); }
       else if (e.key === 'ArrowLeft') { st.skipBack(); }
@@ -79,6 +80,7 @@ export default function App() {
         <Dialogs />
       </div>
       <PlayerBar />
+      <EpisodeMenu />
       {palette && <CommandPalette />}
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (

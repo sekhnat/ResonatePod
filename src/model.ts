@@ -1,6 +1,9 @@
 import { art, epKey, fmt, mono, type Episode, type Person, type Show } from './data';
 import { dlRuleLabel } from './settings-labels';
-import { dlByKey, downloadsBlocked, epInfo, findShow, getEp, ruleFor, type EpState, type Filter, type Sort, type State } from './store';
+import { dlByKey, downloadsBlocked, epInfo, findShow, getEp, ruleFor, type State } from './store';
+
+// Ordering lives with the store, which needs it to find a show's next episode; the screens import it from here.
+export { applyFilter, applySort, orderable, type Orderable } from './store';
 
 export type EpStatus = 'cloud' | 'downloaded' | 'played' | 'downloading';
 
@@ -128,40 +131,6 @@ export const liveMeta = (e: Pick<EpisodeRow, 'head' | 'tail' | 'dur'>, pos: numb
 export const NO_DOWNLOADS: State['dl'] = [];
 
 export const rowsFor = (s: Pick<State, 'shows' | 'eps' | 'dl' | 'cur' | 'playing'>, keys: string[]) => keys.map((k) => episodeRow(s, k)).filter((r): r is EpisodeRow => !!r);
-
-/** The few fields ordering and filtering look at, so a list can be put in order without building its rows. */
-export type Orderable = Pick<EpisodeRow, 'key' | 'title' | 'pubDate' | 'dur' | 'played' | 'downloaded'>;
-
-export const orderable = (show: Show, ep: Episode, st: EpState, cur: string | null): Orderable => {
-  const key = epKey(show.id, ep.guid);
-  return { key, title: ep.title, pubDate: ep.pubDate, dur: ep.duration, played: st.played && cur !== key, downloaded: !!st.file };
-};
-
-export const applyFilter = <T extends Pick<Orderable, 'played' | 'downloaded'>>(rows: T[], f: Filter): T[] =>
-  rows.filter((r) => f === 'All' || (f === 'Unplayed' && !r.played) || (f === 'Downloaded' && r.downloaded));
-
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-
-/** Orders by `by`, with unknown values (0) last in either direction. */
-const byValue = (by: (r: Orderable) => number, dir: 1 | -1) => (a: Orderable, b: Orderable) => {
-  const x = by(a), y = by(b);
-  return !x === !y ? dir * (x - y) : x ? -1 : 1;
-};
-
-/** Sorts a copy of `rows`; ties fall back to newest first. */
-export function applySort<T extends Orderable>(rows: T[], sort: Sort): T[] {
-  const newest = (a: Orderable, b: Orderable) => b.pubDate - a.pubDate;
-  const primary: Record<Sort, (a: Orderable, b: Orderable) => number> = {
-    'Newest first': byValue((r) => r.pubDate, -1),
-    'Oldest first': byValue((r) => r.pubDate, 1),
-    'Longest first': byValue((r) => r.dur, -1),
-    'Shortest first': byValue((r) => r.dur, 1),
-    'Title A–Z': (a, b) => collator.compare(a.title, b.title),
-    'Title Z–A': (a, b) => collator.compare(b.title, a.title),
-    'Unplayed first': (a, b) => Number(a.played) - Number(b.played),
-  };
-  return [...rows].sort((a, b) => primary[sort](a, b) || newest(a, b));
-}
 
 type Library = Pick<State, 'shows' | 'eps'>;
 

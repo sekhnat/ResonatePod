@@ -94,7 +94,7 @@ function ShowPage({ id }: { id: string }) {
 /** One episode. It picks its own row out of the store, so a download's progress or a played flag redraws just this row. */
 const ShowEpisodeRow = memo(function ShowEpisodeRow({ id }: { id: string }) {
   const e = useStore(useShallow((s) => episodeRow(s, id)));
-  const a = useStore(useShallow((s) => ({ play: s.play, cancelDownload: s.cancelDownload, deleteFile: s.deleteFile, startDownload: s.startDownload, markPlayed: s.markPlayed, addToQueue: s.addToQueue })));
+  const a = useStore(useShallow((s) => ({ play: s.play, cancelDownload: s.cancelDownload, deleteFile: s.deleteFile, startDownload: s.startDownload, markPlayed: s.markPlayed, addToQueue: s.addToQueue, set: s.set })));
   const [open, setOpen] = useState(false);
   const [showId, guid] = parseKey(id);
   const notes = useNotes(showId, guid, open); // read from the database when the row is opened, not kept for every episode
@@ -103,7 +103,8 @@ const ShowEpisodeRow = memo(function ShowEpisodeRow({ id }: { id: string }) {
   const dlLabel = e.downloading ? 'Cancel download' : e.downloaded ? 'Delete file' : 'Download';
   const onDl = () => (e.downloading ? a.cancelDownload(e.key) : e.downloaded ? a.deleteFile(e.key) : a.startDownload(e.key));
   return (
-    <div className={`h-row ep-row bleed tall${e.isCur ? ' cur' : ''}`} onDoubleClick={() => a.play(e.key)}>
+    <div className={`h-row ep-row bleed tall${e.isCur ? ' cur' : ''}`} onDoubleClick={() => a.play(e.key)}
+      onContextMenu={(ev) => { ev.preventDefault(); a.set({ epMenu: { key: e.key, x: ev.clientX, y: ev.clientY } }); }}>
       <StatusIcon e={e} wide />
       <div className="ep-body">
         <div className="ep-title-line">

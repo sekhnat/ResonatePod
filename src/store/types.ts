@@ -124,6 +124,8 @@ export interface Ui {
   palette: boolean;
   query: string;
   menu: 'main' | 'sleep-bar' | null;
+  /** The right-click menu of an episode row: which episode, and where the pointer was. */
+  epMenu: { key: string; x: number; y: number } | null;
   dialog: DialogKind | null;
   refreshing: boolean;
   syncing: boolean;
@@ -175,6 +177,8 @@ export interface Actions {
   cleanupStorage(opts?: { quiet?: boolean }): Promise<void>;
 
   addToQueue(key: string): void;
+  /** Puts an episode right after the playing one in the queue (at the front when that isn't queued), moving it if it's already there. */
+  playNext(key: string): void;
   removeFromQueue(key: string): void;
   moveQueue(from: number, to: number): void;
   clearQueue(): void;

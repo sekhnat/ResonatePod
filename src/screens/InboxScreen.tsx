@@ -43,10 +43,11 @@ export function InboxScreen() {
 const InboxRow = memo(function InboxRow({ id }: { id: string }) {
   const e = useStore(useShallow((s) => episodeRow(s, id)));
   const inQueue = useStore((s) => s.queue.includes(id));
-  const a = useStore(useShallow((s) => ({ play: s.play, openShow: s.openShow, addToQueue: s.addToQueue })));
+  const a = useStore(useShallow((s) => ({ play: s.play, openShow: s.openShow, addToQueue: s.addToQueue, set: s.set })));
   if (!e) return null;
   return (
-    <div className={`h-row ep-row bleed${e.isCur ? ' cur' : ''}`} onDoubleClick={() => a.play(e.key)}>
+    <div className={`h-row ep-row bleed${e.isCur ? ' cur' : ''}`} onDoubleClick={() => a.play(e.key)}
+      onContextMenu={(ev) => { ev.preventDefault(); a.set({ epMenu: { key: e.key, x: ev.clientX, y: ev.clientY } }); }}>
       <button className="ep-art-btn" onClick={() => a.openShow(e.showId)} title={`Open ${e.showTitle}`}>
         <Art bg={e.art} mono={e.mono} img={e.imageUrl} size={40} font={12} />
       </button>

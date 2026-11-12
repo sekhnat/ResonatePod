@@ -352,8 +352,11 @@ try {
   });
 
   await step('queue plays the next episode when one ends', async () => {
+    // Fixture FM is back to newest first, so nothing follows Episode one and the queue starts empty.
     await page.locator('nav button', { hasText: 'New episodes' }).click();
-    await page.locator('.h-row', { hasText: 'Episode two' }).getByRole('button', { name: 'Add to queue', exact: true }).click();
+    await page.locator('.h-row', { hasText: 'Episode two' }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Add to queue' }).click();
+    await page.locator('.h-row', { hasText: 'Episode two' }).getByRole('button', { name: 'In queue', exact: true }).waitFor();
     await page.locator('button[title="Queue"]').click();
     await page.getByRole('heading', { name: 'Queue' }).waitFor();
     await page.getByRole('button', { name: 'Unmute' }).click();
@@ -411,13 +414,13 @@ try {
     await shot('09-embedded-chapters');
   });
 
-  await step('Next episode moves on to a queued video episode, which shows its picture', async () => {
-    await page.locator('.h-row', { hasText: 'Video episode' }).getByRole('button', { name: 'Add to queue', exact: true }).click();
-    // Episode two is still queued (the chaptered episode cut in before it finished): put the video ahead of it.
-    await page.locator('button[title="Queue"]').click();
-    await page.locator('.h-row', { hasText: 'Video episode' }).getByRole('button', { name: 'Play next', exact: true }).click();
+  await step('Play next from the right-click menu, then Next episode, plays a video episode, which shows its picture', async () => {
+    // Episode two is still queued (the chaptered episode cut in before it finished): Play next puts the video ahead of it.
+    await page.locator('.h-row', { hasText: 'Video episode' }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Play next' }).click();
     await page.getByRole('button', { name: 'Next episode', exact: true }).click();
     await page.locator('button[title="Open Now playing"]', { hasText: 'Video episode' }).waitFor({ timeout: 8000 });
+    await page.locator('button[title="Queue"]').click();
     await page.locator('.h-row', { hasText: 'Episode two' }).waitFor(); // still queued, to play after the video
     await page.locator('aside video').waitFor({ state: 'visible', timeout: 8000 });
     await until(() => { const v = document.querySelector('aside video'); return v && v.videoWidth === 160 && v.currentTime > 0.5; }, null, { timeout: 8000 });

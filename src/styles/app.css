@@ -180,6 +180,7 @@ button { font: inherit; }
 .btn.titlebar-menu-btn.open, .btn.titlebar-menu-btn.open:hover { background: var(--color-neutral-800); }
 .titlebar-menu-icon { font-size: 17px; }
 .menu.titlebar-menu-pop { top: 38px; right: 0; }
+.menu.ep-menu { position: fixed; z-index: 60; }
 .menu-item .menu-check { margin-left: auto; }
 
 .win-controls { display: flex; margin-left: 6px; color: var(--color-neutral-400); }

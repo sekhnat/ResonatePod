@@ -2,9 +2,9 @@ import { fileStem, safeName } from '../../shared/filename';
 import { DEFAULT_AUTO_SKIP, SKIP_CATEGORIES, type SkipCategory, type SkipSegment } from '../../shared/skips';
 import { chaptersFor, epKey, episodeInfo, lastAtOrBefore, parseKey, type Episode, type EpisodeInfo, type Show } from '../data';
 import type { DlRule } from '../../shared/settings';
-import type { ActiveDl, Data, EpState, Sleep, State, Sort, Ui } from './types';
+import type { ActiveDl, Data, EpState, Filter, Sleep, State, Sort, Ui } from './types';
 
-export const sortFor = (s: State, scope: string): Sort => s.sorts[scope] ?? 'Newest first';
+export const sortFor = (s: Pick<State, 'sorts'>, scope: string): Sort => s.sorts[scope] ?? 'Newest first';
 
 // ---------- helpers ----------
 
@@ -195,4 +195,49 @@ export function cleanupKeys(s: Pick<Data, 'eps' | 'sv' | 'storageLimitGb' | 'cur
     used -= e.fileBytes ?? 0;
   }
   return [...out];
+}
+
+/** The few fields ordering and filtering look at, so a list can be put in order without building its rows. */
+export interface Orderable { key: string; title: string; pubDate: number; dur: number; played: boolean; downloaded: boolean }
+
+export const orderable = (show: Show, ep: Episode, st: EpState, cur: string | null): Orderable => {
+  const key = epKey(show.id, ep.guid);
+  return { key, title: ep.title, pubDate: ep.pubDate, dur: ep.duration, played: st.played && cur !== key, downloaded: !!st.file };
+};
+
+export const applyFilter = <T extends Pick<Orderable, 'played' | 'downloaded'>>(rows: T[], f: Filter): T[] =>
+  rows.filter((r) => f === 'All' || (f === 'Unplayed' && !r.played) || (f === 'Downloaded' && r.downloaded));
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+/** Orders by `by`, with unknown values (0) last in either direction. */
+const byValue = (by: (r: Orderable) => number, dir: 1 | -1) => (a: Orderable, b: Orderable) => {
+  const x = by(a), y = by(b);
+  return !x === !y ? dir * (x - y) : x ? -1 : 1;
+};
+
+/** Sorts a copy of `rows`; ties fall back to newest first. */
+export function applySort<T extends Orderable>(rows: T[], sort: Sort): T[] {
+  const newest = (a: Orderable, b: Orderable) => b.pubDate - a.pubDate;
+  const primary: Record<Sort, (a: Orderable, b: Orderable) => number> = {
+    'Newest first': byValue((r) => r.pubDate, -1),
+    'Oldest first': byValue((r) => r.pubDate, 1),
+    'Longest first': byValue((r) => r.dur, -1),
+    'Shortest first': byValue((r) => r.dur, 1),
+    'Title A–Z': (a, b) => collator.compare(a.title, b.title),
+    'Title Z–A': (a, b) => collator.compare(b.title, a.title),
+    'Unplayed first': (a, b) => Number(a.played) - Number(b.played),
+  };
+  return [...rows].sort((a, b) => primary[sort](a, b) || newest(a, b));
+}
+
+/** The episode after `key` in its show's list as the show is sorted (played ones included), if there is one. */
+export function nextInShow(s: Pick<State, 'shows' | 'eps' | 'sorts'>, key: string): string | undefined {
+  const info = epInfo(s, key);
+  if (!info) return undefined;
+  const { show } = info;
+  // `key` stands in for the playing episode, so it counts as unplayed the way it does on the show page.
+  const rows = applySort(show.eps.map((e) => orderable(show, e, getEp(s, epKey(show.id, e.guid)), key)), sortFor(s, show.id));
+  const i = rows.findIndex((r) => r.key === key);
+  return i < 0 ? undefined : rows[i + 1]?.key;
 }

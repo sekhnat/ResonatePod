@@ -4,6 +4,15 @@ What's new in each release of Resonate. When a version is tagged, CI publishes
 its entry here as the "What's new" section of the GitHub release, so every
 release needs one.
 
+## Unreleased
+
+- Added: playing an episode with nothing else queued puts the show's next
+  episode (the one below it on the show's page, as you have it sorted) into the
+  queue. When that one starts, the one after it is queued, so a series plays on
+  from one episode to the next, and the Next button always has somewhere to go.
+- Added: right-click an episode on a show's page or in New episodes to play it
+  next or add it to the end of the queue.
+
 ## 1.9.1 (12 November 2026)
 
 - Fixed: the skip-forward button in the player bar, and the Next media key, now

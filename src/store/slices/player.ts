@@ -3,7 +3,7 @@ import { parseJsonChapters, parseTranscript } from '../../../shared/meta';
 import type { EpisodeInfo, EpisodeMeta } from '../../data';
 import { SMALL_BODY_BYTES, platform } from '../../platform';
 import { getPlayhead, setPlayhead } from '../../playhead';
-import { chaptersOf, currentChapter, epInfo, getEp, introFor, sleepLabel, speedFor } from '../selectors';
+import { chaptersOf, currentChapter, epInfo, getEp, introFor, nextInShow, sleepLabel, speedFor } from '../selectors';
 import type { EpState, Slice } from '../types';
 
 /** The audio engine, which the store seeks through. */
@@ -27,7 +27,7 @@ async function loadChapters(info: EpisodeInfo, file: string | undefined) {
   return (await platform.embeddedChapters(file, enclosureUrl).catch(() => null)) ?? undefined;
 }
 
-export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack' | 'skipFwd' | 'prevChapter' | 'nextEpisode' | 'cycleSpeed' | 'setSpeed' | 'setVolume' | 'toggleMute' | 'setSleep' | 'tick' | 'onTime' | 'onDuration' | 'onEnded' | 'onPlayError' | 'addTrimSaved' | 'loadMeta' | 'checkpoint' | 'addToQueue' | 'removeFromQueue' | 'moveQueue' | 'clearQueue'> = (set, get) => {
+export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack' | 'skipFwd' | 'prevChapter' | 'nextEpisode' | 'cycleSpeed' | 'setSpeed' | 'setVolume' | 'toggleMute' | 'setSleep' | 'tick' | 'onTime' | 'onDuration' | 'onEnded' | 'onPlayError' | 'addTrimSaved' | 'loadMeta' | 'checkpoint' | 'addToQueue' | 'playNext' | 'removeFromQueue' | 'moveQueue' | 'clearQueue'> = (set, get) => {
   let lastChapterIdx = -1;
   let playStartedAt: number | null = null;
 
@@ -74,6 +74,12 @@ export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack
       playStartedAt = pos;
       setPlayhead(pos); // before `cur` changes, so the engine loads the episode at this position
       set({ eps, cur: key, playing: true, palette: false, speed: speedFor(s, next.show.id) });
+      // With nothing else lined up, the show's next episode is queued, so Next and the end of this one carry on through it.
+      const after = get();
+      if (!after.queue.some((k) => k !== key)) {
+        const following = nextInShow(after, key);
+        if (following) set({ queue: [...after.queue, following] });
+      }
       void get().loadMeta(key);
     },
     togglePlay: () => {
@@ -193,6 +199,17 @@ export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack
       if (s.queue.includes(key)) { s.toast('Already in the queue'); return; }
       set({ queue: [...s.queue, key] });
       s.toast(`Added “${info.title}” to the queue`);
+    },
+    playNext: (key) => {
+      const s = get();
+      const info = epInfo(s, key);
+      if (!info) return;
+      if (key === s.cur) { s.toast('Already playing'); return; }
+      const queue = s.queue.filter((k) => k !== key);
+      // Right after the playing episode when it's queued, else at the front.
+      queue.splice(queue.indexOf(s.cur ?? '') + 1, 0, key);
+      set({ queue });
+      s.toast(`Playing “${info.title}” next`);
     },
     removeFromQueue: (key) => set((s) => ({ queue: s.queue.filter((k) => k !== key) })),
     moveQueue: (from, to) =>
