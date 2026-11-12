@@ -4,7 +4,7 @@ What's new in each release of Resonate. When a version is tagged, CI publishes
 its entry here as the "What's new" section of the GitHub release, so every
 release needs one.
 
-## Unreleased
+## 1.10.0 (13 November 2026)
 
 - Added: playing an episode with nothing else queued puts the show's next
   episode (the one below it on the show's page, as you have it sorted) into the
@@ -12,6 +12,8 @@ release needs one.
   from one episode to the next, and the Next button always has somewhere to go.
 - Added: right-click an episode on a show's page or in New episodes to play it
   next or add it to the end of the queue.
+- Fixed: releases include the Flatpak bundle again. 1.9.1 shipped without one
+  because the build failed on some of GitHub's machines.
 
 ## 1.9.1 (12 November 2026)
 
