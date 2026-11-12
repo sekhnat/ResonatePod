@@ -207,6 +207,12 @@ jobs:
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
+      # The image comes with the runtimes installed, and flatpak-builder updates them when Flathub has newer ones. In
+      # the image's own overlay filesystem that update fails on some runners with "Invalid cross-device link" (moving
+      # and hardlinking files across overlay layers). An anonymous volume starts as a copy of the image's
+      # /var/lib/flatpak but lives on the runner's own disk, so the update works wherever the job lands.
+      volumes:
+        - /var/lib/flatpak
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
