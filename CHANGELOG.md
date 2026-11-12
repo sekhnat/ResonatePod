@@ -4,6 +4,12 @@ What's new in each release of Resonate. When a version is tagged, CI publishes
 its entry here as the "What's new" section of the GitHub release, so every
 release needs one.
 
+## 1.9.1 (12 November 2026)
+
+- Fixed: the skip-forward button in the player bar, and the Next media key, now
+  move on to the next episode in the queue. They used to jump to the next
+  chapter, so they did nothing on episodes without chapters.
+
 ## 1.9.0 (11 November 2026)
 
 - Added: skip segments. Import a segments file that marks ads, promos, credits

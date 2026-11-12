@@ -367,6 +367,33 @@ describe('playback', () => {
     expect(st().queue).toEqual([K40]);
   });
 
+  it('skips to the next queued episode, keeping the skipped one’s place', () => {
+    useStore.setState({ queue: [K42, K40] });
+    st().play(K42);
+    st().onTime(700);
+    st().nextEpisode();
+    expect(st().cur).toBe(K40);
+    expect(st().playing).toBe(true);
+    expect(st().queue).toEqual([K40]);
+    expect(getEp(st(), K42)).toMatchObject({ pos: 700, played: false });
+  });
+
+  it('skips to the head of the queue from an episode that isn’t queued', () => {
+    useStore.setState({ queue: [K40] });
+    st().play(K41);
+    st().nextEpisode();
+    expect(st().cur).toBe(K40);
+  });
+
+  it('keeps playing when nothing else is queued', () => {
+    useStore.setState({ queue: [K42] });
+    st().play(K42);
+    st().nextEpisode();
+    expect(st().cur).toBe(K42);
+    expect(st().playing).toBe(true);
+    expect(st().queue).toEqual([K42]);
+  });
+
   it('stops at the end of the episode when the sleep timer says so', () => {
     useStore.setState({ queue: [K42, K40] });
     st().play(K42);

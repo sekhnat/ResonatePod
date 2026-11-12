@@ -411,8 +411,14 @@ try {
     await shot('09-embedded-chapters');
   });
 
-  await step('a video episode shows its picture', async () => {
-    await page.locator('.h-row', { hasText: 'Video episode' }).getByRole('button', { name: 'Play', exact: true }).click();
+  await step('Next episode moves on to a queued video episode, which shows its picture', async () => {
+    await page.locator('.h-row', { hasText: 'Video episode' }).getByRole('button', { name: 'Add to queue', exact: true }).click();
+    // Episode two is still queued (the chaptered episode cut in before it finished): put the video ahead of it.
+    await page.locator('button[title="Queue"]').click();
+    await page.locator('.h-row', { hasText: 'Video episode' }).getByRole('button', { name: 'Play next', exact: true }).click();
+    await page.getByRole('button', { name: 'Next episode', exact: true }).click();
+    await page.locator('button[title="Open Now playing"]', { hasText: 'Video episode' }).waitFor({ timeout: 8000 });
+    await page.locator('.h-row', { hasText: 'Episode two' }).waitFor(); // still queued, to play after the video
     await page.locator('aside video').waitFor({ state: 'visible', timeout: 8000 });
     await until(() => { const v = document.querySelector('aside video'); return v && v.videoWidth === 160 && v.currentTime > 0.5; }, null, { timeout: 8000 });
     await shot('10-video');

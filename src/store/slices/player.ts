@@ -27,7 +27,7 @@ async function loadChapters(info: EpisodeInfo, file: string | undefined) {
   return (await platform.embeddedChapters(file, enclosureUrl).catch(() => null)) ?? undefined;
 }
 
-export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack' | 'skipFwd' | 'prevChapter' | 'nextChapter' | 'cycleSpeed' | 'setSpeed' | 'setVolume' | 'toggleMute' | 'setSleep' | 'tick' | 'onTime' | 'onDuration' | 'onEnded' | 'onPlayError' | 'addTrimSaved' | 'loadMeta' | 'checkpoint' | 'addToQueue' | 'removeFromQueue' | 'moveQueue' | 'clearQueue'> = (set, get) => {
+export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack' | 'skipFwd' | 'prevChapter' | 'nextEpisode' | 'cycleSpeed' | 'setSpeed' | 'setVolume' | 'toggleMute' | 'setSleep' | 'tick' | 'onTime' | 'onDuration' | 'onEnded' | 'onPlayError' | 'addTrimSaved' | 'loadMeta' | 'checkpoint' | 'addToQueue' | 'removeFromQueue' | 'moveQueue' | 'clearQueue'> = (set, get) => {
   let lastChapterIdx = -1;
   let playStartedAt: number | null = null;
 
@@ -101,13 +101,13 @@ export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack
       const ci = currentChapter(ch, pos);
       get().seek(ch[Math.max(0, pos - ch[ci].at > 3 ? ci : ci - 1)].at);
     },
-    nextChapter: () => {
+    // Moves on to the next queued episode. The one playing keeps its place and leaves the queue.
+    nextEpisode: () => {
       const s = get();
-      const cur = epInfo(s, s.cur);
-      if (!cur) return;
-      const ch = chaptersOf(s, cur);
-      const ci = currentChapter(ch, getPlayhead());
-      if (ci < ch.length - 1) get().seek(ch[ci + 1].at);
+      const next = s.queue.find((k) => k !== s.cur);
+      if (!next) { s.toast('Nothing else in the queue'); return; }
+      set({ queue: s.queue.filter((k) => k !== s.cur) });
+      get().play(next);
     },
     // The next faster preset from wherever the speed is now (a show can set one that isn't a preset), wrapping to the slowest.
     cycleSpeed: () => set((s) => ({ speed: SPEEDS.find((p) => p > s.speed + 1e-9) ?? SPEEDS[0] })),

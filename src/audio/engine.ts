@@ -188,7 +188,7 @@ export function startEngine() {
       ['seekforward', () => st().skipFwd()],
       ['seekto', (d) => { if (d.seekTime != null) st().seek(d.seekTime); }],
       ['previoustrack', () => st().prevChapter()],
-      ['nexttrack', () => st().nextChapter()],
+      ['nexttrack', () => st().nextEpisode()],
     ];
     for (const [a, h] of handlers) { try { ms.setActionHandler(a, h); } catch { /* unsupported action */ } }
   }

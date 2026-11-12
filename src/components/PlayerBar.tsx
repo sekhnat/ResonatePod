@@ -136,7 +136,7 @@ function ChapterName({ chapters }: { chapters: Chapter[] }) {
 export function PlayerBar() {
   const s = useStore(useShallow((s) => ({
     playing: s.playing, speed: s.speed, skip: s.sv.skip, npOpen: s.npOpen, screen: s.screen,
-    set: s.set, go: s.go, prevChapter: s.prevChapter, nextChapter: s.nextChapter, skipBack: s.skipBack, skipFwd: s.skipFwd,
+    set: s.set, go: s.go, prevChapter: s.prevChapter, nextEpisode: s.nextEpisode, skipBack: s.skipBack, skipFwd: s.skipFwd,
     togglePlay: s.togglePlay, cycleSpeed: s.cycleSpeed,
   })));
   const cur = useCurrent();
@@ -162,7 +162,7 @@ export function PlayerBar() {
             <i className={s.playing ? 'ph-fill ph-pause' : 'ph-fill ph-play'} />
           </button>
           <GhostIcon icon="ph ph-arrow-clockwise" title={`Forward ${fwd} s`} size={30} iconSize={17} color={btn} onClick={s.skipFwd} />
-          <GhostIcon icon="ph ph-skip-forward" title="Next chapter" size={30} color={btn} onClick={s.nextChapter} />
+          <GhostIcon icon="ph ph-skip-forward" title="Next episode" size={30} color={btn} onClick={s.nextEpisode} />
         </div>
         <div className="player-time">
           <span className="player-elapsed"><Elapsed /></span>

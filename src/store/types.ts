@@ -148,7 +148,7 @@ export interface Actions {
   skipBack(): void;
   skipFwd(): void;
   prevChapter(): void;
-  nextChapter(): void;
+  nextEpisode(): void;
   cycleSpeed(): void;
   setSpeed(speed: number): void;
   setVolume(v: number): void;
