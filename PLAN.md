@@ -138,7 +138,7 @@ then labels, `export/segments.json` and VTTs. Re-import in the app picks everyth
 - [x] 3. `new_episodes.sh` driver: flock, library snapshot, fingerprint → match → span-transcribe →
       transcribe_full → label chain + export (gated on change), log to the data dir
 - [x] 4. systemd units + `install.sh`; enable the timer
-- [ ] 5. Catch-up run of the driver (~458 files; whisper in the background)
+- [x] 5. Catch-up run of the driver (~458 files; whisper in the background)
 - [x] 6. App: `segmentsFile` setting + `skips:read` IPC + platform surface + Settings/Preferences row
 - [x] 7. App: extract the shared merge + quiet auto-import + mtime watch in services
 - [x] 8. App: `media:transcript` IPC + local-first branch in `loadMeta`; `.vtt` cleanup on delete;
