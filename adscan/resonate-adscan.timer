@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly resonate-adscan run (picks up every new release)
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

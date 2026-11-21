@@ -21,6 +21,19 @@ export async function importOpmlFile() {
   if (n) useStore.getState().go('shows');
 }
 
+/**
+ * The Resonate adscan pipeline's segments file: its path is remembered and re-imported quietly whenever
+ * the pipeline rewrites it (services), and what it holds now is imported with the manual import's toast.
+ */
+export async function chooseSegmentsFile() {
+  const s = useStore.getState();
+  const file = await platform.pickSegmentsFile().catch((err: Error) => ({ error: err.message }));
+  if (!file) return;
+  if ('error' in file) { s.toast(`Couldn’t read that segments file: ${file.error}`); return; }
+  s.setSegmentsFile(file.path);
+  s.importSkips(file.text, file.name);
+}
+
 /** Adds skip segments from a segments file to the downloaded episodes it names (see shared/skips.ts). */
 export async function importSkipsFile() {
   const file = await platform.openSkips().catch((err: Error) => ({ error: err.message }));

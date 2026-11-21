@@ -178,7 +178,10 @@ export function registerIpc({ roots, downloads }: { roots: DownloadRoots; downlo
   // Every path from the renderer goes through roots.resolve, and only what it returns is touched.
   ipcMain.handle('fs:delete', async (_e, file: string) => {
     const target = await roots.resolve(file);
-    if (target) await fs.rm(target, { force: true });
+    if (target) {
+      await fs.rm(target, { force: true });
+      await fs.rm(target.slice(0, target.length - path.extname(target).length) + '.vtt', { force: true }); // the whisper transcript beside it, if any
+    }
   });
   ipcMain.handle('fs:move', async (_e, from: string, to: string, files: string[]) => {
     const [src, dst] = await Promise.all([roots.resolve(from), roots.resolve(to)]);
@@ -220,6 +223,39 @@ export function registerIpc({ roots, downloads }: { roots: DownloadRoots; downlo
     // Read only, never written; the window parses and checks it (shared/skips.ts).
     if ((await fs.stat(file)).size > MAX_SKIPS_BYTES) return { error: 'This file is too big to be a segments file' };
     return { name: path.basename(file), text: await fs.readFile(file, 'utf8') };
+  });
+
+  // The adscan pipeline's segments file: the person picks it once, then the page re-reads it whenever it changes.
+  ipcMain.handle('skips:pick', async (): Promise<{ name: string; path: string; text: string } | { error: string } | null> => {
+    const r = await dialog.showOpenDialog(ctx.win!, { title: 'Segments file', filters: [{ name: 'Segments file', extensions: ['json'] }, { name: 'All files', extensions: ['*'] }], properties: ['openFile'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const file = r.filePaths[0];
+    if ((await fs.stat(file)).size > MAX_SKIPS_BYTES) return { error: 'This file is too big to be a segments file' };
+    return { name: path.basename(file), path: file, text: await fs.readFile(file, 'utf8') };
+  });
+  ipcMain.handle('skips:stat', async (_e, filePath: string): Promise<{ size: number; mtime: number } | null> => {
+    try {
+      const st = await fs.stat(expandHome(String(filePath)));
+      return { size: st.size, mtime: st.mtimeMs };
+    } catch { return null; }
+  });
+  ipcMain.handle('skips:read', async (_e, filePath: string): Promise<{ name: string; text: string } | { error: string } | null> => {
+    const file = expandHome(String(filePath));
+    try {
+      if ((await fs.stat(file)).size > MAX_SKIPS_BYTES) return { error: 'This file is too big to be a segments file' };
+      return { name: path.basename(file), text: await fs.readFile(file, 'utf8') };
+    } catch { return { error: 'it could not be read' }; }
+  });
+
+  // The whisper transcript the adscan pipeline writes beside the episode file (a read-only sibling .vtt).
+  ipcMain.handle('media:transcript', async (_e, file: string | null): Promise<string | null> => {
+    const audio = file ? await roots.resolve(file) : null;
+    if (!audio) return null;
+    const sidecar = audio.slice(0, audio.length - path.extname(audio).length) + '.vtt';
+    try {
+      if ((await fs.stat(sidecar)).size > MAX_SKIPS_BYTES) return null;
+      return await fs.readFile(sidecar, 'utf8');
+    } catch { return null; }
   });
   ipcMain.handle('dialog:saveOpml', async (_e, name: string, text: string) => {
     const r = await dialog.showSaveDialog(ctx.win!, { title: 'Export subscriptions', defaultPath: path.join(app.getPath('documents'), name), filters: [{ name: 'OPML', extensions: ['opml'] }] });

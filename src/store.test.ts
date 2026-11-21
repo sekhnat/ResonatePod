@@ -280,6 +280,25 @@ describe('subscribing and refreshing', () => {
     expect([...autoSkipFor(st(), 'kernel-panic-hour')]).toEqual(['sponsor']);
   });
 
+  it('re-imports the pipeline’s segments file quietly: nothing written or said when nothing changed', () => {
+    useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), file: '/p/42.mp3', fileBytes: 900, skips: { file: '/p/42.mp3', bytes: 900, segs: [{ start: 0, end: 30, cat: 'promo' }, { start: 900, end: 960, cat: 'sponsor' }] } }, [K41]: { ...getEp(st(), K41), file: '/p/41.mp3' } } });
+    expect(st().segmentsFile).toBeNull();
+    st().setSegmentsFile(' ~/adscan/export/segments.json/ ');
+    expect(st().segmentsFile).toBe('~/adscan/export/segments.json');
+    st().setSegmentsFile('');
+    expect(st().segmentsFile).toBeNull();
+    const toasts = st().toasts.length;
+    const same = JSON.stringify({ '/p/42.mp3': { segments: [{ start: 0, end: 30, category: 'promo' }, { start: 900, end: 960, category: 'sponsor' }] } });
+    expect(st().autoImportSkips(same, 'segments.json')).toBe(0);
+    expect(st().toasts.length).toBe(toasts);
+    const updated = JSON.stringify({ '/p/42.mp3': { segments: [{ start: 0, end: 45, category: 'promo' }] }, '/p/unknown.mp3': { segments: [{ start: 1, end: 5, category: 'promo' }] } });
+    expect(st().autoImportSkips(updated, 'segments.json')).toBe(1);
+    expect(getEp(st(), K42).skips!.segs).toEqual([{ start: 0, end: 45, cat: 'promo' }]);
+    expect(st().toasts.at(-1)!.text).toBe('Updated skip segments for 1 episode');
+    expect(st().autoImportSkips('{ nope', 'segments.json')).toBe(0);
+    expect(getEp(st(), K42).skips!.segs).toEqual([{ start: 0, end: 45, cat: 'promo' }]);
+  });
+
   it('puts an action on a toast and keeps it up longer', () => {
     vi.useFakeTimers();
     const run = vi.fn();
@@ -455,6 +474,24 @@ describe('playback', () => {
     expect(st().playing).toBe(false);
   });
 
+  it('prefers the whisper transcript beside the file, and falls back to the feed’s when there is none', async () => {
+    st().play(K42);
+    await vi.waitFor(() => expect(st().meta[K42]?.transcript?.[0]).toMatchObject({ who: 'Tom', text: 'Welcome back to Kernel Panic Hour.' }));
+    // A downloaded file with a sidecar: the local one wins without fetching the feed's.
+    platform.isDesktop = true;
+    const local = 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v Tom>Whisper copy, not the feed.';
+    vi.spyOn(platform, 'localTranscript').mockResolvedValue(local);
+    useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), file: '/p/42.mp3' } }, meta: {} });
+    const calls = http.mock.calls.filter(([u]) => String(u).endsWith('.vtt')).length;
+    await st().loadMeta(K42);
+    expect(st().meta[K42].transcript?.[0]).toMatchObject({ who: 'Tom', text: 'Whisper copy, not the feed.' });
+    expect(http.mock.calls.filter(([u]) => String(u).endsWith('.vtt')).length).toBe(calls); // the feed transcript wasn't refetched
+    // No sidecar (not downloaded, or the pipeline hasn't reached it): the feed's transcript as before.
+    vi.spyOn(platform, 'localTranscript').mockResolvedValue(null);
+    useStore.setState({ eps: { ...st().eps, [K42]: { ...getEp(st(), K42), file: undefined } }, meta: {} });
+    await st().loadMeta(K42);
+    expect(st().meta[K42].transcript?.[0]).toMatchObject({ who: 'Tom', text: 'Welcome back to Kernel Panic Hour.' });
+  });
   it('counts down a sleep timer', () => {
     st().play(K42);
     st().setSleep({ mode: 'timer', minutes: 1, remaining: 2 });

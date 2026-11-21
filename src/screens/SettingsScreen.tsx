@@ -6,7 +6,7 @@ import { delLabel, keepLabel, skipLabel, speedLabel } from '../settings-labels';
 import { Seg, Toggle } from '../components/ui';
 import { platform } from '../platform';
 import { clockLabel } from '../model';
-import { backupLibraryFile, chooseBackupFile, exportOpmlFile, importOpmlFile, importSkipsFile } from '../lib/library-io';
+import { backupLibraryFile, chooseBackupFile, chooseSegmentsFile, exportOpmlFile, importOpmlFile, importSkipsFile } from '../lib/library-io';
 import { CountrySelect, SourceSelect } from '../components/DirectoryCard';
 
 type Row = { label: string; hint?: string } & (
@@ -15,10 +15,13 @@ type Row = { label: string; hint?: string } & (
   | { kind: 'node'; node: ReactNode }
 );
 
+/** Short enough for the row: the home directory as "~", e.g. /home/me/Documents/x.json → ~/Documents/x.json. */
+const shortPath = (p: string) => p.replace(/^\/(?:home|Users)\/[^/]+(?=\/)/, '~');
+
 export function SettingsScreen() {
   const s = useStore(useShallow((s) => ({
     directory: s.directory, eps: s.eps, folder: s.folder, set: s.set, setPrefs: s.setPrefs, setSetting: s.setSetting, setToggle: s.setToggle,
-    shows: s.shows, storageLimitGb: s.storageLimitGb, sv: s.sv, sync: s.sync, syncing: s.syncing, tg: s.tg, toast: s.toast,
+    shows: s.shows, storageLimitGb: s.storageLimitGb, sv: s.sv, sync: s.sync, syncing: s.syncing, tg: s.tg, toast: s.toast, segmentsFile: s.segmentsFile, setSegmentsFile: s.setSegmentsFile,
     folderBytes: s.folderBytes, updateUsage: s.updateUsage, autoSkip: s.autoSkip, toggleAutoSkip: s.toggleAutoSkip,
   })));
   const withSegments = Object.keys(s.eps).filter((k) => skipsFor(s, k).length).length;
@@ -57,6 +60,14 @@ export function SettingsScreen() {
     ...(platform.isDesktop ? [{ title: 'Skip segments', rows: [
       { label: 'Segments', hint: 'Ads, promos and credits marked in downloaded episodes, from a segments file; playback jumps over them and the files are left as they are', kind: 'value',
         value: withSegments ? `${withSegments.toLocaleString()} episode${withSegments === 1 ? '' : 's'}` : 'None', action: 'Import…', run: () => void importSkipsFile() },
+      ...([{ label: 'Segments file', hint: 'The adscan pipeline’s output, re-imported here whenever it is rewritten; “Off” stops that', kind: 'node',
+        node: (
+          <div className="prefs-value">
+            <span className="prefs-value-text">{s.segmentsFile ? shortPath(s.segmentsFile) : 'Off'}</span>
+            <button className="btn btn-secondary prefs-btn" onClick={() => void chooseSegmentsFile()}>{s.segmentsFile ? 'Change…' : 'Choose…'}</button>
+            {s.segmentsFile && <button className="btn btn-secondary prefs-btn" onClick={() => s.setSegmentsFile(null)}>Off</button>}
+          </div>
+        ) } as Row]),
       ...SKIP_CATEGORIES.map((c): Row => ({ label: `Skip ${SKIP_LABELS[c].toLowerCase()}`, hint: SKIP_HINTS[c], kind: 'node',
         node: <Toggle on={s.autoSkip.includes(c)} onToggle={() => s.toggleAutoSkip(c)} label={`Skip ${SKIP_LABELS[c].toLowerCase()}`} /> })),
     ] as Row[] }] : []),

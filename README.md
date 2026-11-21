@@ -96,8 +96,10 @@ in place, downloading only what changed.
 | **Playback** | Streams, or plays the downloaded file. Resumes where you left off. Speed changes keep pitch. Skip intervals, chapter skip, a draggable seek bar, volume and mute. |
 | **Video podcasts** | Video episodes show their picture in *Now playing* (double-click for full screen). Audio keeps all the usual controls. |
 | **Silence trim** | Web Audio level detection plays quiet stretches at 3×. The time saved is tracked. |
-| **Skip segments** | Import a segments file that marks ads, promos, credits and the like in downloaded episodes, and playback jumps over the kinds you choose (sponsors, promotions, self-promotion and break bumpers by default), with Undo. Every segment is drawn on the seek bar, and a "Skip intro"-style button appears inside the ones not skipped automatically. Nothing is cut from the files: playback only seeks. Segments apply only to the file they were measured on, so a re-downloaded episode (with different dynamic ads) is left alone. The file is JSON keyed by each episode's full path: `{ "/home/me/Podcasts/Show/2024-01-01 - Title.mp3": { "segments": [{ "start": 12.5, "end": 75, "category": "sponsor" }] } }`, with categories `sponsor`, `promo`, `selfpromo`, `bumper`, `intro`, `outro` and `recap`. |
-| **Chapters and transcripts** | A clickable chapter list, from the feed or, failing that, from inside the file: ID3 `CHAP` frames (MP3) or Nero `chpl` (M4A), read from disk or with a few small Range requests while streaming. VTT, SRT, JSON and timed HTML transcripts follow playback. HTML and plain-text transcripts without timestamps are shown as text. |
+| **Skip segments** | Import a segments file that marks ads, promos, credits and the like in downloaded episodes, and playback jumps over the kinds you choose (sponsors, promotions, self-promotion and break bumpers by default), with Undo. Every segment is drawn on the seek bar, and a "Skip intro"-style button appears inside the ones not skipped automatically. Nothing is cut from the files: playback only seeks. Segments apply only to the file they were measured on, so a re-downloaded episode (with different dynamic ads) is left alone. The file is JSON keyed by each episode's full path: `{ "/home/me/Podcasts/Show/2024-01-01 - Title.mp3": { "segments": [{ "start": 12.5, "end": 75, "category": "sponsor" }] } }`, with categories `sponsor`, `promo`, `selfpromo`, `bumper`, `intro`, `outro` and `recap`. In Preferences a
+*segments file* can also be chosen: the [adscan pipeline](#development) rewrites one for your whole library as
+episodes are released, and Resonate re-imports it quietly whenever it changes. |
+| **Chapters and transcripts** | A clickable chapter list, from the feed or, failing that, from inside the file: ID3 `CHAP` frames (MP3) or Nero `chpl` (M4A), read from disk or with a few small Range requests while streaming. VTT, SRT, JSON and timed HTML transcripts follow playback. HTML and plain-text transcripts without timestamps are shown as text. When the adscan pipeline's transcript is saved beside a downloaded episode (`<episode>.vtt`), it is shown instead of the feed's — it matches the audio the app will play, dynamic ads and all. |
 | **Queue** | Drag to reorder, play next, remove, clear. The next item plays automatically when an episode ends. |
 | **Sleep timer** | 15, 30 or 60 minutes, end of chapter, or end of episode. |
 | **Command palette** | <kbd>Ctrl</kbd>+<kbd>K</kbd> searches commands, shows and episodes. |
@@ -172,6 +174,19 @@ feeds won't load there because of CORS.
 `npm run icons` regenerates `assets/*.png` from the SVGs. It needs `playwright` with Chromium
 installed.
 
+
+### Ad-scan pipeline (`adscan/`)
+
+`adscan/` takes the downloaded library and produces what the app reads: a segments file (which ads, promos and
+credits to skip) and a whisper transcript for every episode. New releases flow through on an hourly systemd
+timer: fingerprint (Chromaprint), find the audio that repeats across episodes, transcribe what is new with
+whisper.cpp (CUDA, `large-v3-turbo`, paused while the GPU is busy elsewhere), label it against the rules, and
+write `export/segments.json` plus one `<episode>.vtt` per episode. Databases and logs stay in a data dir
+(default `~/Documents/resonate-adscan`), so the repo carries only code and hand-crafted review verdicts.
+Point Resonate's *Preferences → Segments file* at `export/segments.json` and playback starts skipping.
+
+Needs `ffmpeg`, `fpcalc` (chromaprint) and `whisper-cli` on PATH; `adscan/install.sh` enables the timer.
+See `adscan/README.md` for the pipeline's own commands and the review workflow that keeps quality up.
 ### Continuous integration
 
 `.github/workflows/ci.yml` runs for every pull request and every push to `main`: typecheck, unit tests and the
@@ -202,6 +217,8 @@ src/
   components/    Shared UI
   styles/icons/  The Phosphor icons the app uses, cut from @phosphor-icons/web. Using a new icon? Run
                  `npm run icons:subset` (src/icons.test.ts fails until you do)
+adscan/          The ad-scan pipeline (see Development): fingerprints and transcripts to skip segments
+                 and per-episode .vtt files; data dir holds the databases, code here plus verdicts
 e2e/run.mjs      Playwright-driven Electron test against a local feed server (directories are served
                  from test/fixtures/directory via the RESONATE_URL_REWRITE test hook)
 test/fixtures/   Sample feed, chapters, transcript, and small media files (chaptered MP3/M4A, video)

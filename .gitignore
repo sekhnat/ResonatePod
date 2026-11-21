@@ -5,3 +5,4 @@ dist
 dist-electron
 release
 *.tsbuildinfo
+__pycache__/

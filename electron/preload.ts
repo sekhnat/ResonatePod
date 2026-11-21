@@ -31,6 +31,8 @@ const api = {
   deleteFile: (file: string): Promise<void> => ipcRenderer.invoke('fs:delete', file),
   moveFiles: (from: string, to: string, files: string[]): Promise<{ from: string; to: string }[]> => ipcRenderer.invoke('fs:move', from, to, files),
   embeddedChapters: (file: string | null, url: string): Promise<Chapter[] | null> => ipcRenderer.invoke('media:chapters', file, url),
+  /** The episode's whisper transcript, written beside the file by the adscan pipeline (desktop only). */
+  localTranscript: (file: string): Promise<string | null> => ipcRenderer.invoke('media:transcript', file),
   setFeedAuth: (url: string, user: string | null, password: string | null): Promise<void> => ipcRenderer.invoke('auth:set', url, user, password),
   setAutostart: (on: boolean): Promise<void> => ipcRenderer.invoke('autostart:set', on),
   onFlush: (cb: () => Promise<void>) => {
@@ -43,6 +45,9 @@ const api = {
   openOpml: (): Promise<{ name: string; text: string } | null> => ipcRenderer.invoke('dialog:openOpml'),
   saveOpml: (name: string, text: string): Promise<string | null> => ipcRenderer.invoke('dialog:saveOpml', name, text),
   openSkips: (): Promise<{ name: string; text: string } | { error: string } | null> => ipcRenderer.invoke('dialog:openSkips'),
+  pickSegmentsFile: (): Promise<{ name: string; path: string; text: string } | { error: string } | null> => ipcRenderer.invoke('skips:pick'),
+  skipsStat: (filePath: string): Promise<{ size: number; mtime: number } | null> => ipcRenderer.invoke('skips:stat', filePath),
+  skipsRead: (filePath: string): Promise<{ name: string; text: string } | { error: string } | null> => ipcRenderer.invoke('skips:read', filePath),
   isMetered: (): Promise<boolean | null> => ipcRenderer.invoke('net:metered'),
   logError: (message: string, detail?: string) => ipcRenderer.send('log:renderer', message, detail),
   openLogs: (): Promise<string> => ipcRenderer.invoke('log:open'),

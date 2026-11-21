@@ -1,0 +1,9 @@
+[Unit]
+Description=Resonate ad-scan: fingerprint, transcribe and skip-label new podcast episodes
+ConditionPathExists=%h/Documents/Projects/ResonatePod/adscan/new_episodes.sh
+
+[Service]
+TimeoutStartSec=infinity
+ExecStart=%h/Documents/Projects/ResonatePod/adscan/new_episodes.sh
+# The scripts live in the repo; whisper-cli sits in ~/.local/bin, not in systemd's default PATH.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin

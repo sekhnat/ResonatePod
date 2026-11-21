@@ -47,6 +47,8 @@ export interface Platform {
   moveFiles(from: string, to: string, files: string[]): Promise<{ from: string; to: string }[]>;
   /** Chapters stored inside the media file (ID3 CHAP / MP4 chpl), from disk or by Range requests. */
   embeddedChapters(file: string | undefined, url: string): Promise<Chapter[] | null>;
+  /** The episode's whisper transcript, written beside the file by the adscan pipeline; null when there isn't one (desktop only). */
+  localTranscript(file: string): Promise<string | null>;
   /** HTTP Basic credentials for a feed's origin (also used for its enclosures); null clears them. */
   setFeedAuth(url: string, user: string | null, password: string | null): Promise<void>;
   setAutostart(on: boolean): Promise<void>;
@@ -60,6 +62,12 @@ export interface Platform {
   saveOpml(name: string, text: string): Promise<string | null>;
   /** A skip segments file the person picks (desktop only: segments belong to downloaded files). */
   openSkips(): Promise<{ name: string; text: string } | { error: string } | null>;
+  /** The adscan pipeline's segments file, chosen in a dialog with its full path (desktop only). */
+  pickSegmentsFile(): Promise<{ name: string; path: string; text: string } | { error: string } | null>;
+  /** Size and modification time of the configured segments file, so it is re-read only when it changed; null when it isn't there. */
+  segmentsFileStat(path: string): Promise<{ size: number; mtime: number } | null>;
+  /** The configured segments file's text; an error string for one too big to be a segments file. */
+  readSegmentsFile(path: string): Promise<{ name: string; text: string } | { error: string } | null>;
   isMetered(): Promise<boolean | null>;
   /** Records an error the page didn't handle, in the log file (the console in the browser build). */
   logError(message: string, detail?: string): void;
@@ -118,6 +126,7 @@ function electronPlatform(api: ResonateApi): Platform {
     deleteFile: api.deleteFile,
     moveFiles: api.moveFiles,
     embeddedChapters: (file, url) => api.embeddedChapters(file ?? null, url),
+    localTranscript: api.localTranscript,
     setFeedAuth: api.setFeedAuth,
     setAutostart: api.setAutostart,
     onFlush: api.onFlush,
@@ -127,6 +136,9 @@ function electronPlatform(api: ResonateApi): Platform {
     pickFolder: api.pickFolder,
     openOpml: api.openOpml,
     openSkips: api.openSkips,
+    pickSegmentsFile: api.pickSegmentsFile,
+    segmentsFileStat: api.skipsStat,
+    readSegmentsFile: api.skipsRead,
     saveOpml: api.saveOpml,
     isMetered: api.isMetered,
     logError: api.logError,
@@ -194,6 +206,10 @@ function browserPlatform(): Platform {
     }),
     saveOpml: async (name, text) => { downloadText(name, text); return name; },
     openSkips: async () => null,
+    pickSegmentsFile: async () => null,
+    segmentsFileStat: async () => null,
+    readSegmentsFile: async () => null,
+    localTranscript: async () => null,
     isMetered: async () => null,
     logError: (message, detail) => console.error(message, detail ?? ''),
     openLogs() {},

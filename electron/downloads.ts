@@ -11,6 +11,9 @@ export const expandHome = (p: string) => (p === '~' || p.startsWith('~/') ? path
 
 const EXT: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'video/mp4': 'mp4', 'video/x-m4v': 'm4v', 'video/quicktime': 'mov', 'video/webm': 'webm' };
 
+/** The file extensions downloads produce: folder size counts those, not the transcripts written beside them. */
+const AUDIO = /\.(mp3|m4a|mp4|m4v|mov|ogg|opus|aac|wav|webm)$/i;
+
 /** A job that can't succeed however often it is tried, as opposed to a network hiccup. */
 export class JobError extends Error {}
 
@@ -229,7 +232,7 @@ export async function diskUsage(folder: string): Promise<number> {
     for (const e of entries) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) await walk(p);
-      else if (e.isFile()) total += (await fs.stat(p).catch(() => ({ size: 0 }))).size;
+      else if (e.isFile() && AUDIO.test(e.name)) total += (await fs.stat(p).catch(() => ({ size: 0 }))).size;
     }
   };
   await walk(root);
@@ -259,6 +262,17 @@ export async function moveFiles(from: string, to: string, files: string[]): Prom
         await fs.rm(f);
       }
       moved.push({ from: f, to: target });
+      // The whisper transcript written beside the file moves with it, when there is one.
+      const sidecar = f.slice(0, f.length - path.extname(f).length) + '.vtt';
+      const sideTarget = path.join(dst, path.relative(src, sidecar));
+      try {
+        await fs.rename(sidecar, sideTarget);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+          await fs.copyFile(sidecar, sideTarget);
+          await fs.rm(sidecar);
+        }
+      }
       await fs.rmdir(path.dirname(f)).catch(() => {}); // only succeeds once the show folder is empty
     } catch {
       // Missing or unreadable: leave its record pointing where it was.

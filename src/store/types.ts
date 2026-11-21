@@ -92,6 +92,8 @@ export interface Data {
   directory: DirectoryPrefs;
   /** Skip segment categories skipped automatically; the others are only marked. */
   autoSkip: SkipCategory[];
+  /** The segments file the Resonate adscan pipeline outputs; re-imported quietly whenever it changes. */
+  segmentsFile: string | null;
 }
 
 export interface Ui {
@@ -200,8 +202,18 @@ export interface Actions {
   setPrefs(patch: Partial<Pick<Data, 'folder' | 'storageLimitGb'>>): void;
   /** Turns automatic skipping of one segment category on or off. */
   toggleAutoSkip(cat: SkipCategory): void;
+  /** Turns automatic skipping of one segment category on or off. */
+  toggleAutoSkip(cat: SkipCategory): void;
   /** Adds the segments in a segments file to the downloaded episodes it names; reports how many matched. */
   importSkips(text: string, name: string): { episodes: number; unmatched: number } | null;
+  /** Remembers (or clears) the segments file the Resonate adscan pipeline rewrites. */
+  setSegmentsFile(file: string | null): void;
+  /**
+   * Merges a segments file in quietly: the watcher calls this when the file changes. Only episodes whose
+   * segments actually differ are written; a toast only when something was updated, and nothing on a file
+   * that can't be parsed (the pipeline is allowed a write in progress).
+   */
+  autoImportSkips(text: string, name: string): number;
 
   setDirectory(patch: Partial<DirectoryPrefs>): void;
   setPodcastIndexKey(key: { key: string; secret: string } | null): Promise<void>;

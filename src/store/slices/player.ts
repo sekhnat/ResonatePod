@@ -26,6 +26,22 @@ async function loadChapters(info: EpisodeInfo, file: string | undefined) {
   if (inlineChapters?.length) return undefined;
   return (await platform.embeddedChapters(file, enclosureUrl).catch(() => null)) ?? undefined;
 }
+/**
+ * The episode's transcript: the whisper one written beside the downloaded file when there is one (it matches
+ * the actual audio, dynamic ads and all), else the feed's `podcast:transcript`. Null when there is neither.
+ */
+async function loadTranscript(info: EpisodeInfo, file: string | undefined) {
+  if (platform.isDesktop && file) {
+    const vtt = await platform.localTranscript(file).catch(() => null);
+    const parsed = vtt ? parseTranscript(vtt, 'vtt') : null;
+    if (parsed) return parsed;
+  }
+  const { transcriptUrl, transcriptType } = info.ep;
+  if (!transcriptUrl) return null;
+  const r = await platform.http(transcriptUrl, { maxBytes: SMALL_BODY_BYTES }).catch(() => null);
+  return r?.status === 200 ? parseTranscript(r.text, transcriptType) : null;
+}
+
 
 export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack' | 'skipFwd' | 'prevChapter' | 'nextEpisode' | 'cycleSpeed' | 'setSpeed' | 'setVolume' | 'toggleMute' | 'setSleep' | 'tick' | 'onTime' | 'onDuration' | 'onEnded' | 'onPlayError' | 'addTrimSaved' | 'loadMeta' | 'checkpoint' | 'addToQueue' | 'playNext' | 'removeFromQueue' | 'moveQueue' | 'clearQueue'> = (set, get) => {
   let lastChapterIdx = -1;
@@ -176,14 +192,13 @@ export const createPlayerSlice: Slice<'play' | 'togglePlay' | 'seek' | 'skipBack
       if (!info || s.meta[key]) return;
       const meta: EpisodeMeta = {};
       set({ meta: { ...get().meta, [key]: meta } });
-      const { transcriptUrl, transcriptType } = info.ep;
       await Promise.all([
         loadChapters(info, getEp(s, key).file).then((ch) => { meta.chapters = ch; }),
-        transcriptUrl && platform.http(transcriptUrl, { maxBytes: SMALL_BODY_BYTES }).then((r) => {
-          const t = r.status === 200 ? parseTranscript(r.text, transcriptType) : null;
-          meta.transcript = t?.lines ?? null;
-          meta.transcriptTimed = t?.timed;
-        }).catch(() => { meta.transcript = null; }),
+        loadTranscript(info, getEp(s, key).file).then((t) => {
+          if (!t) return;
+          meta.transcript = t.lines;
+          meta.transcriptTimed = t.timed;
+        }),
       ]);
       if (get().meta[key] === meta) set({ meta: { ...get().meta, [key]: { ...meta } } });
     },

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DownloadManager, failureMessage, moveFiles, retryable, targetPath } from './downloads';
+import { DownloadManager, diskUsage, failureMessage, moveFiles, retryable, targetPath } from './downloads';
 import type { DownloadEvent, DownloadJob } from '../shared/types';
 
 const BODY = Buffer.alloc(300_000, 7);
@@ -242,5 +242,22 @@ describe('DownloadManager', () => {
     expect(readFileSync(moved[0].to, 'utf8')).toBe('a');
     expect(readdirSync(path.join(root, 'old'))).toEqual([]);
     expect(existsSync(outside)).toBe(true);
+    expect(readdirSync(path.join(root, 'new', 'Show A'))).toEqual(['ep.mp3']);
+    expect(await diskUsage(path.join(root, 'new'))).toBe(1);
+  });
+
+  it('moves the whisper transcript written beside an episode with it, and counts only episodes in the folder size', async () => {
+    const { mkdirSync, readdirSync } = await import('node:fs');
+    const root = mkdtempSync(path.join(tmpdir(), 'res-'));
+    const a = path.join(root, 'old', 'Show A', 'ep.mp3');
+    mkdirSync(path.dirname(a), { recursive: true });
+    writeFileSync(a, 'a');
+    writeFileSync(a.replace(/\.mp3$/, '.vtt'), 'WEBVTT');
+    writeFileSync(path.join(root, 'old', 'Show A', 'cover.jpg'), 'ignored');
+    const moved = await moveFiles(path.join(root, 'old'), path.join(root, 'new'), [a]);
+    expect(moved).toEqual([{ from: a, to: path.join(root, 'new', 'Show A', 'ep.mp3') }]);
+    expect(readFileSync(path.join(root, 'new', 'Show A', 'ep.vtt'), 'utf8')).toBe('WEBVTT');
+    expect(readdirSync(path.join(root, 'old', 'Show A'))).toEqual(['cover.jpg']); // not ours to move
+    expect(await diskUsage(path.join(root, 'new'))).toBe(1);
   });
 });

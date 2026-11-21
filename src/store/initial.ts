@@ -28,6 +28,7 @@ export const initialData: Data = {
   trimSaved: 0,
   directory: { country: defaultCountry(), source: 'all', podcastIndex: false },
   autoSkip: [...DEFAULT_AUTO_SKIP],
+  segmentsFile: null,
 };
 
 export const initialUi: Ui = {

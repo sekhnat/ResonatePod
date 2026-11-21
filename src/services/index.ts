@@ -8,7 +8,8 @@ import { trayPusher } from './tray';
 
 const HOUR = 3600000;
 let started = false;
-
+/** The segments file last seen (path, size, mtime): a change means the pipeline rewrote it. */
+let watched: { path: string; stat: { size: number; mtime: number } } | null = null;
 /** Wires the store to the OS: downloads, tray, metered network, timers. Call after hydration; later calls do nothing. */
 export function startServices() {
   if (started) return;
@@ -107,4 +108,21 @@ export function startServices() {
   maybeRefresh();
   setInterval(maybeRefresh, 60000);
   if (st().cur) void st().loadMeta(st().cur!);
+  // The adscan pipeline's segments file: imported at start-up and again whenever the file changes, quietly.
+  const checkSegmentsFile = async () => {
+    const path = st().segmentsFile;
+    if (!path || !platform.isDesktop) return;
+    const stat = await platform.segmentsFileStat(path);
+    if (!stat) return; // not there (yet): the pipeline hasn't written it, or the file moved
+    if (watched?.path === path && watched.stat.size === stat.size && watched.stat.mtime === stat.mtime) return;
+    watched = { path, stat };
+    const file = await platform.readSegmentsFile(path);
+    if (!file || 'error' in file) {
+      if (file) platform.logError(`Segments file ${path}: ${file.error}`);
+      return;
+    }
+    void st().autoImportSkips(file.text, file.name);
+  };
+  void checkSegmentsFile();
+  setInterval(() => void checkSegmentsFile(), 60000);
 }
