@@ -31,6 +31,7 @@ the **Nocturne** design system (dark, compact, Inter, Phosphor icons).
 - **Private feeds:** token URLs and HTTP Basic auth, with credentials kept in the system keyring.
 - **Offline-ready:** automatic downloads with resume and retry, and storage limits that clean up for you.
 - **Rich playback:** chapters (from the feed or the file), synced transcripts, silence trimming and a sleep timer.
+- **Skip the ads:** the bundled ad-scan pipeline marks ads, promos and credits in downloaded episodes and playback jumps over them — and its whisper transcripts match the audio you're playing.
 - **Sync:** two-way subscriptions and play positions through gpodder.net, oPodSync or Nextcloud.
 - **Native feel:** system tray, MPRIS media keys, desktop notifications and login autostart.
 

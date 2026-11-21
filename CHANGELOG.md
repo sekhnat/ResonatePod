@@ -4,6 +4,20 @@ What's new in each release of Resonate. When a version is tagged, CI publishes
 its entry here as the "What's new" section of the GitHub release, so every
 release needs one.
 
+## 1.11.0 (21 November 2026)
+
+- Added: the ad-scan pipeline, in `adscan/` in the repository. It fingerprints and transcribes
+  the downloaded library (whisper.cpp), labels the ads, promos and credits in every episode, and
+  runs itself for each new release on an hourly systemd timer. `adscan/README.md` has the install,
+  the manual commands and the review workflow that keeps quality up.
+- Added: a *Segments file* can be chosen once in Preferences (Skip segments). Resonate then
+  re-imports the pipeline's segments on its own, quietly, whenever the file is rewritten — a
+  message appears only when episodes were actually updated. One-off files keep the Import… button.
+- Added: when a whisper transcript sits beside a downloaded episode (`<episode>.vtt`), Now
+  playing shows it instead of the feed's `podcast:transcript` — it matches the audio that is
+  playing, dynamic ads and all. Deleting an episode or moving the download folder takes the
+  transcript along, and the folder-size figure counts episodes, not transcripts.
+
 ## 1.10.0 (13 November 2026)
 
 - Added: playing an episode with nothing else queued puts the show's next

@@ -25,7 +25,9 @@ The scripts live here in the repo; the heavy state (databases, work files, logs,
   `kyty_emulator` holds the GPU.
 - Skip categories and the segments-file format are documented in the main README ("Skip segments");
   `export/segments.json` is that file, keyed by absolute episode path.
-- Measured on the full 2,149-episode library: ~97% precision, ~94% recall.
+- Measured by hand on the 2,149-episode corpus (precision: an 80-segment sample plus 25 bridged
+  stretches; recall: a fresh 15-episode sample): ~97% precision, ~94% recall. The corpus has since
+  grown to 2,438 episodes (1,316 h).
 
 ## Install
 
